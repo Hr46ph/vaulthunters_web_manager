@@ -185,48 +185,67 @@ class SystemControlService:
             return f"{minutes} minutes"
     
     def _get_player_count(self):
-        """Try to extract player count from server logs"""
+        """Get player count using mcstatus server query"""
+        try:
+            from mcstatus import JavaServer
+            
+            # Get server host and query port from config
+            server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+            server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
+            query_port = current_app.config.get('MINECRAFT_QUERY_PORT', 25565)
+            
+            # Try server query first (most reliable)
+            try:
+                server = JavaServer(server_host, query_port)
+                query = server.query()
+                return {
+                    'players': query.players.online,
+                    'max_players': query.players.max,
+                    'player_names': query.players.names if hasattr(query.players, 'names') else []
+                }
+            except Exception as query_error:
+                self.logger.debug(f"Query failed, trying status ping: {query_error}")
+                
+                # Fallback to status ping
+                server = JavaServer(server_host, server_port)
+                status = server.status()
+                return {
+                    'players': status.players.online,
+                    'max_players': status.players.max,
+                    'player_names': []
+                }
+                
+        except Exception as e:
+            self.logger.debug(f"Could not get player count via mcstatus: {e}")
+            # Final fallback - try old method
+            return self._get_player_count_fallback()
+    
+    def _get_player_count_fallback(self):
+        """Fallback method using server.properties"""
         try:
             server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
             if not server_path:
-                return {'players': 0, 'max_players': 20}
+                return {'players': 0, 'max_players': 20, 'player_names': []}
             
-            log_file = f"{server_path}/logs/latest.log"
+            max_players = 20
+            # Try to find server.properties for max players
+            try:
+                props_result = subprocess.run(
+                    ['grep', 'max-players', f"{server_path}/server.properties"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if props_result.returncode == 0:
+                    match = re.search(r'max-players=(\d+)', props_result.stdout)
+                    if match:
+                        max_players = int(match.group(1))
+            except:
+                pass
             
-            # Read last few lines of the log file to find player info
-            result = subprocess.run(
-                ['tail', '-100', log_file],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            if result.returncode == 0:
-                log_content = result.stdout
-                
-                # Look for player join/leave messages to count current players
-                # This is a simple approach - could be improved with better parsing
-                current_players = 0
-                max_players = 20
-                
-                # Try to find server.properties for max players
-                try:
-                    props_result = subprocess.run(
-                        ['grep', 'max-players', f"{server_path}/server.properties"],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
-                    if props_result.returncode == 0:
-                        match = re.search(r'max-players=(\d+)', props_result.stdout)
-                        if match:
-                            max_players = int(match.group(1))
-                except:
-                    pass
-                
-                return {'players': current_players, 'max_players': max_players}
+            return {'players': 0, 'max_players': max_players, 'player_names': []}
             
         except Exception as e:
-            self.logger.debug(f"Could not get player count: {e}")
+            self.logger.debug(f"Fallback player count failed: {e}")
         
-        return {'players': 0, 'max_players': 20}
+        return {'players': 0, 'max_players': 20, 'player_names': []}

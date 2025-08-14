@@ -244,8 +244,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update server status on page load
     updateServerStatus();
     
-    // Set up periodic status updates (every 30 seconds)
-    setInterval(updateServerStatus, 30000);
+    // Set up periodic status updates (every 10 seconds)
+    setInterval(updateServerStatus, 10000);
     
     console.log('VaultHunter Web Manager loaded');
 });

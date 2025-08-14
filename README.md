@@ -4,7 +4,8 @@ A simple, lightweight web interface for managing your VaultHunter Minecraft serv
 
 ## Features
 
-- **Server Control**: Start, stop, and restart your VaultHunter server with real-time status monitoring
+- **Server Control**: Start, stop, and restart your VaultHunter server with real-time status monitoring and accurate player counts
+- **RCON Console**: Full server console access with RCON authentication for executing commands, managing players, and server administration
 - **Advanced Log Monitoring**: View server logs, crash reports, and debug logs with auto-refresh and dark mode support
 - **Comprehensive Configuration Management**: 
   - Organized config editor with three categories:
@@ -14,9 +15,10 @@ A simple, lightweight web interface for managing your VaultHunter Minecraft serv
   - Automatic config backup before changes
   - File validation and syntax checking
 - **Backup Management**: Download, view, and manage server backups with file size information and cleanup tools
+- **Real-time Server Monitoring**: Accurate player counts and server status using Minecraft query protocol
 - **Dark Mode Support**: Full dark/light theme toggle with consistent styling across all pages
 - **Responsive Design**: Clean Bootstrap-based UI that works perfectly on desktop, tablet, and mobile
-- **Security First**: Runs under the same user account as your Minecraft server (no root required) with CSRF protection
+- **Security First**: Runs under the same user account as your Minecraft server (no root required) with CSRF protection and session-based RCON authentication
 
 ## Requirements
 
@@ -50,6 +52,12 @@ pip install -r requirements.txt
 MINECRAFT_SERVER_PATH = "/home/minecraft/vaulthunter"
 BACKUP_PATH = "/home/minecraft/backups"
 SERVICE_NAME = "vaulthunter"  # systemd service name
+
+# Minecraft server connection settings
+MINECRAFT_SERVER_HOST = "localhost"
+MINECRAFT_SERVER_PORT = 25565
+MINECRAFT_QUERY_PORT = 25565    # For player count queries
+MINECRAFT_RCON_PORT = 25575     # For console commands
 
 # Web interface settings
 HOST = "0.0.0.0"
@@ -122,9 +130,25 @@ Edit `config.py` to match your server setup:
 - `MINECRAFT_SERVER_PATH`: Full path to your VaultHunter server directory
 - `BACKUP_PATH`: Directory where backups are stored
 - `SERVICE_NAME`: Name of your systemd service
+- `MINECRAFT_SERVER_HOST`: Minecraft server hostname (usually `localhost`)
+- `MINECRAFT_SERVER_PORT`: Minecraft server port (default: 25565)
+- `MINECRAFT_QUERY_PORT`: Query protocol port for player counts (default: 25565)
+- `MINECRAFT_RCON_PORT`: RCON port for console commands (default: 25575)
 - `HOST`: Interface to bind to (use `127.0.0.1` for localhost only)
 - `PORT`: Port for the web interface
 - `SECRET_KEY`: Random secret for session security
+
+### RCON Setup
+
+To enable the console feature, configure RCON in your Minecraft server's `server.properties`:
+
+```properties
+enable-rcon=true
+rcon.port=25575
+rcon.password=your-secure-password
+```
+
+**Important**: The RCON password is entered via a secure modal in the web interface - it's not stored in configuration files.
 
 ### Nginx Reverse Proxy (Optional)
 
@@ -153,20 +177,28 @@ server {
    - Green button: Start server
    - Yellow button: Restart server
    - Red button: Stop server
-   - Current status displayed at the top
+   - Current status displayed at the top with accurate player counts (updates every 10 seconds)
 
-3. **Log Viewer**:
+3. **RCON Console**:
+   - Full server console access through web interface
+   - Enter RCON password via secure modal popup
+   - Execute any Minecraft command (`/list`, `/tp`, `/give`, `/gamemode`, etc.)
+   - Command history with arrow key navigation
+   - Quick command buttons for common tasks
+   - Terminal-style interface with auto-scroll
+
+4. **Log Viewer**:
    - Switch between different log files using the dropdown
    - Auto-refresh every 30 seconds
    - Scroll to bottom for latest entries
 
-4. **Configuration Editor**:
+5. **Configuration Editor**:
    - **Server Properties**: Direct editor for `server.properties` with reload and save buttons
    - **Bans & Whitelist**: Three-panel interface for managing `banned-ips.json`, `banned-players.json`, and `whitelist.json` simultaneously
    - **Config Directory**: File browser for all config files with dedicated editor pane featuring cancel and save options
    - All editors include automatic backup creation and file validation
 
-5. **Backup Manager**:
+6. **Backup Manager**:
    - View available backups with timestamps and sizes
    - Download backups directly to your computer
    - Automatic cleanup of old backups (configurable)
@@ -193,6 +225,7 @@ vaulthunter_web_manager/
 ├── templates/
 │   ├── base.html          # Base template with dark mode support
 │   ├── index.html         # Dashboard with server control
+│   ├── console.html       # RCON console interface
 │   ├── logs.html          # Advanced log viewer
 │   ├── config.html        # Multi-category config editor
 │   ├── backups.html       # Backup manager

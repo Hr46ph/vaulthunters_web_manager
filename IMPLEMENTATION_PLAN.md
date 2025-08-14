@@ -13,14 +13,15 @@
 - [x] Configure session management and security
 - [x] Add error handling and logging
 
-## Phase 2: Backend Services ✅ COMPLETED
+## Phase 2: Backend Services ✅ COMPLETED & ENHANCED
 
-### 2.1 System Integration Services ✅
+### 2.1 System Integration Services ✅ ENHANCED
 - [x] Create `services/system_control.py` for systemd service management
   - Server start/stop/restart functions
   - Service status checking with uptime, memory, and CPU usage
   - Error handling for service operations
-  - Player count extraction from logs
+  - **NEW**: Accurate player count using mcstatus library with Minecraft query protocol
+  - **NEW**: Fallback to server.properties for max players when query fails
 
 ### 2.2 File Management Services ✅
 - [x] Create `services/log_service.py` for log file operations
@@ -48,11 +49,12 @@
 - [x] Add navigation, alerts, and common UI components
 - [x] Implement responsive design patterns with consistent styling
 
-### 3.2 Dashboard and Server Control ✅
+### 3.2 Dashboard and Server Control ✅ ENHANCED
 - [x] Create `templates/index.html` for main dashboard
-- [x] Add server status display with uptime, memory, CPU, and player count
+- [x] Add server status display with uptime, memory, CPU, and **accurate player count using mcstatus**
 - [x] Implement server control buttons (start/stop/restart) with status-aware states
-- [x] Add AJAX for real-time status updates and service journal viewing
+- [x] Add AJAX for real-time status updates (every 10 seconds) and service journal viewing
+- [x] **NEW**: Add Console quick action button
 
 ### 3.3 Log Viewer ✅
 - [x] Create `templates/logs.html` for log viewing interface
@@ -68,7 +70,16 @@
 - [x] Add file validation, automatic backup creation, and cancel/save functionality
 - [x] Implement organized workflow replacing overwhelming dropdown with categorized buttons
 
-### 3.5 Backup Manager ✅
+### 3.5 RCON Console ✅ NEW FEATURE
+- [x] Create `templates/console.html` with terminal-style interface
+- [x] Add RCON authentication via secure modal popup (no password storage)
+- [x] Implement full server command execution via RCON
+- [x] Add command history with arrow key navigation
+- [x] Include quick command buttons for common tasks
+- [x] Session-based authentication with automatic re-authentication
+- [x] Add Console navigation item and quick action integration
+
+### 3.6 Backup Manager ✅
 - [x] Create `templates/backups.html` for backup management
 - [x] Display backup list with sizes, dates, and human-readable formatting
 - [x] Add download links with proper MIME type handling

@@ -7,6 +7,12 @@ class Config:
     BACKUP_PATH = os.environ.get('BACKUP_PATH', '/home/minecraft/backups')
     SERVICE_NAME = os.environ.get('SERVICE_NAME', 'vaulthunters')
     
+    # Minecraft server connection settings
+    MINECRAFT_SERVER_HOST = os.environ.get('MINECRAFT_SERVER_HOST', 'localhost')
+    MINECRAFT_SERVER_PORT = int(os.environ.get('MINECRAFT_SERVER_PORT', 25565))
+    MINECRAFT_QUERY_PORT = int(os.environ.get('MINECRAFT_QUERY_PORT', 25565))
+    MINECRAFT_RCON_PORT = int(os.environ.get('MINECRAFT_RCON_PORT', 25575))
+    
     # Web interface settings
     HOST = os.environ.get('HOST', '0.0.0.0')
     PORT = int(os.environ.get('PORT', 8080))

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
+from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app, session
 from flask_wtf import FlaskForm
 from flask_wtf.csrf import validate_csrf
 from wtforms import StringField, TextAreaField, SelectField, SubmitField
@@ -311,6 +311,172 @@ def webmanager_journal():
         return jsonify({
             'success': False,
             'error': 'Failed to read web manager journal'
+        }), 500
+
+@main_bp.route('/console')
+def console():
+    """Console page with RCON interface"""
+    return render_template('console.html')
+
+@main_bp.route('/console/status')
+def console_status():
+    """Check RCON connection status"""
+    try:
+        rcon_password = session.get('rcon_password')
+        
+        if not rcon_password:
+            return jsonify({
+                'connected': False,
+                'error': 'Not authenticated'
+            })
+        
+        from mcstatus import JavaServer
+        
+        # Get server connection details
+        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+        rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
+        
+        # Test RCON connection
+        server = JavaServer(server_host, rcon_port)
+        with server.rcon(rcon_password) as rcon:
+            # Simple test command
+            rcon.command("help")
+            
+        return jsonify({
+            'connected': True,
+            'host': server_host,
+            'port': rcon_port
+        })
+        
+    except Exception as e:
+        current_app.logger.debug(f'RCON status check failed: {e}')
+        return jsonify({
+            'connected': False,
+            'error': str(e)
+        })
+
+@main_bp.route('/console/authenticate', methods=['POST'])
+def console_authenticate():
+    """Authenticate RCON with password"""
+    try:
+        validate_csrf(request.form.get('csrf_token') or request.headers.get('X-CSRFToken'))
+        
+        data = request.get_json()
+        password = data.get('password', '').strip()
+        
+        if not password:
+            return jsonify({
+                'success': False,
+                'error': 'No password provided'
+            }), 400
+        
+        from mcstatus import JavaServer
+        
+        # Get server connection details
+        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+        rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
+        
+        # Test RCON connection with provided password
+        server = JavaServer(server_host, rcon_port)
+        with server.rcon(password) as rcon:
+            # Simple test command to verify authentication
+            rcon.command("help")
+        
+        # Store password in session if authentication successful
+        session['rcon_password'] = password
+        session.permanent = True
+        
+        current_app.logger.info('RCON authentication successful')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Authentication successful'
+        })
+        
+    except Exception as e:
+        current_app.logger.debug(f'RCON authentication failed: {e}')
+        return jsonify({
+            'success': False,
+            'error': 'Authentication failed - invalid password or RCON not enabled'
+        }), 401
+
+@main_bp.route('/console/disconnect', methods=['POST'])
+def console_disconnect():
+    """Disconnect RCON (clear session)"""
+    try:
+        validate_csrf(request.form.get('csrf_token') or request.headers.get('X-CSRFToken'))
+        
+        # Clear RCON password from session
+        session.pop('rcon_password', None)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Disconnected successfully'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'RCON disconnect failed: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@main_bp.route('/console/execute', methods=['POST'])
+def console_execute():
+    """Execute RCON command"""
+    try:
+        validate_csrf(request.form.get('csrf_token') or request.headers.get('X-CSRFToken'))
+        
+        data = request.get_json()
+        command = data.get('command', '').strip()
+        
+        if not command:
+            return jsonify({
+                'success': False,
+                'error': 'No command provided'
+            }), 400
+        
+        rcon_password = session.get('rcon_password')
+        if not rcon_password:
+            return jsonify({
+                'success': False,
+                'error': 'Not authenticated - please login first'
+            }), 401
+        
+        from mcstatus import JavaServer
+        
+        # Get server connection details
+        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+        rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
+        
+        # Execute command via RCON
+        server = JavaServer(server_host, rcon_port)
+        with server.rcon(rcon_password) as rcon:
+            response = rcon.command(command)
+            
+        current_app.logger.info(f'RCON command executed: {command}')
+        
+        return jsonify({
+            'success': True,
+            'command': command,
+            'response': response
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'RCON command execution failed: {e}')
+        
+        # Check if it's an authentication error
+        if 'authentication' in str(e).lower() or 'password' in str(e).lower():
+            # Clear invalid session
+            session.pop('rcon_password', None)
+            return jsonify({
+                'success': False,
+                'error': 'Authentication failed - please login again'
+            }), 401
+        
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
 
 @main_bp.route('/health')

@@ -61,6 +61,9 @@
                     </div>
                     <div class="card-body">
                         <div class="d-grid gap-2">
+                            <a href="{{ url_for('main.console') }}" class="btn btn-outline-success">
+                                <i class="fas fa-terminal"></i> Server Console
+                            </a>
                             <a href="{{ url_for('main.logs') }}" class="btn btn-outline-primary">View Logs</a>
                             <a href="{{ url_for('main.config_editor') }}" class="btn btn-outline-secondary">Edit Config</a>
                             <a href="{{ url_for('main.backups') }}" class="btn btn-outline-info">Manage Backups</a>

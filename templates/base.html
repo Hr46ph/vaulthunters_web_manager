@@ -15,6 +15,7 @@
             <a class="navbar-brand" href="{{ url_for('main.index') }}">VaultHunter Web Manager</a>
             <div class="navbar-nav ms-auto">
                 <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">Dashboard</a>
+                <a class="nav-link {% if request.endpoint == 'main.console' %}active{% endif %}" href="{{ url_for('main.console') }}">Console</a>
                 <a class="nav-link {% if request.endpoint == 'main.logs' %}active{% endif %}" href="{{ url_for('main.logs') }}">Logs</a>
                 <a class="nav-link {% if request.endpoint == 'main.config_editor' %}active{% endif %}" href="{{ url_for('main.config_editor') }}">Config</a>
                 <a class="nav-link {% if request.endpoint == 'main.backups' %}active{% endif %}" href="{{ url_for('main.backups') }}">Backups</a>
