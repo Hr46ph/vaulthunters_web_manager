@@ -18,7 +18,7 @@ class SystemControlService:
         try:
             # Get service status
             result = subprocess.run(
-                ['systemctl', 'status', self.service_name],
+                ['sudo', '/bin/systemctl', 'status', f'{self.service_name}.service'],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -99,7 +99,7 @@ class SystemControlService:
         """Start the systemd service"""
         try:
             result = subprocess.run(
-                ['sudo', 'systemctl', 'start', self.service_name],
+                ['sudo', '/bin/systemctl', 'start', f'{self.service_name}.service'],
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -124,7 +124,7 @@ class SystemControlService:
         """Stop the systemd service"""
         try:
             result = subprocess.run(
-                ['sudo', 'systemctl', 'stop', self.service_name],
+                ['sudo', '/bin/systemctl', 'stop', f'{self.service_name}.service'],
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -149,7 +149,7 @@ class SystemControlService:
         """Restart the systemd service"""
         try:
             result = subprocess.run(
-                ['sudo', 'systemctl', 'restart', self.service_name],
+                ['sudo', '/bin/systemctl', 'restart', f'{self.service_name}.service'],
                 capture_output=True,
                 text=True,
                 timeout=60

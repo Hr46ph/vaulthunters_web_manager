@@ -205,9 +205,12 @@ sudo journalctl -u vaulthunter-web.service -f
 
 ### Server Control Not Working
 - Verify systemd service name matches `config.py`
-- Check that the minecraft user has permission to control the service:
-```bash
-sudo usermod -a -G systemd-journal minecraft
+- Check that the user has passwordless sudo access for systemctl commands. Add to `/etc/sudoers.d/vaulthunter-web`:
+```
+username ALL=NOPASSWD: /bin/systemctl start vaulthunters.service, \
+                       /bin/systemctl stop vaulthunters.service, \
+                       /bin/systemctl restart vaulthunters.service, \
+                       /bin/systemctl status vaulthunters.service
 ```
 
 ### Backup Downloads Failing
