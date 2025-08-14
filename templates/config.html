@@ -3,78 +3,428 @@
 {% block title %}Configuration - VaultHunter Web Manager{% endblock %}
 
 {% block content %}
-        <div class="card">
-            <div class="card-header">
-                <h5>Configuration Editor</h5>
-            </div>
-            <div class="card-body">
-                <form id="config-form" method="POST" action="{{ url_for('main.save_config') }}">
-                    {{ form.hidden_tag() }}
-                    <div class="mb-3">
-                        <label for="config_file" class="form-label">Configuration File</label>
-                        {{ form.config_file(class="form-select", id="config_file") }}
+    <div class="row">
+        <!-- Category Buttons -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h6>Configuration Categories</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary active" id="btn-server-props" onclick="showCategory('server-props')">
+                            Server Properties
+                        </button>
+                        <button class="btn btn-outline-warning" id="btn-ban-whitelist" onclick="showCategory('ban-whitelist')">
+                            Bans & Whitelist
+                        </button>
+                        <button class="btn btn-outline-info" id="btn-config-files" onclick="showCategory('config-files')">
+                            Config Directory
+                        </button>
                     </div>
-                    <div class="mb-3">
-                        <label for="content" class="form-label">Content</label>
-                        {{ form.content(class="form-control", id="content", rows="20", style="font-family: monospace;") }}
-                    </div>
-                    <button type="submit" class="btn btn-primary">Save Configuration</button>
-                    <button type="button" class="btn btn-secondary" onclick="loadConfig()">Reload</button>
-                </form>
+                </div>
             </div>
         </div>
+
+        <!-- Content Area -->
+        <div class="col-md-9">
+            <!-- Server Properties Tab -->
+            <div id="server-props-content" class="config-category active">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6>Server Properties</h6>
+                        <div>
+                            <button class="btn btn-sm btn-secondary" onclick="reloadServerProps()">
+                                <i class="fas fa-sync"></i> Reload
+                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="saveServerProps()">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <textarea id="server-props-editor" class="form-control" rows="25" style="font-family: monospace;">Loading server.properties...</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bans & Whitelist Tab -->
+            <div id="ban-whitelist-content" class="config-category" style="display: none;">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6>Banned IPs</h6>
+                                <button class="btn btn-sm btn-primary" onclick="saveBanWhitelist('banned-ips')">
+                                    <i class="fas fa-save"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <textarea id="banned-ips-editor" class="form-control" rows="15" style="font-family: monospace;">Loading...</textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6>Banned Players</h6>
+                                <button class="btn btn-sm btn-primary" onclick="saveBanWhitelist('banned-players')">
+                                    <i class="fas fa-save"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <textarea id="banned-players-editor" class="form-control" rows="15" style="font-family: monospace;">Loading...</textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6>Whitelist</h6>
+                                <button class="btn btn-sm btn-primary" onclick="saveBanWhitelist('whitelist')">
+                                    <i class="fas fa-save"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <textarea id="whitelist-editor" class="form-control" rows="15" style="font-family: monospace;">Loading...</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-center">
+                    <button class="btn btn-secondary" onclick="reloadBanWhitelist()">
+                        <i class="fas fa-sync"></i> Reload All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Config Directory Tab -->
+            <div id="config-files-content" class="config-category" style="display: none;">
+                <div class="row">
+                    <!-- File List -->
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6>Config Files</h6>
+                            </div>
+                            <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                                <div id="config-file-list">
+                                    Loading config files...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- File Editor -->
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 id="current-config-file">Select a file to edit</h6>
+                                <div id="config-file-actions" style="display: none;">
+                                    <button class="btn btn-sm btn-secondary" onclick="cancelConfigEdit()">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                    <button class="btn btn-sm btn-primary" onclick="saveConfigFile()">
+                                        <i class="fas fa-save"></i> Save
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <textarea id="config-file-editor" class="form-control" rows="25" style="font-family: monospace;" placeholder="Select a file from the left panel to start editing..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_css %}
+    <style>
+        .config-category {
+            display: none;
+        }
+        .config-category.active {
+            display: block;
+        }
+        .file-item {
+            cursor: pointer;
+            padding: 8px 12px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+        }
+        .file-item:hover {
+            background-color: var(--bs-light);
+            border-color: var(--bs-border-color);
+        }
+        .file-item.selected {
+            background-color: var(--bs-primary);
+            color: white;
+        }
+        .file-item small {
+            opacity: 0.7;
+        }
+        [data-bs-theme="dark"] .file-item:hover {
+            background-color: var(--bs-dark);
+        }
+    </style>
 {% endblock %}
 
 {% block extra_js %}
     <script>
-        function loadConfig() {
-            const configFile = document.getElementById('config_file').value;
-            const contentArea = document.getElementById('content');
+        let currentConfigFile = null;
+        let configFiles = [];
+        
+        // Category Management
+        function showCategory(category) {
+            // Update button states
+            document.querySelectorAll('.btn[id^="btn-"]').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('btn-outline-primary', 'btn-outline-warning', 'btn-outline-info');
+                btn.classList.remove('btn-primary', 'btn-warning', 'btn-info');
+            });
             
-            if (!configFile) return;
+            // Activate clicked button
+            const activeBtn = document.getElementById(`btn-${category}`);
+            activeBtn.classList.add('active');
+            if (category === 'server-props') {
+                activeBtn.classList.remove('btn-outline-primary');
+                activeBtn.classList.add('btn-primary');
+            } else if (category === 'ban-whitelist') {
+                activeBtn.classList.remove('btn-outline-warning');
+                activeBtn.classList.add('btn-warning');
+            } else if (category === 'config-files') {
+                activeBtn.classList.remove('btn-outline-info');
+                activeBtn.classList.add('btn-info');
+            }
             
-            contentArea.value = 'Loading...';
+            // Hide all categories
+            document.querySelectorAll('.config-category').forEach(cat => {
+                cat.style.display = 'none';
+            });
             
-            fetch(`/config/content/${configFile}`)
+            // Show selected category
+            document.getElementById(`${category}-content`).style.display = 'block';
+            
+            // Load content based on category
+            if (category === 'server-props') {
+                loadServerProps();
+            } else if (category === 'ban-whitelist') {
+                loadBanWhitelist();
+            } else if (category === 'config-files') {
+                loadConfigFilesList();
+            }
+        }
+        
+        // Server Properties Functions
+        function loadServerProps() {
+            const editor = document.getElementById('server-props-editor');
+            editor.value = 'Loading server.properties...';
+            
+            fetch('/config/content/server.properties')
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
-                        contentArea.value = `Error: ${data.error}`;
+                        editor.value = `Error: ${data.error}`;
                     } else {
-                        contentArea.value = data.content;
+                        editor.value = data.content;
                     }
                 })
                 .catch(error => {
-                    contentArea.value = `Network error: ${error}`;
+                    editor.value = `Network error: ${error}`;
                 });
         }
         
-        document.addEventListener('DOMContentLoaded', function() {
-            loadConfig();
+        function reloadServerProps() {
+            loadServerProps();
+        }
+        
+        function saveServerProps() {
+            const content = document.getElementById('server-props-editor').value;
+            saveConfigContent('server.properties', content, 'Server properties saved successfully!');
+        }
+        
+        // Ban/Whitelist Functions
+        function loadBanWhitelist() {
+            const files = ['banned-ips.json', 'banned-players.json', 'whitelist.json'];
             
-            document.getElementById('config_file').addEventListener('change', loadConfig);
+            files.forEach(file => {
+                const editorId = file.replace('.json', '-editor');
+                const editor = document.getElementById(editorId);
+                editor.value = `Loading ${file}...`;
+                
+                fetch(`/config/content/${file}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            editor.value = `Error: ${data.error}`;
+                        } else {
+                            editor.value = data.content;
+                        }
+                    })
+                    .catch(error => {
+                        editor.value = `Network error: ${error}`;
+                    });
+            });
+        }
+        
+        function reloadBanWhitelist() {
+            loadBanWhitelist();
+        }
+        
+        function saveBanWhitelist(type) {
+            const editorId = `${type}-editor`;
+            const filename = `${type}.json`;
+            const content = document.getElementById(editorId).value;
             
-            document.getElementById('config-form').addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const formData = new FormData(this);
-                
-                fetch(this.action, {
-                    method: 'POST',
-                    body: formData
-                })
+            saveConfigContent(filename, content, `${type.replace('-', ' ')} saved successfully!`);
+        }
+        
+        // Config Files Functions
+        function loadConfigFilesList() {
+            const listContainer = document.getElementById('config-file-list');
+            listContainer.innerHTML = 'Loading config files...';
+            
+            fetch('/config/files/list')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success) {
-                        alert('Configuration saved successfully');
+                    if (data.error) {
+                        listContainer.innerHTML = `<div class="text-danger">Error: ${data.error}</div>`;
+                        return;
+                    }
+                    
+                    configFiles = data.files || [];
+                    renderConfigFilesList();
+                })
+                .catch(error => {
+                    listContainer.innerHTML = `<div class="text-danger">Network error: ${error}</div>`;
+                });
+        }
+        
+        function renderConfigFilesList() {
+            const listContainer = document.getElementById('config-file-list');
+            
+            if (configFiles.length === 0) {
+                listContainer.innerHTML = '<div class="text-muted">No config files found</div>';
+                return;
+            }
+            
+            let html = '';
+            configFiles.forEach(file => {
+                const isSelected = currentConfigFile === file.path ? 'selected' : '';
+                const sizeText = file.size ? `(${formatFileSize(file.size)})` : '';
+                html += `
+                    <div class="file-item ${isSelected}" onclick="selectConfigFile('${file.path}', '${file.name}')">
+                        <div>${file.name}</div>
+                        <small class="text-muted">${sizeText}</small>
+                    </div>
+                `;
+            });
+            
+            listContainer.innerHTML = html;
+        }
+        
+        function selectConfigFile(filePath, fileName) {
+            if (currentConfigFile === filePath) return;
+            
+            currentConfigFile = filePath;
+            document.getElementById('current-config-file').textContent = fileName;
+            document.getElementById('config-file-actions').style.display = 'block';
+            
+            const editor = document.getElementById('config-file-editor');
+            editor.value = 'Loading...';
+            
+            // Update file list selection
+            renderConfigFilesList();
+            
+            // Load file content
+            fetch(`/config/content/${encodeURIComponent(fileName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        editor.value = `Error: ${data.error}`;
                     } else {
-                        alert('Error: ' + (data.error || 'Save failed'));
+                        editor.value = data.content;
                     }
                 })
                 .catch(error => {
-                    alert('Network error: ' + error);
+                    editor.value = `Network error: ${error}`;
                 });
+        }
+        
+        function cancelConfigEdit() {
+            currentConfigFile = null;
+            document.getElementById('current-config-file').textContent = 'Select a file to edit';
+            document.getElementById('config-file-actions').style.display = 'none';
+            document.getElementById('config-file-editor').value = '';
+            renderConfigFilesList();
+        }
+        
+        function saveConfigFile() {
+            if (!currentConfigFile) return;
+            
+            const content = document.getElementById('config-file-editor').value;
+            const fileName = document.getElementById('current-config-file').textContent;
+            
+            saveConfigContent(fileName, content, `${fileName} saved successfully!`);
+        }
+        
+        // Utility Functions
+        function saveConfigContent(filename, content, successMessage) {
+            const formData = new FormData();
+            formData.append('config_file', filename);
+            formData.append('content', content);
+            formData.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+            
+            fetch('/config/save', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', successMessage);
+                } else {
+                    showAlert('error', 'Error: ' + (data.error || 'Save failed'));
+                }
+            })
+            .catch(error => {
+                showAlert('error', 'Network error: ' + error);
             });
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+        
+        function showAlert(type, message) {
+            // Use the existing modal system from app.js
+            if (window.showAlert) {
+                window.showAlert(message);
+            } else {
+                alert(message);
+            }
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add CSRF token if it doesn't exist
+            if (!document.querySelector('[name=csrf_token]')) {
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = document.querySelector('meta[name=csrf-token]').content;
+                document.body.appendChild(csrfInput);
+            }
+            
+            // Load default category
+            showCategory('server-props');
         });
     </script>
 {% endblock %}

@@ -131,26 +131,44 @@ def log_content(log_type):
 def config_editor():
     """Configuration editor page"""
     try:
-        config_manager = ConfigManager()
-        available_configs = config_manager.get_available_config_files()
-        
-        # Extract config file names for form
-        config_files = [config['name'] for config in available_configs] if available_configs else ['server.properties']
-        selected_config = request.args.get('config', config_files[0] if config_files else 'server.properties')
-        
-        form = ConfigEditForm()
-        form.config_file.choices = [(f, f) for f in config_files]
-        
-        return render_template('config.html', 
-                             form=form, 
-                             config_files=config_files,
-                             selected_config=selected_config)
+        return render_template('config.html')
     except Exception as e:
         current_app.logger.error(f'Config editor error: {e}')
         flash('Error loading configuration editor', 'error')
         return redirect(url_for('main.index'))
 
-@main_bp.route('/config/content/<config_file>')
+@main_bp.route('/config/files/list')
+def config_files_list():
+    """API endpoint for config files list"""
+    try:
+        config_manager = ConfigManager()
+        available_configs = config_manager.get_available_config_files()
+        
+        # Filter to only config directory files for the file browser
+        config_dir_files = []
+        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        config_dir_path = f"{server_path}/config/"
+        
+        for config in available_configs:
+            # Only include files from the config/ directory
+            if config['path'].startswith(config_dir_path):
+                config_dir_files.append({
+                    'name': config['name'].replace('config/', ''),  # Remove config/ prefix
+                    'path': config['path'],
+                    'size': config['size'],
+                    'type': config['type']
+                })
+        
+        return jsonify({
+            'success': True,
+            'files': config_dir_files
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Config files list error: {e}')
+        return jsonify({'error': 'Failed to get config files list'}), 500
+
+@main_bp.route('/config/content/<path:config_file>')
 def config_content(config_file):
     """API endpoint for config file content"""
     try:
@@ -158,7 +176,14 @@ def config_content(config_file):
         
         # Get server path and construct full config path
         server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
-        config_path = os.path.join(server_path, config_file)
+        
+        # Handle different file locations
+        if config_file in ['server.properties', 'banned-ips.json', 'banned-players.json', 'whitelist.json']:
+            # Root server files
+            config_path = os.path.join(server_path, config_file)
+        else:
+            # Config directory files
+            config_path = os.path.join(server_path, 'config', config_file)
         
         result = config_manager.read_config_file(config_path)
         
@@ -179,38 +204,43 @@ def config_content(config_file):
 @main_bp.route('/config/save', methods=['POST'])
 def save_config():
     """Save configuration file"""
-    form = ConfigEditForm()
-    
-    if form.validate_on_submit():
-        config_file = form.config_file.data
-        content = form.content.data
+    try:
+        config_file = request.form.get('config_file')
+        content = request.form.get('content')
         
-        try:
-            config_manager = ConfigManager()
-            
-            # Get server path and construct full config path
-            server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        if not config_file or content is None:
+            return jsonify({'error': 'Missing config_file or content'}), 400
+        
+        config_manager = ConfigManager()
+        
+        # Get server path and construct full config path
+        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        
+        # Handle different file locations
+        if config_file in ['server.properties', 'banned-ips.json', 'banned-players.json', 'whitelist.json']:
+            # Root server files
             config_path = os.path.join(server_path, config_file)
+        else:
+            # Config directory files
+            config_path = os.path.join(server_path, 'config', config_file)
+        
+        result = config_manager.write_config_file(config_path, content, create_backup=True)
+        
+        if result['success']:
+            current_app.logger.info(f'Config save successful for: {config_file}')
+            flash(f'Configuration {config_file} saved successfully', 'success')
+            return jsonify({
+                'success': True, 
+                'message': result['message'],
+                'backup_created': result.get('backup_created', False)
+            })
+        else:
+            current_app.logger.error(f'Config save failed for {config_file}: {result["error"]}')
+            return jsonify({'error': result['error']}), 500
             
-            result = config_manager.write_config_file(config_path, content, create_backup=True)
-            
-            if result['success']:
-                current_app.logger.info(f'Config save successful for: {config_file}')
-                flash(f'Configuration {config_file} saved successfully', 'success')
-                return jsonify({
-                    'success': True, 
-                    'message': result['message'],
-                    'backup_created': result.get('backup_created', False)
-                })
-            else:
-                current_app.logger.error(f'Config save failed for {config_file}: {result["error"]}')
-                return jsonify({'error': result['error']}), 500
-                
-        except Exception as e:
-            current_app.logger.error(f'Config save error: {e}')
-            return jsonify({'error': 'Failed to save configuration'}), 500
-    
-    return jsonify({'error': 'Invalid form data'}), 400
+    except Exception as e:
+        current_app.logger.error(f'Config save error: {e}')
+        return jsonify({'error': 'Failed to save configuration'}), 500
 
 @main_bp.route('/backups')
 def backups():

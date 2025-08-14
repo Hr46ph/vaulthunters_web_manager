@@ -4,12 +4,19 @@ A simple, lightweight web interface for managing your VaultHunter Minecraft serv
 
 ## Features
 
-- **Server Control**: Start, stop, and restart your VaultHunter server
-- **Log Monitoring**: View server logs, crash reports, and debug logs
-- **Configuration Management**: Edit server properties through the web interface
-- **Backup Downloads**: Download and manage server backups directly from the browser
-- **User-Friendly Interface**: Clean Bootstrap-based UI that works on desktop and mobile
-- **Secure**: Runs under the same user account as your Minecraft server (no root required)
+- **Server Control**: Start, stop, and restart your VaultHunter server with real-time status monitoring
+- **Advanced Log Monitoring**: View server logs, crash reports, and debug logs with auto-refresh and dark mode support
+- **Comprehensive Configuration Management**: 
+  - Organized config editor with three categories:
+    - Server Properties editor for `server.properties`
+    - Bans & Whitelist manager with three-panel view for `banned-ips.json`, `banned-players.json`, and `whitelist.json`
+    - Config Directory browser with file selection and editing interface
+  - Automatic config backup before changes
+  - File validation and syntax checking
+- **Backup Management**: Download, view, and manage server backups with file size information and cleanup tools
+- **Dark Mode Support**: Full dark/light theme toggle with consistent styling across all pages
+- **Responsive Design**: Clean Bootstrap-based UI that works perfectly on desktop, tablet, and mobile
+- **Security First**: Runs under the same user account as your Minecraft server (no root required) with CSRF protection
 
 ## Requirements
 
@@ -154,9 +161,10 @@ server {
    - Scroll to bottom for latest entries
 
 4. **Configuration Editor**:
-   - Select configuration file from dropdown
-   - Edit directly in the web interface
-   - Save changes with validation
+   - **Server Properties**: Direct editor for `server.properties` with reload and save buttons
+   - **Bans & Whitelist**: Three-panel interface for managing `banned-ips.json`, `banned-players.json`, and `whitelist.json` simultaneously
+   - **Config Directory**: File browser for all config files with dedicated editor pane featuring cancel and save options
+   - All editors include automatic backup creation and file validation
 
 5. **Backup Manager**:
    - View available backups with timestamps and sizes
@@ -167,20 +175,34 @@ server {
 
 ```
 vaulthunter_web_manager/
-├── app.py                 # Main Flask application
-├── config.py             # Configuration settings
-├── requirements.txt      # Python dependencies
+├── app.py                    # Main Flask application
+├── config.py                # Configuration settings
+├── routes.py                # Web routes and API endpoints
+├── requirements.txt         # Python dependencies
+├── services/                # Backend service modules
+│   ├── __init__.py         # Service exports
+│   ├── system_control.py   # Server control and status
+│   ├── log_service.py      # Log file management
+│   ├── config_manager.py   # Configuration file handling
+│   └── backup_manager.py   # Backup operations
 ├── static/
 │   ├── css/
-│   │   └── style.css    # Custom styles
+│   │   └── style.css      # Custom styles with dark mode
 │   └── js/
-│       └── app.js       # Frontend JavaScript
+│       └── app.js         # Frontend JavaScript and dark mode
 ├── templates/
-│   ├── base.html        # Base template
-│   ├── index.html       # Dashboard
-│   ├── logs.html        # Log viewer
-│   ├── config.html      # Configuration editor
-│   └── backups.html     # Backup manager
+│   ├── base.html          # Base template with dark mode support
+│   ├── index.html         # Dashboard with server control
+│   ├── logs.html          # Advanced log viewer
+│   ├── config.html        # Multi-category config editor
+│   ├── backups.html       # Backup manager
+│   └── errors/            # Error page templates
+│       ├── 403.html
+│       ├── 404.html
+│       ├── 500.html
+│       └── generic.html
+├── CLAUDE.md              # AI assistant instructions
+├── IMPLEMENTATION_PLAN.md # Development roadmap
 └── README.md
 ```
 
