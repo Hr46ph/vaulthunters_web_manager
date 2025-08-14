@@ -5,7 +5,7 @@ class Config:
     # Server paths - adjust these to match your setup
     MINECRAFT_SERVER_PATH = os.environ.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
     BACKUP_PATH = os.environ.get('BACKUP_PATH', '/home/minecraft/backups')
-    SERVICE_NAME = os.environ.get('SERVICE_NAME', 'vaulthunter')
+    SERVICE_NAME = os.environ.get('SERVICE_NAME', 'vaulthunters')
     
     # Web interface settings
     HOST = os.environ.get('HOST', '0.0.0.0')

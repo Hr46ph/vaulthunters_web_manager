@@ -3,6 +3,7 @@ from flask_wtf import FlaskForm
 from flask_wtf.csrf import validate_csrf
 from wtforms import StringField, TextAreaField, SelectField, SubmitField
 from wtforms.validators import DataRequired, Length
+from services.system_control import SystemControlService
 import os
 import logging
 
@@ -22,13 +23,9 @@ class ConfigEditForm(FlaskForm):
 def index():
     """Main dashboard"""
     try:
-        # TODO: Get actual server status from system service
-        server_status = {
-            'running': False,
-            'uptime': '0 minutes',
-            'players': 0,
-            'max_players': 20
-        }
+        service_name = current_app.config.get('SERVICE_NAME', 'vaulthunters')
+        system_control = SystemControlService(service_name)
+        server_status = system_control.get_service_status()
         
         return render_template('index.html', server_status=server_status)
     except Exception as e:
@@ -40,14 +37,9 @@ def index():
 def server_status():
     """API endpoint for server status"""
     try:
-        # TODO: Implement actual server status check
-        status = {
-            'running': False,
-            'uptime': '0 minutes',
-            'players': 0,
-            'max_players': 20,
-            'last_update': 'Never'
-        }
+        service_name = current_app.config.get('SERVICE_NAME', 'vaulthunters')
+        system_control = SystemControlService(service_name)
+        status = system_control.get_service_status()
         return jsonify(status)
     except Exception as e:
         current_app.logger.error(f'Server status error: {e}')
@@ -65,13 +57,28 @@ def server_control():
             return jsonify({'error': 'Invalid action'}), 400
         
         try:
-            # TODO: Implement actual server control
-            current_app.logger.info(f'Server control action: {action}')
-            flash(f'Server {action} command sent', 'success')
-            return jsonify({'success': True, 'message': f'Server {action} initiated'})
+            service_name = current_app.config.get('SERVICE_NAME', 'vaulthunters')
+            system_control = SystemControlService(service_name)
+            
+            # Execute the requested action
+            if action == 'start':
+                result = system_control.start_service()
+            elif action == 'stop':
+                result = system_control.stop_service()
+            elif action == 'restart':
+                result = system_control.restart_service()
+            
+            if result['success']:
+                current_app.logger.info(f'Server control action {action} successful')
+                flash(result['message'], 'success')
+                return jsonify({'success': True, 'message': result['message']})
+            else:
+                current_app.logger.error(f'Server control action {action} failed: {result["error"]}')
+                return jsonify({'success': False, 'error': result['error']}), 500
+                
         except Exception as e:
             current_app.logger.error(f'Server control error: {e}')
-            return jsonify({'error': f'Failed to {action} server'}), 500
+            return jsonify({'error': f'Failed to {action} server: {str(e)}'}), 500
     
     return jsonify({'error': 'Invalid request'}), 400
 

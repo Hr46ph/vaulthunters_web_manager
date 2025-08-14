@@ -1,0 +1,232 @@
+import subprocess
+import psutil
+import time
+import re
+from datetime import datetime, timedelta
+from flask import current_app
+import logging
+
+class SystemControlService:
+    """Service for managing systemd service and system operations"""
+    
+    def __init__(self, service_name):
+        self.service_name = service_name
+        self.logger = logging.getLogger(__name__)
+    
+    def get_service_status(self):
+        """Get detailed service status from systemd"""
+        try:
+            # Get service status
+            result = subprocess.run(
+                ['systemctl', 'status', self.service_name],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            status_info = {
+                'running': False,
+                'uptime': '0 minutes',
+                'players': 0,
+                'max_players': 20,
+                'last_update': datetime.now().isoformat(),
+                'memory_usage': 0,
+                'cpu_usage': 0.0
+            }
+            
+            # Parse systemctl status output
+            if result.returncode == 0:
+                output = result.stdout
+                
+                # Check if service is active
+                if 'Active: active (running)' in output:
+                    status_info['running'] = True
+                    
+                    # Extract uptime
+                    uptime_match = re.search(r'Active: active \(running\) since (.+?);', output)
+                    if uptime_match:
+                        start_time_str = uptime_match.group(1).strip()
+                        try:
+                            # Parse the start time (format may vary)
+                            start_time = datetime.strptime(start_time_str, '%a %Y-%m-%d %H:%M:%S %Z')
+                            uptime_delta = datetime.now() - start_time
+                            status_info['uptime'] = self._format_uptime(uptime_delta)
+                        except ValueError:
+                            # Try alternative format
+                            try:
+                                start_time = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S')
+                                uptime_delta = datetime.now() - start_time
+                                status_info['uptime'] = self._format_uptime(uptime_delta)
+                            except ValueError:
+                                status_info['uptime'] = 'Unknown'
+                    
+                    # Extract PID and get process info
+                    pid_match = re.search(r'Main PID: (\d+)', output)
+                    if pid_match:
+                        main_pid = int(pid_match.group(1))
+                        try:
+                            # Get memory and CPU usage
+                            process = psutil.Process(main_pid)
+                            status_info['memory_usage'] = process.memory_info().rss // (1024 * 1024)  # MB
+                            status_info['cpu_usage'] = process.cpu_percent()
+                            
+                            # Get child processes (for Java process)
+                            children = process.children(recursive=True)
+                            for child in children:
+                                if 'java' in child.name().lower():
+                                    status_info['memory_usage'] += child.memory_info().rss // (1024 * 1024)
+                                    status_info['cpu_usage'] += child.cpu_percent()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+                    
+                    # Try to get player count from server logs if available
+                    try:
+                        player_info = self._get_player_count()
+                        status_info.update(player_info)
+                    except Exception as e:
+                        self.logger.debug(f"Could not get player count: {e}")
+            
+            return status_info
+            
+        except subprocess.TimeoutExpired:
+            self.logger.error("Timeout getting service status")
+            return {'running': False, 'uptime': 'Unknown', 'players': 0, 'max_players': 20}
+        except Exception as e:
+            self.logger.error(f"Error getting service status: {e}")
+            return {'running': False, 'uptime': 'Error', 'players': 0, 'max_players': 20}
+    
+    def start_service(self):
+        """Start the systemd service"""
+        try:
+            result = subprocess.run(
+                ['sudo', 'systemctl', 'start', self.service_name],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                self.logger.info(f"Service {self.service_name} started successfully")
+                return {'success': True, 'message': f'Service {self.service_name} started'}
+            else:
+                error_msg = result.stderr.strip() or result.stdout.strip()
+                self.logger.error(f"Failed to start service: {error_msg}")
+                return {'success': False, 'error': f'Failed to start service: {error_msg}'}
+                
+        except subprocess.TimeoutExpired:
+            self.logger.error("Timeout starting service")
+            return {'success': False, 'error': 'Service start timeout'}
+        except Exception as e:
+            self.logger.error(f"Error starting service: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def stop_service(self):
+        """Stop the systemd service"""
+        try:
+            result = subprocess.run(
+                ['sudo', 'systemctl', 'stop', self.service_name],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                self.logger.info(f"Service {self.service_name} stopped successfully")
+                return {'success': True, 'message': f'Service {self.service_name} stopped'}
+            else:
+                error_msg = result.stderr.strip() or result.stdout.strip()
+                self.logger.error(f"Failed to stop service: {error_msg}")
+                return {'success': False, 'error': f'Failed to stop service: {error_msg}'}
+                
+        except subprocess.TimeoutExpired:
+            self.logger.error("Timeout stopping service")
+            return {'success': False, 'error': 'Service stop timeout'}
+        except Exception as e:
+            self.logger.error(f"Error stopping service: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def restart_service(self):
+        """Restart the systemd service"""
+        try:
+            result = subprocess.run(
+                ['sudo', 'systemctl', 'restart', self.service_name],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode == 0:
+                self.logger.info(f"Service {self.service_name} restarted successfully")
+                return {'success': True, 'message': f'Service {self.service_name} restarted'}
+            else:
+                error_msg = result.stderr.strip() or result.stdout.strip()
+                self.logger.error(f"Failed to restart service: {error_msg}")
+                return {'success': False, 'error': f'Failed to restart service: {error_msg}'}
+                
+        except subprocess.TimeoutExpired:
+            self.logger.error("Timeout restarting service")
+            return {'success': False, 'error': 'Service restart timeout'}
+        except Exception as e:
+            self.logger.error(f"Error restarting service: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def _format_uptime(self, uptime_delta):
+        """Format uptime delta to human readable string"""
+        total_seconds = int(uptime_delta.total_seconds())
+        days = total_seconds // 86400
+        hours = (total_seconds % 86400) // 3600
+        minutes = (total_seconds % 3600) // 60
+        
+        if days > 0:
+            return f"{days} days, {hours} hours"
+        elif hours > 0:
+            return f"{hours} hours, {minutes} minutes"
+        else:
+            return f"{minutes} minutes"
+    
+    def _get_player_count(self):
+        """Try to extract player count from server logs"""
+        try:
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
+            if not server_path:
+                return {'players': 0, 'max_players': 20}
+            
+            log_file = f"{server_path}/logs/latest.log"
+            
+            # Read last few lines of the log file to find player info
+            result = subprocess.run(
+                ['tail', '-100', log_file],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                log_content = result.stdout
+                
+                # Look for player join/leave messages to count current players
+                # This is a simple approach - could be improved with better parsing
+                current_players = 0
+                max_players = 20
+                
+                # Try to find server.properties for max players
+                try:
+                    props_result = subprocess.run(
+                        ['grep', 'max-players', f"{server_path}/server.properties"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if props_result.returncode == 0:
+                        match = re.search(r'max-players=(\d+)', props_result.stdout)
+                        if match:
+                            max_players = int(match.group(1))
+                except:
+                    pass
+                
+                return {'players': current_players, 'max_players': max_players}
+            
+        except Exception as e:
+            self.logger.debug(f"Could not get player count: {e}")
+        
+        return {'players': 0, 'max_players': 20}

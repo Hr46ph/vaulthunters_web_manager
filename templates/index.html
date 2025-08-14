@@ -48,9 +48,15 @@
                                         </span>
                                     </h6>
                                     <p>Uptime: {{ server_status.uptime }}</p>
+                                    {% if server_status.memory_usage > 0 %}
+                                    <p>Memory: {{ server_status.memory_usage }} MB</p>
+                                    {% endif %}
                                 </div>
                                 <div class="col-md-6">
                                     <p>Players: {{ server_status.players }}/{{ server_status.max_players }}</p>
+                                    {% if server_status.cpu_usage > 0 %}
+                                    <p>CPU: {{ "%.1f"|format(server_status.cpu_usage) }}%</p>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>

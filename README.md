@@ -46,7 +46,7 @@ SERVICE_NAME = "vaulthunter"  # systemd service name
 
 # Web interface settings
 HOST = "0.0.0.0"
-PORT = 8080
+PORT = 8889
 SECRET_KEY = "change-this-to-a-random-secret"
 ```
 

@@ -71,20 +71,36 @@ function updateStatusDisplay(status) {
     if (!statusElement) return;
     
     const badge = statusElement.querySelector('.badge');
-    const uptimeElement = statusElement.querySelector('p');
-    const playersElement = statusElement.querySelectorAll('p')[1];
-    
     if (badge) {
         badge.className = `badge bg-${status.running ? 'success' : 'danger'}`;
         badge.textContent = status.running ? 'Running' : 'Stopped';
     }
     
-    if (uptimeElement) {
-        uptimeElement.textContent = `Uptime: ${status.uptime}`;
+    // Update the entire status section with new data
+    const leftCol = statusElement.querySelector('.col-md-6:first-child');
+    const rightCol = statusElement.querySelector('.col-md-6:last-child');
+    
+    if (leftCol) {
+        let html = `
+            <h6>Status: 
+                <span class="badge bg-${status.running ? 'success' : 'danger'}">
+                    ${status.running ? 'Running' : 'Stopped'}
+                </span>
+            </h6>
+            <p>Uptime: ${status.uptime}</p>
+        `;
+        if (status.memory_usage > 0) {
+            html += `<p>Memory: ${status.memory_usage} MB</p>`;
+        }
+        leftCol.innerHTML = html;
     }
     
-    if (playersElement) {
-        playersElement.textContent = `Players: ${status.players}/${status.max_players}`;
+    if (rightCol) {
+        let html = `<p>Players: ${status.players}/${status.max_players}</p>`;
+        if (status.cpu_usage > 0) {
+            html += `<p>CPU: ${status.cpu_usage.toFixed(1)}%</p>`;
+        }
+        rightCol.innerHTML = html;
     }
     
     // Update button states
