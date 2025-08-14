@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration - VaultHunter Web Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">VaultHunter Web Manager</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('main.index') }}">Dashboard</a>
+                <a class="nav-link" href="{{ url_for('main.logs') }}">Logs</a>
+                <a class="nav-link active" href="{{ url_for('main.config_editor') }}">Config</a>
+                <a class="nav-link" href="{{ url_for('main.backups') }}">Backups</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Configuration Editor</h5>
+            </div>
+            <div class="card-body">
+                <form id="config-form" method="POST" action="{{ url_for('main.save_config') }}">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label for="config_file" class="form-label">Configuration File</label>
+                        {{ form.config_file(class="form-select", id="config_file") }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="content" class="form-label">Content</label>
+                        {{ form.content(class="form-control", id="content", rows="20", style="font-family: monospace;") }}
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                    <button type="button" class="btn btn-secondary" onclick="loadConfig()">Reload</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function loadConfig() {
+            const configFile = document.getElementById('config_file').value;
+            const contentArea = document.getElementById('content');
+            
+            if (!configFile) return;
+            
+            contentArea.value = 'Loading...';
+            
+            fetch(`/config/content/${configFile}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        contentArea.value = `Error: ${data.error}`;
+                    } else {
+                        contentArea.value = data.content;
+                    }
+                })
+                .catch(error => {
+                    contentArea.value = `Network error: ${error}`;
+                });
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConfig();
+            
+            document.getElementById('config_file').addEventListener('change', loadConfig);
+            
+            document.getElementById('config-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                
+                fetch(this.action, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Configuration saved successfully');
+                    } else {
+                        alert('Error: ' + (data.error || 'Save failed'));
+                    }
+                })
+                .catch(error => {
+                    alert('Network error: ' + error);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

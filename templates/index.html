@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VaultHunter Web Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">VaultHunter Web Manager</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('main.index') }}">Dashboard</a>
+                <a class="nav-link" href="{{ url_for('main.logs') }}">Logs</a>
+                <a class="nav-link" href="{{ url_for('main.config_editor') }}">Config</a>
+                <a class="nav-link" href="{{ url_for('main.backups') }}">Backups</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Server Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="server-status">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Status: 
+                                        <span class="badge bg-{{ 'success' if server_status.running else 'danger' }}">
+                                            {{ 'Running' if server_status.running else 'Stopped' }}
+                                        </span>
+                                    </h6>
+                                    <p>Uptime: {{ server_status.uptime }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p>Players: {{ server_status.players }}/{{ server_status.max_players }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-success" onclick="serverControl('start')" 
+                                    {{ 'disabled' if server_status.running else '' }}>
+                                Start Server
+                            </button>
+                            <button type="button" class="btn btn-warning" onclick="serverControl('restart')"
+                                    {{ 'disabled' if not server_status.running else '' }}>
+                                Restart Server
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="serverControl('stop')"
+                                    {{ 'disabled' if not server_status.running else '' }}>
+                                Stop Server
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h6>Quick Actions</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('main.logs') }}" class="btn btn-outline-primary">View Logs</a>
+                            <a href="{{ url_for('main.config_editor') }}" class="btn btn-outline-secondary">Edit Config</a>
+                            <a href="{{ url_for('main.backups') }}" class="btn btn-outline-info">Manage Backups</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6>System Information</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">VaultHunter Web Manager v1.0.0-dev</p>
+                        <p class="text-muted">Phase 1 Implementation - Basic structure complete</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CSRF Token for AJAX requests -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

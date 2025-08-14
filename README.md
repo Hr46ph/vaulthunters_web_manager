@@ -1,93 +1,235 @@
-# manage_vh_mc_server
+# VaultHunter Web Manager
 
+A simple, lightweight web interface for managing your VaultHunter Minecraft server. Built with Python Flask and Bootstrap for a clean, responsive experience.
 
+## Features
 
-## Getting started
+- **Server Control**: Start, stop, and restart your VaultHunter server
+- **Log Monitoring**: View server logs, crash reports, and debug logs
+- **Configuration Management**: Edit server properties through the web interface
+- **Backup Downloads**: Download and manage server backups directly from the browser
+- **User-Friendly Interface**: Clean Bootstrap-based UI that works on desktop and mobile
+- **Secure**: Runs under the same user account as your Minecraft server (no root required)
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Requirements
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.com/python_two2e32a/manage_vh_mc_server.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://gitlab.com/python_two2e32a/manage_vh_mc_server/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+- Python 3.7+
+- VaultHunter Minecraft server installation
+- Linux/Unix system with systemd (for service management)
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+
+1. Clone or download this project to your server:
+```bash
+cd /home/minecraft/
+git clone <repository-url> vaulthunter-web-manager
+cd vaulthunter-web-manager
+```
+
+2. Set up Python virtual environment:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+3. Install Python dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Configure the application by editing `config.py`:
+```python
+# Server paths
+MINECRAFT_SERVER_PATH = "/home/minecraft/vaulthunter"
+BACKUP_PATH = "/home/minecraft/backups"
+SERVICE_NAME = "vaulthunter"  # systemd service name
+
+# Web interface settings
+HOST = "0.0.0.0"
+PORT = 8080
+SECRET_KEY = "change-this-to-a-random-secret"
+```
+
+5. Create a systemd service for the web manager (run as your minecraft user):
+```bash
+sudo systemctl edit --force --full vaulthunter-web.service
+```
+
+Add the following content:
+```ini
+[Unit]
+Description=VaultHunter Web Manager
+After=network.target
+
+[Service]
+Type=simple
+User=minecraft
+Group=minecraft
+WorkingDirectory=/home/minecraft/vaulthunter-web-manager
+Environment=PATH=/usr/bin:/usr/local/bin
+ExecStart=/home/minecraft/vaulthunter-web-manager/venv/bin/python app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+6. Enable and start the web manager:
+```bash
+sudo systemctl enable vaulthunter-web.service
+sudo systemctl start vaulthunter-web.service
+```
+
+## Configuration
+
+### Server Setup
+
+Ensure your VaultHunter server is set up as a systemd service. Create `/etc/systemd/system/vaulthunters.service`:
+
+```ini
+[Unit]
+Description=VaultHunters Minecraft Server
+After=network.target
+
+[Service]
+Type=forking
+User=minecraft
+Group=minecraft
+WorkingDirectory=/home/minecraft/vaulthunters
+ExecStart=/home/minecraft/vaulthunters/run.sh
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=on-failure
+RestartSec=5
+User=natie
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Web Manager Configuration
+
+Edit `config.py` to match your server setup:
+
+- `MINECRAFT_SERVER_PATH`: Full path to your VaultHunter server directory
+- `BACKUP_PATH`: Directory where backups are stored
+- `SERVICE_NAME`: Name of your systemd service
+- `HOST`: Interface to bind to (use `127.0.0.1` for localhost only)
+- `PORT`: Port for the web interface
+- `SECRET_KEY`: Random secret for session security
+
+### Nginx Reverse Proxy (Optional)
+
+For production use, set up Nginx as a reverse proxy:
+
+```nginx
+server {
+    listen 80;
+    server_name your-server.example.com;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
 
 ## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+1. Open your web browser and navigate to `http://your-server-ip:8080`
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+2. **Server Control Panel**:
+   - Green button: Start server
+   - Yellow button: Restart server
+   - Red button: Stop server
+   - Current status displayed at the top
+
+3. **Log Viewer**:
+   - Switch between different log files using the dropdown
+   - Auto-refresh every 30 seconds
+   - Scroll to bottom for latest entries
+
+4. **Configuration Editor**:
+   - Select configuration file from dropdown
+   - Edit directly in the web interface
+   - Save changes with validation
+
+5. **Backup Manager**:
+   - View available backups with timestamps and sizes
+   - Download backups directly to your computer
+   - Automatic cleanup of old backups (configurable)
+
+## File Structure
+
+```
+vaulthunter-web-manager/
+├── app.py                 # Main Flask application
+├── config.py             # Configuration settings
+├── requirements.txt      # Python dependencies
+├── static/
+│   ├── css/
+│   │   └── style.css    # Custom styles
+│   └── js/
+│       └── app.js       # Frontend JavaScript
+├── templates/
+│   ├── base.html        # Base template
+│   ├── index.html       # Dashboard
+│   ├── logs.html        # Log viewer
+│   ├── config.html      # Configuration editor
+│   └── backups.html     # Backup manager
+└── README.md
+```
+
+## Security Notes
+
+- The web interface runs under the same user as your Minecraft server
+- No root privileges required
+- Uses session-based authentication
+- Input validation on all forms
+- File access restricted to configured directories
+
+## Troubleshooting
+
+### Web Manager Won't Start
+```bash
+# Check service status
+sudo systemctl status vaulthunter-web.service
+
+# View logs
+sudo journalctl -u vaulthunter-web.service -f
+```
+
+### Server Control Not Working
+- Verify systemd service name matches `config.py`
+- Check that the minecraft user has permission to control the service:
+```bash
+sudo usermod -a -G systemd-journal minecraft
+```
+
+### Backup Downloads Failing
+- Ensure backup directory exists and is readable
+- Check disk space and permissions
 
 ## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+MIT License - see LICENSE file for details
+
+## Support
+
+For issues and questions:
+- Check the troubleshooting section above
+- Review systemd logs for error messages
+- Ensure all file paths in config.py are correct
+- Verify user permissions for all directories
