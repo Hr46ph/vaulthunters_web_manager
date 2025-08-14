@@ -211,8 +211,21 @@ username ALL=NOPASSWD: /bin/systemctl start vaulthunters.service, \
                        /bin/systemctl stop vaulthunters.service, \
                        /bin/systemctl restart vaulthunters.service, \
                        /bin/systemctl status vaulthunters.service, \
-                       /bin/journalctl -u vaulthunters.service *, \
-                       /bin/journalctl -u vaulthunter_web_manager.service *
+                       /bin/journalctl -u vaulthunters.service -n * --no-pager, \
+                       /bin/journalctl -u vaulthunter_web_manager.service -n * --no-pager
+```
+
+### Service Status Button Asks for Password
+The "Service Status" button shows `journalctl` logs. If it asks for a password, add the journalctl commands to your sudoers file:
+```bash
+# Add these lines to /etc/sudoers.d/vaulthunter_web (replace 'username' with your actual username)
+username ALL=NOPASSWD: /bin/journalctl -u vaulthunters.service -n * --no-pager, \
+                       /bin/journalctl -u vaulthunter_web_manager.service -n * --no-pager
+```
+
+Alternatively, add the user to the `systemd-journal` group:
+```bash
+sudo usermod -a -G systemd-journal username
 ```
 
 ### Backup Downloads Failing

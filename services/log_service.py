@@ -10,6 +10,7 @@ class LogService:
     
     def get_service_journal(self, service_name, lines=100):
         """Get systemd journal logs for a service"""
+        # Try with sudo first
         try:
             result = subprocess.run(
                 ['sudo', '/bin/journalctl', '-u', f'{service_name}.service', '-n', str(lines), '--no-pager'],
@@ -25,13 +26,8 @@ class LogService:
                     'service': service_name
                 }
             else:
-                error_msg = result.stderr.strip() or 'Failed to read journal'
-                self.logger.error(f"Journal read failed: {error_msg}")
-                return {
-                    'success': False,
-                    'error': error_msg,
-                    'service': service_name
-                }
+                # If sudo fails, try without sudo (user might have access)
+                return self._get_journal_without_sudo(service_name, lines)
                 
         except subprocess.TimeoutExpired:
             self.logger.error("Timeout reading service journal")
@@ -41,10 +37,40 @@ class LogService:
                 'service': service_name
             }
         except Exception as e:
-            self.logger.error(f"Error reading service journal: {e}")
+            self.logger.error(f"Error reading service journal with sudo: {e}")
+            # Try without sudo as fallback
+            return self._get_journal_without_sudo(service_name, lines)
+    
+    def _get_journal_without_sudo(self, service_name, lines=100):
+        """Fallback method to read journal without sudo"""
+        try:
+            result = subprocess.run(
+                ['/bin/journalctl', '-u', f'{service_name}.service', '-n', str(lines), '--no-pager'],
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
+            
+            if result.returncode == 0:
+                return {
+                    'success': True,
+                    'logs': result.stdout,
+                    'service': service_name
+                }
+            else:
+                error_msg = result.stderr.strip() or 'Failed to read journal (check permissions)'
+                self.logger.error(f"Journal read failed without sudo: {error_msg}")
+                return {
+                    'success': False,
+                    'error': f'Permission denied. Add journalctl commands to sudoers: {error_msg}',
+                    'service': service_name
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error reading service journal without sudo: {e}")
             return {
                 'success': False,
-                'error': str(e),
+                'error': f'Cannot read journal. Please add journalctl permissions to sudoers: {str(e)}',
                 'service': service_name
             }
     
