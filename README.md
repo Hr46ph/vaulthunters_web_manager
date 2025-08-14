@@ -22,8 +22,8 @@ A simple, lightweight web interface for managing your VaultHunter Minecraft serv
 1. Clone or download this project to your server:
 ```bash
 cd /home/minecraft/
-git clone <repository-url> vaulthunter-web-manager
-cd vaulthunter-web-manager
+git clone <repository-url> vaulthunter_web_manager
+cd vaulthunter_web_manager
 ```
 
 2. Set up Python virtual environment:
@@ -52,7 +52,7 @@ SECRET_KEY = "change-this-to-a-random-secret"
 
 5. Create a systemd service for the web manager (run as your minecraft user):
 ```bash
-sudo systemctl edit --force --full vaulthunter-web.service
+sudo systemctl edit --force --full vaulthunter_web_manager.service
 ```
 
 Add the following content:
@@ -65,9 +65,9 @@ After=network.target
 Type=simple
 User=minecraft
 Group=minecraft
-WorkingDirectory=/home/minecraft/vaulthunter-web-manager
+WorkingDirectory=/home/minecraft/vaulthunter_web_manager
 Environment=PATH=/usr/bin:/usr/local/bin
-ExecStart=/home/minecraft/vaulthunter-web-manager/venv/bin/python app.py
+ExecStart=/home/minecraft/vaulthunter_web_manager/venv/bin/python app.py
 Restart=always
 
 [Install]
@@ -76,8 +76,8 @@ WantedBy=multi-user.target
 
 6. Enable and start the web manager:
 ```bash
-sudo systemctl enable vaulthunter-web.service
-sudo systemctl start vaulthunter-web.service
+sudo systemctl enable vaulthunter_web_manager.service
+sudo systemctl start vaulthunter_web_manager.service
 ```
 
 ## Configuration
@@ -166,7 +166,7 @@ server {
 ## File Structure
 
 ```
-vaulthunter-web-manager/
+vaulthunter_web_manager/
 ├── app.py                 # Main Flask application
 ├── config.py             # Configuration settings
 ├── requirements.txt      # Python dependencies
@@ -197,20 +197,22 @@ vaulthunter-web-manager/
 ### Web Manager Won't Start
 ```bash
 # Check service status
-sudo systemctl status vaulthunter-web.service
+sudo systemctl status vaulthunter_web_manager.service
 
 # View logs
-sudo journalctl -u vaulthunter-web.service -f
+sudo journalctl -u vaulthunter_web_manager.service -f
 ```
 
 ### Server Control Not Working
 - Verify systemd service name matches `config.py`
-- Check that the user has passwordless sudo access for systemctl commands. Add to `/etc/sudoers.d/vaulthunter-web`:
+- Check that the user has passwordless sudo access for systemctl commands. Add to `/etc/sudoers.d/vaulthunter_web`:
 ```
 username ALL=NOPASSWD: /bin/systemctl start vaulthunters.service, \
                        /bin/systemctl stop vaulthunters.service, \
                        /bin/systemctl restart vaulthunters.service, \
-                       /bin/systemctl status vaulthunters.service
+                       /bin/systemctl status vaulthunters.service, \
+                       /bin/journalctl -u vaulthunters.service *, \
+                       /bin/journalctl -u vaulthunter_web_manager.service *
 ```
 
 ### Backup Downloads Failing

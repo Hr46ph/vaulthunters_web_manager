@@ -5,11 +5,42 @@ function getCSRFToken() {
     return document.querySelector('meta[name=csrf-token]').getAttribute('content');
 }
 
+// Modal functions (replacing alert/confirm)
+function showAlert(title, message, type = 'info') {
+    document.getElementById('alertModalTitle').textContent = title;
+    document.getElementById('alertModalMessage').textContent = message;
+    
+    const modal = new bootstrap.Modal(document.getElementById('alertModal'));
+    modal.show();
+}
+
+function showConfirm(title, message, callback) {
+    document.getElementById('confirmModalTitle').textContent = title;
+    document.getElementById('confirmModalMessage').textContent = message;
+    
+    const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+    
+    // Set up the OK button to call the callback
+    document.getElementById('confirmModalOK').onclick = function() {
+        modal.hide();
+        callback();
+    };
+    
+    modal.show();
+}
+
 // Server control functions
 function serverControl(action) {
-    if (!confirm(`Are you sure you want to ${action} the server?`)) {
-        return;
-    }
+    showConfirm(
+        'Confirm Server Action', 
+        `Are you sure you want to ${action} the server?`,
+        function() {
+            executeServerControl(action);
+        }
+    );
+}
+
+function executeServerControl(action) {
     
     const formData = new FormData();
     formData.append('action', action);
@@ -29,16 +60,16 @@ function serverControl(action) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showAlert('success', data.message);
+            showAlert('Success', data.message);
             // Refresh server status after a delay
             setTimeout(updateServerStatus, 2000);
         } else {
-            showAlert('danger', data.error || 'Server control failed');
+            showAlert('Error', data.error || 'Server control failed');
         }
     })
     .catch(error => {
         console.error('Server control error:', error);
-        showAlert('danger', 'Network error occurred');
+        showAlert('Error', 'Network error occurred');
     })
     .finally(() => {
         // Re-enable buttons
@@ -118,8 +149,64 @@ function updateButtonStates(isRunning) {
     if (stopBtn) stopBtn.disabled = !isRunning;
 }
 
-// Show alert message
-function showAlert(type, message) {
+// Server journal functions
+function showServerJournal() {
+    const modal = new bootstrap.Modal(document.getElementById('serverJournalModal'));
+    modal.show();
+    
+    // Load initial content
+    refreshServerJournal();
+}
+
+function refreshServerJournal() {
+    const contentElement = document.getElementById('serverJournalContent');
+    contentElement.textContent = 'Loading...';
+    
+    fetch('/server/journal?lines=100')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                contentElement.textContent = data.logs || 'No logs available';
+            } else {
+                contentElement.textContent = `Error: ${data.error || 'Failed to load logs'}`;
+            }
+            // Auto-scroll to bottom
+            contentElement.scrollTop = contentElement.scrollHeight;
+        })
+        .catch(error => {
+            console.error('Journal fetch error:', error);
+            contentElement.textContent = 'Network error loading logs';
+        });
+}
+
+// Dark mode functions
+function toggleDarkMode() {
+    const currentTheme = document.documentElement.getAttribute('data-bs-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+}
+
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-bs-theme', theme);
+    
+    const icon = document.getElementById('darkModeIcon');
+    if (theme === 'dark') {
+        icon.className = 'fas fa-sun';
+    } else {
+        icon.className = 'fas fa-moon';
+    }
+}
+
+function initTheme() {
+    // Check for saved theme preference or default to light mode
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    setTheme(savedTheme);
+}
+
+// Flash message function (for server-side flash messages)
+function showFlashAlert(type, message) {
     const alertContainer = document.querySelector('.container');
     const existingAlerts = document.querySelectorAll('.alert');
     
@@ -131,7 +218,7 @@ function showAlert(type, message) {
     });
     
     const alertHTML = `
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+        <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show" role="alert">
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -151,6 +238,9 @@ function showAlert(type, message) {
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize theme
+    initTheme();
+    
     // Update server status on page load
     updateServerStatus();
     

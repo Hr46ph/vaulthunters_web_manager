@@ -59,7 +59,7 @@ pip install -r requirements.txt
 - `python app.py` - Run development server (in venv)
 - `pip install -r requirements.txt` - Install dependencies (in venv)
 - `deactivate` - Exit virtual environment
-- For production: systemd service uses `./venv/bin/python app.py`
+- For production: systemd service `vaulthunter_web_manager.service` uses `./venv/bin/python app.py`
 
 ## Implementation Reference
 

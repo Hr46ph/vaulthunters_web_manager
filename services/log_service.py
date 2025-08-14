@@ -1,0 +1,113 @@
+import subprocess
+import logging
+from flask import current_app
+
+class LogService:
+    """Service for reading various log files and systemd journal"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+    
+    def get_service_journal(self, service_name, lines=100):
+        """Get systemd journal logs for a service"""
+        try:
+            result = subprocess.run(
+                ['sudo', '/bin/journalctl', '-u', f'{service_name}.service', '-n', str(lines), '--no-pager'],
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
+            
+            if result.returncode == 0:
+                return {
+                    'success': True,
+                    'logs': result.stdout,
+                    'service': service_name
+                }
+            else:
+                error_msg = result.stderr.strip() or 'Failed to read journal'
+                self.logger.error(f"Journal read failed: {error_msg}")
+                return {
+                    'success': False,
+                    'error': error_msg,
+                    'service': service_name
+                }
+                
+        except subprocess.TimeoutExpired:
+            self.logger.error("Timeout reading service journal")
+            return {
+                'success': False,
+                'error': 'Timeout reading service logs',
+                'service': service_name
+            }
+        except Exception as e:
+            self.logger.error(f"Error reading service journal: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'service': service_name
+            }
+    
+    def get_web_manager_journal(self, lines=50):
+        """Get journal logs for the web manager service itself"""
+        web_service_name = 'vaulthunter_web_manager'
+        return self.get_service_journal(web_service_name, lines)
+    
+    def get_minecraft_server_logs(self, log_type='latest', lines=100):
+        """Get Minecraft server log files"""
+        try:
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
+            if not server_path:
+                return {
+                    'success': False,
+                    'error': 'Server path not configured',
+                    'logs': ''
+                }
+            
+            log_file_map = {
+                'latest': f'{server_path}/logs/latest.log',
+                'debug': f'{server_path}/logs/debug.log',
+            }
+            
+            log_file = log_file_map.get(log_type)
+            if not log_file:
+                return {
+                    'success': False,
+                    'error': f'Unknown log type: {log_type}',
+                    'logs': ''
+                }
+            
+            result = subprocess.run(
+                ['tail', '-n', str(lines), log_file],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                return {
+                    'success': True,
+                    'logs': result.stdout,
+                    'log_type': log_type,
+                    'log_file': log_file
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'Could not read {log_file}',
+                    'logs': ''
+                }
+                
+        except subprocess.TimeoutExpired:
+            return {
+                'success': False,
+                'error': 'Timeout reading log file',
+                'logs': ''
+            }
+        except Exception as e:
+            self.logger.error(f"Error reading log file: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'logs': ''
+            }

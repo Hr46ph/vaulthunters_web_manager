@@ -1,7 +1,9 @@
 /* VaultHunter Web Manager Custom Styles */
 
+/* Light Mode (Default) */
 body {
     background-color: #f8f9fa;
+    transition: background-color 0.3s, color 0.3s;
 }
 
 .navbar-brand {
@@ -12,12 +14,14 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     border: none;
     margin-bottom: 1rem;
+    transition: background-color 0.3s, box-shadow 0.3s;
 }
 
 .card-header {
     background-color: #ffffff;
     border-bottom: 1px solid #dee2e6;
     font-weight: 600;
+    transition: background-color 0.3s, border-color 0.3s;
 }
 
 .btn-group .btn {
@@ -37,6 +41,86 @@ body {
 .loading {
     opacity: 0.6;
     pointer-events: none;
+}
+
+/* Dark Mode */
+[data-bs-theme="dark"] body {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .card {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+[data-bs-theme="dark"] .card-header {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border-bottom: 1px solid #404040;
+}
+
+[data-bs-theme="dark"] .text-muted {
+    color: #b0b0b0 !important;
+}
+
+[data-bs-theme="dark"] .modal-content {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border: 1px solid #404040;
+}
+
+[data-bs-theme="dark"] .modal-header {
+    border-bottom: 1px solid #404040;
+}
+
+[data-bs-theme="dark"] .modal-footer {
+    border-top: 1px solid #404040;
+}
+
+[data-bs-theme="dark"] .form-control {
+    background-color: #2d2d2d;
+    border-color: #404040;
+    color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .form-control:focus {
+    background-color: #2d2d2d;
+    border-color: #666666;
+    color: #e0e0e0;
+    box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+}
+
+[data-bs-theme="dark"] .form-select {
+    background-color: #2d2d2d;
+    border-color: #404040;
+    color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .table {
+    color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > td,
+[data-bs-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > th {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Dark mode toggle button */
+#darkModeToggle {
+    transition: all 0.3s ease;
+}
+
+#darkModeToggle:hover {
+    transform: scale(1.05);
+}
+
+/* Journal/Log content dark styling */
+[data-bs-theme="dark"] #serverJournalContent {
+    background-color: #0d1117 !important;
+    color: #c9d1d9 !important;
+    border: 1px solid #30363d;
 }
 
 /* Responsive adjustments */

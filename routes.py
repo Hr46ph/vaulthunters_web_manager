@@ -4,6 +4,7 @@ from flask_wtf.csrf import validate_csrf
 from wtforms import StringField, TextAreaField, SelectField, SubmitField
 from wtforms.validators import DataRequired, Length
 from services.system_control import SystemControlService
+from services.log_service import LogService
 import os
 import logging
 
@@ -207,6 +208,44 @@ def download_backup(filename):
         current_app.logger.error(f'Backup download error: {e}')
         flash('Error downloading backup', 'error')
         return redirect(url_for('main.backups'))
+
+@main_bp.route('/server/journal')
+def server_journal():
+    """Get systemd journal logs for the VaultHunters service"""
+    try:
+        service_name = current_app.config.get('SERVICE_NAME', 'vaulthunters')
+        lines = request.args.get('lines', 100, type=int)
+        
+        log_service = LogService()
+        result = log_service.get_service_journal(service_name, lines)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f'Server journal error: {e}')
+        return jsonify({
+            'success': False,
+            'error': 'Failed to read service journal',
+            'service': service_name
+        }), 500
+
+@main_bp.route('/webmanager/journal')
+def webmanager_journal():
+    """Get systemd journal logs for the web manager service"""
+    try:
+        lines = request.args.get('lines', 50, type=int)
+        
+        log_service = LogService()
+        result = log_service.get_web_manager_journal(lines)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f'Web manager journal error: {e}')
+        return jsonify({
+            'success': False,
+            'error': 'Failed to read web manager journal'
+        }), 500
 
 @main_bp.route('/health')
 def health_check():
