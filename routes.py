@@ -316,7 +316,12 @@ def webmanager_journal():
 @main_bp.route('/console')
 def console():
     """Console page with RCON interface"""
-    return render_template('console.html')
+    try:
+        return render_template('console.html')
+    except Exception as e:
+        current_app.logger.error(f'Console page error: {e}')
+        flash('Error loading console page', 'error')
+        return redirect(url_for('main.index'))
 
 @main_bp.route('/console/status')
 def console_status():

@@ -74,12 +74,12 @@ def create_app(config_name=None):
 
 def main():
     """Entry point for running the application"""
-    config_name = os.environ.get('FLASK_ENV', 'development')
+    config_name = os.environ.get('FLASK_ENV', 'production')
     app = create_app(config_name)
     
     host = app.config.get('HOST', '0.0.0.0')
     port = app.config.get('PORT', 8080)
-    debug = app.config.get('DEBUG', True)
+    debug = app.config.get('DEBUG', False)
     
     print(f"Starting VaultHunter Web Manager on {host}:{port}")
     print(f"Debug mode: {debug}")
