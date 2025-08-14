@@ -89,11 +89,34 @@ function updateServerStatus() {
             updateStatusDisplay(data);
         } else {
             console.error('Status update error:', data.error);
+            showStatusError('Failed to load server status');
         }
     })
     .catch(error => {
         console.error('Status fetch error:', error);
+        showStatusError('Network error loading status');
     });
+}
+
+// Show status loading error
+function showStatusError(message) {
+    const statusElement = document.getElementById('server-status');
+    if (!statusElement) return;
+    
+    const leftCol = statusElement.querySelector('.col-md-6:first-child');
+    if (leftCol) {
+        leftCol.innerHTML = `
+            <h6>Status: 
+                <span class="badge bg-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Error
+                </span>
+            </h6>
+            <p class="text-danger">${message}</p>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="updateServerStatus()">
+                <i class="fas fa-redo"></i> Retry
+            </button>
+        `;
+    }
 }
 
 // Update status display
@@ -241,8 +264,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize theme
     initTheme();
     
-    // Update server status on page load
-    updateServerStatus();
+    // Update server status on page load - small delay to let page render first
+    setTimeout(updateServerStatus, 100);
     
     // Set up periodic status updates (every 10 seconds)
     setInterval(updateServerStatus, 10000);

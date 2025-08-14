@@ -1,3 +1,10 @@
+"""
+VaultHunter Web Manager Configuration Template
+
+Copy this file to config.py and customize the settings for your environment.
+DO NOT commit config.py to version control - it contains environment-specific settings.
+"""
+
 import os
 from datetime import timedelta
 

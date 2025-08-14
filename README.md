@@ -46,7 +46,11 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. Configure the application by editing `config.py`:
+4. Configure the application by copying `config.py.example` to `config.py` and editing it:
+
+```bash
+cp config.py.example config.py
+```
 ```python
 # Server paths
 MINECRAFT_SERVER_PATH = "/home/minecraft/vaulthunter"
@@ -125,7 +129,11 @@ WantedBy=multi-user.target
 
 ### Web Manager Configuration
 
-Edit `config.py` to match your server setup:
+Copy `config.py.example` to `config.py` and edit it to match your server setup:
+
+```bash
+cp config.py.example config.py
+```
 
 - `MINECRAFT_SERVER_PATH`: Full path to your VaultHunter server directory
 - `BACKUP_PATH`: Directory where backups are stored
@@ -208,7 +216,8 @@ server {
 ```
 vaulthunter_web_manager/
 ├── app.py                    # Main Flask application
-├── config.py                # Configuration settings
+├── config.py.example        # Configuration template
+├── config.py                # Configuration settings (create from .example)
 ├── routes.py                # Web routes and API endpoints
 ├── requirements.txt         # Python dependencies
 ├── services/                # Backend service modules

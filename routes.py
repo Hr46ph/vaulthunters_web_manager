@@ -24,17 +24,14 @@ class ConfigEditForm(FlaskForm):
 
 @main_bp.route('/')
 def index():
-    """Main dashboard"""
+    """Main dashboard - lightweight initial load"""
     try:
-        service_name = current_app.config.get('SERVICE_NAME', 'vaulthunters')
-        system_control = SystemControlService(service_name)
-        server_status = system_control.get_service_status()
-        
-        return render_template('index.html', server_status=server_status)
+        # Return minimal page - status will be loaded via AJAX
+        return render_template('index.html')
     except Exception as e:
         current_app.logger.error(f'Dashboard error: {e}')
         flash('Error loading dashboard', 'error')
-        return render_template('index.html', server_status={'running': False})
+        return render_template('index.html')
 
 @main_bp.route('/server/status')
 def server_status():

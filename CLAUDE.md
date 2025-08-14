@@ -24,7 +24,7 @@ VaultHunter Web Manager is a Flask-based web application for managing VaultHunte
 Based on the README.md specifications:
 
 - **Flask Application** (`app.py`): Main web server with routes for server control, log viewing, config editing, backup management, and RCON console
-- **Configuration** (`config.py`): Server paths, systemd service name, web interface settings, Minecraft server connection details
+- **Configuration** (`config.py.example`): Configuration template - copy to `config.py` and customize server paths, systemd service name, web interface settings, Minecraft server connection details
 - **Templates** (`templates/`): Jinja2 templates for dashboard, console, logs, config editor, and backup manager
 - **Static Files** (`static/`): CSS and JavaScript for Bootstrap-based responsive UI with console functionality
 - **Requirements** (`requirements.txt`): Python dependencies including Flask and mcstatus for Minecraft server integration

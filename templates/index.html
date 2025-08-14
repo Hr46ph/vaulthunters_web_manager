@@ -13,20 +13,16 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <h6>Status: 
-                                        <span class="badge bg-{{ 'success' if server_status.running else 'danger' }}">
-                                            {{ 'Running' if server_status.running else 'Stopped' }}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-spinner fa-spin"></i> Loading...
                                         </span>
                                     </h6>
-                                    <p>Uptime: {{ server_status.uptime }}</p>
-                                    {% if server_status.memory_usage > 0 %}
-                                    <p>Memory: {{ server_status.memory_usage }} MB</p>
-                                    {% endif %}
+                                    <p>Uptime: <span class="text-muted">Loading...</span></p>
+                                    <p>Memory: <span class="text-muted">Loading...</span></p>
                                 </div>
                                 <div class="col-md-6">
-                                    <p>Players: {{ server_status.players }}/{{ server_status.max_players }}</p>
-                                    {% if server_status.cpu_usage > 0 %}
-                                    <p>CPU: {{ "%.1f"|format(server_status.cpu_usage) }}%</p>
-                                    {% endif %}
+                                    <p>Players: <span class="text-muted">Loading...</span></p>
+                                    <p>CPU: <span class="text-muted">Loading...</span></p>
                                 </div>
                             </div>
                         </div>
@@ -34,16 +30,13 @@
                         <hr>
                         
                         <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-success" onclick="serverControl('start')" 
-                                    {{ 'disabled' if server_status.running else '' }}>
+                            <button type="button" class="btn btn-success" onclick="serverControl('start')" disabled>
                                 Start Server
                             </button>
-                            <button type="button" class="btn btn-warning" onclick="serverControl('restart')"
-                                    {{ 'disabled' if not server_status.running else '' }}>
+                            <button type="button" class="btn btn-warning" onclick="serverControl('restart')" disabled>
                                 Restart Server
                             </button>
-                            <button type="button" class="btn btn-danger" onclick="serverControl('stop')"
-                                    {{ 'disabled' if not server_status.running else '' }}>
+                            <button type="button" class="btn btn-danger" onclick="serverControl('stop')" disabled>
                                 Stop Server
                             </button>
                             <button type="button" class="btn btn-info" onclick="showServerJournal()">
