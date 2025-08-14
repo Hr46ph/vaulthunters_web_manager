@@ -24,9 +24,7 @@
                         <label class="form-check-label" for="auto-refresh">Auto-refresh</label>
                     </div>
                 </div>
-                <div id="log-content" style="background-color: #f8f9fa; padding: 1rem; height: 400px; overflow-y: scroll; font-family: monospace; white-space: pre-wrap;">
-                    Loading logs...
-                </div>
+                <textarea id="log-content" class="form-control" readonly style="height: 400px; font-family: monospace; resize: none;">Loading logs...</textarea>
             </div>
         </div>
 {% endblock %}
@@ -37,20 +35,20 @@
             const logType = document.getElementById('log-selector').value;
             const logContent = document.getElementById('log-content');
             
-            logContent.textContent = 'Loading...';
+            logContent.value = 'Loading...';
             
             fetch(`/logs/content/${logType}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
-                        logContent.textContent = `Error: ${data.error}`;
+                        logContent.value = `Error: ${data.error}`;
                     } else {
-                        logContent.textContent = data.content;
+                        logContent.value = data.content;
                         logContent.scrollTop = logContent.scrollHeight;
                     }
                 })
                 .catch(error => {
-                    logContent.textContent = `Network error: ${error}`;
+                    logContent.value = `Network error: ${error}`;
                 });
         }
         

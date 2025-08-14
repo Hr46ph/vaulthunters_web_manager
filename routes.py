@@ -5,6 +5,8 @@ from wtforms import StringField, TextAreaField, SelectField, SubmitField
 from wtforms.validators import DataRequired, Length
 from services.system_control import SystemControlService
 from services.log_service import LogService
+from services.config_manager import ConfigManager
+from services.backup_manager import BackupManager
 import os
 import logging
 
@@ -87,9 +89,12 @@ def server_control():
 def logs():
     """Log viewer page"""
     try:
-        # TODO: Get available log files
-        log_files = ['server', 'debug', 'crash']
-        selected_log = request.args.get('log', 'server')
+        log_service = LogService()
+        available_logs = log_service.get_available_log_files()
+        
+        # Extract log types for selector
+        log_files = ['latest', 'debug', 'crash']
+        selected_log = request.args.get('log', 'latest')
         
         return render_template('logs.html', 
                              log_files=log_files, 
@@ -103,19 +108,21 @@ def logs():
 def log_content(log_type):
     """API endpoint for log content"""
     try:
-        # TODO: Implement actual log reading
-        if log_type not in ['server', 'debug', 'crash']:
+        if log_type not in ['latest', 'debug', 'crash']:
             return jsonify({'error': 'Invalid log type'}), 400
         
-        # Placeholder log content
-        log_content = f"[INFO] This is a placeholder for {log_type} log content\n"
-        log_content += "[INFO] Log reading functionality not yet implemented\n"
+        log_service = LogService()
+        result = log_service.get_minecraft_server_logs(log_type, lines=200)
         
-        return jsonify({
-            'content': log_content,
-            'last_modified': 'Unknown',
-            'size': len(log_content)
-        })
+        if result['success']:
+            return jsonify({
+                'content': result['logs'],
+                'log_type': result.get('log_type', log_type),
+                'log_file': result.get('log_file', 'N/A')
+            })
+        else:
+            return jsonify({'error': result['error']}), 500
+            
     except Exception as e:
         current_app.logger.error(f'Log content error: {e}')
         return jsonify({'error': 'Failed to read log file'}), 500
@@ -124,9 +131,12 @@ def log_content(log_type):
 def config_editor():
     """Configuration editor page"""
     try:
-        # TODO: Get available config files
-        config_files = ['server.properties', 'bukkit.yml', 'spigot.yml']
-        selected_config = request.args.get('config', 'server.properties')
+        config_manager = ConfigManager()
+        available_configs = config_manager.get_available_config_files()
+        
+        # Extract config file names for form
+        config_files = [config['name'] for config in available_configs] if available_configs else ['server.properties']
+        selected_config = request.args.get('config', config_files[0] if config_files else 'server.properties')
         
         form = ConfigEditForm()
         form.config_file.choices = [(f, f) for f in config_files]
@@ -144,18 +154,24 @@ def config_editor():
 def config_content(config_file):
     """API endpoint for config file content"""
     try:
-        # TODO: Implement actual config file reading
-        if config_file not in current_app.config.get('EDITABLE_CONFIGS', []):
-            return jsonify({'error': 'Config file not allowed'}), 403
+        config_manager = ConfigManager()
         
-        # Placeholder config content
-        content = f"# Placeholder content for {config_file}\n"
-        content += "# Configuration file reading not yet implemented\n"
+        # Get server path and construct full config path
+        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        config_path = os.path.join(server_path, config_file)
         
-        return jsonify({
-            'content': content,
-            'filename': config_file
-        })
+        result = config_manager.read_config_file(config_path)
+        
+        if result['success']:
+            return jsonify({
+                'content': result['content'],
+                'filename': config_file,
+                'size': result.get('size', 0),
+                'type': result.get('type', 'text')
+            })
+        else:
+            return jsonify({'error': result['error']}), 500
+            
     except Exception as e:
         current_app.logger.error(f'Config content error: {e}')
         return jsonify({'error': 'Failed to read config file'}), 500
@@ -170,10 +186,26 @@ def save_config():
         content = form.content.data
         
         try:
-            # TODO: Implement actual config file saving
-            current_app.logger.info(f'Config save request for: {config_file}')
-            flash(f'Configuration {config_file} saved successfully', 'success')
-            return jsonify({'success': True, 'message': 'Configuration saved'})
+            config_manager = ConfigManager()
+            
+            # Get server path and construct full config path
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+            config_path = os.path.join(server_path, config_file)
+            
+            result = config_manager.write_config_file(config_path, content, create_backup=True)
+            
+            if result['success']:
+                current_app.logger.info(f'Config save successful for: {config_file}')
+                flash(f'Configuration {config_file} saved successfully', 'success')
+                return jsonify({
+                    'success': True, 
+                    'message': result['message'],
+                    'backup_created': result.get('backup_created', False)
+                })
+            else:
+                current_app.logger.error(f'Config save failed for {config_file}: {result["error"]}')
+                return jsonify({'error': result['error']}), 500
+                
         except Exception as e:
             current_app.logger.error(f'Config save error: {e}')
             return jsonify({'error': 'Failed to save configuration'}), 500
@@ -184,11 +216,17 @@ def save_config():
 def backups():
     """Backup manager page"""
     try:
-        # TODO: Get available backups
-        backups = [
-            {'name': 'backup_2024_01_01.zip', 'size': '125 MB', 'date': '2024-01-01 12:00:00'},
-            {'name': 'backup_2024_01_02.zip', 'size': '128 MB', 'date': '2024-01-02 12:00:00'},
-        ]
+        backup_manager = BackupManager()
+        available_backups = backup_manager.get_available_backups()
+        
+        # Format backup data for template
+        backups = []
+        for backup in available_backups:
+            backups.append({
+                'name': backup['filename'],
+                'size': backup['size_human'],
+                'date': backup['modified']
+            })
         
         return render_template('backups.html', backups=backups)
     except Exception as e:
@@ -200,10 +238,8 @@ def backups():
 def download_backup(filename):
     """Download backup file"""
     try:
-        # TODO: Implement actual backup download
-        current_app.logger.info(f'Backup download request: {filename}')
-        flash('Backup download functionality not yet implemented', 'info')
-        return redirect(url_for('main.backups'))
+        backup_manager = BackupManager()
+        return backup_manager.download_backup(filename)
     except Exception as e:
         current_app.logger.error(f'Backup download error: {e}')
         flash('Error downloading backup', 'error')
