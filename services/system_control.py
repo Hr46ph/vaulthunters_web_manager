@@ -187,7 +187,7 @@ class SystemControlService:
     def _get_player_count(self):
         """Get player count using mcstatus server query"""
         try:
-            from mcstatus import JavaServer
+            from mcstatus.server import JavaServer
             
             # Get server host and query port from config
             server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
@@ -196,7 +196,7 @@ class SystemControlService:
             
             # Try server query first (most reliable)
             try:
-                server = JavaServer(server_host, query_port)
+                server = JavaServer.lookup(f"{server_host}:{query_port}")
                 query = server.query()
                 return {
                     'players': query.players.online,
@@ -207,7 +207,7 @@ class SystemControlService:
                 self.logger.debug(f"Query failed, trying status ping: {query_error}")
                 
                 # Fallback to status ping
-                server = JavaServer(server_host, server_port)
+                server = JavaServer.lookup(f"{server_host}:{server_port}")
                 status = server.status()
                 return {
                     'players': status.players.online,

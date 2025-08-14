@@ -327,18 +327,20 @@ def console():
 def console_status():
     """Check RCON connection status"""
     try:
-        from mcstatus import JavaServer
+        from mcstatus.server import JavaServer
         
         # Get server connection details
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
         rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
         rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', 'minecraft')
         
-        # Test RCON connection
-        server = JavaServer(server_host, rcon_port)
-        with server.rcon(rcon_password) as rcon:
+        # Create server connection for RCON
+        server = JavaServer.lookup(f"{server_host}:{rcon_port}")
+        
+        # Test RCON connection - correct API usage
+        with server.rcon(rcon_password) as rcon_client:
             # Simple test command
-            rcon.command("help")
+            response = rcon_client.command("help")
             
         return jsonify({
             'connected': True,
@@ -368,24 +370,26 @@ def console_execute():
                 'error': 'No command provided'
             }), 400
         
-        from mcstatus import JavaServer
+        from mcstatus.server import JavaServer
         
         # Get server connection details
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
         rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
         rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', 'minecraft')
         
+        # Create server connection for RCON
+        server = JavaServer.lookup(f"{server_host}:{rcon_port}")
+        
         # Execute command via RCON
-        server = JavaServer(server_host, rcon_port)
-        with server.rcon(rcon_password) as rcon:
-            response = rcon.command(command)
+        with server.rcon(rcon_password) as rcon_client:
+            response = rcon_client.command(command)
             
         current_app.logger.info(f'RCON command executed: {command}')
         
         return jsonify({
             'success': True,
             'command': command,
-            'response': response
+            'response': response if response else 'Command executed successfully'
         })
         
     except Exception as e:
