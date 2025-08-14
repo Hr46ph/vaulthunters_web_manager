@@ -12,6 +12,7 @@ class Config:
     MINECRAFT_SERVER_PORT = int(os.environ.get('MINECRAFT_SERVER_PORT', 25565))
     MINECRAFT_QUERY_PORT = int(os.environ.get('MINECRAFT_QUERY_PORT', 25565))
     MINECRAFT_RCON_PORT = int(os.environ.get('MINECRAFT_RCON_PORT', 25575))
+    MINECRAFT_RCON_PASSWORD = os.environ.get('MINECRAFT_RCON_PASSWORD', 'minecraft')
     
     # Web interface settings
     HOST = os.environ.get('HOST', '0.0.0.0')

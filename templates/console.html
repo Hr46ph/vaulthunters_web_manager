@@ -5,28 +5,45 @@
 {% block extra_css %}
 <style>
     .console-output {
-        background-color: #1e1e1e;
-        color: #ffffff;
         font-family: 'Courier New', monospace;
         font-size: 14px;
         height: 400px;
         overflow-y: auto;
         padding: 15px;
-        border: 1px solid #444;
+        border: 1px solid var(--bs-border-color);
         border-radius: 5px;
         white-space: pre-wrap;
         word-wrap: break-word;
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+    }
+    
+    /* Dark theme specific console styling */
+    [data-bs-theme="dark"] .console-output {
+        background-color: #1e1e1e;
+        color: #ffffff;
+        border-color: #444;
+    }
+    
+    /* Light theme specific console styling */
+    [data-bs-theme="light"] .console-output {
+        background-color: #f8f9fa;
+        color: #212529;
+        border-color: #dee2e6;
     }
     
     .console-input {
         font-family: 'Courier New', monospace;
         font-size: 14px;
+    }
+    
+    [data-bs-theme="dark"] .console-input {
         background-color: #2d2d2d;
         color: #ffffff;
         border: 1px solid #555;
     }
     
-    .console-input:focus {
+    [data-bs-theme="dark"] .console-input:focus {
         background-color: #2d2d2d;
         color: #ffffff;
         border-color: #007bff;
@@ -41,15 +58,15 @@
     .command-suggestion {
         cursor: pointer;
         padding: 5px 10px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--bs-border-color);
     }
     
     .command-suggestion:hover {
-        background-color: #f8f9fa;
+        background-color: var(--bs-secondary-bg);
     }
     
     .console-timestamp {
-        color: #888;
+        color: var(--bs-secondary-color);
         font-size: 12px;
     }
     
@@ -58,8 +75,13 @@
     }
     
     .console-response {
-        color: #ffffff;
+        color: var(--bs-body-color);
         margin-left: 10px;
+    }
+    
+    /* Dark theme response color */
+    [data-bs-theme="dark"] .console-response {
+        color: #ffffff;
     }
     
     .console-error {
@@ -146,65 +168,19 @@
     </div>
 </div>
 
-<!-- RCON Password Modal -->
-<div class="modal fade" id="rconPasswordModal" tabindex="-1" aria-labelledby="rconPasswordModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="rconPasswordModalLabel">RCON Authentication</h5>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info" role="alert">
-                    <i class="fas fa-info-circle"></i> Enter the RCON password to connect to the Minecraft server console.
-                </div>
-                <form id="rcon-password-form">
-                    <div class="mb-3">
-                        <label for="rcon-password" class="form-label">RCON Password</label>
-                        <input type="password" 
-                               class="form-control" 
-                               id="rcon-password" 
-                               placeholder="Enter RCON password" 
-                               required>
-                        <div class="form-text">This password is stored securely in your session and not saved permanently.</div>
-                    </div>
-                    <div id="rcon-error-message" class="alert alert-danger d-none" role="alert"></div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-primary" onclick="authenticateRcon()">
-                    <i class="fas fa-key"></i> Connect
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="disconnectRcon()">
-                    <i class="fas fa-times"></i> Cancel
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
 let autoScroll = true;
 let commandHistory = [];
 let historyIndex = -1;
-let rconAuthenticated = false;
-let rconPasswordModal = null;
 
 // Initialize console
 document.addEventListener('DOMContentLoaded', function() {
-    rconPasswordModal = new bootstrap.Modal(document.getElementById('rconPasswordModal'));
     checkRconStatus();
     setupCommandHistory();
     
     // Focus command input
     document.getElementById('command-input').focus();
-    
-    // Handle Enter key in password modal
-    document.getElementById('rcon-password').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            authenticateRcon();
-        }
-    });
 });
 
 // Handle form submission
@@ -254,14 +230,6 @@ function setupCommandHistory() {
 
 // Execute command
 function executeCommand(command) {
-    // Check if authenticated first
-    if (!rconAuthenticated) {
-        showPasswordModal();
-        // Store command to execute after authentication
-        window.pendingCommand = command;
-        return;
-    }
-    
     const output = document.getElementById('console-output');
     const timestamp = new Date().toLocaleTimeString();
     
@@ -289,14 +257,7 @@ function executeCommand(command) {
                 appendToConsole(`<span class="console-response">Command executed successfully</span>`);
             }
         } else {
-            // If authentication failed, show modal again
-            if (data.error && data.error.includes('authentication')) {
-                rconAuthenticated = false;
-                showPasswordModal();
-                window.pendingCommand = command;
-            } else {
-                appendToConsole(`<span class="console-error">Error: ${escapeHtml(data.error || 'Unknown error')}</span>`);
-            }
+            appendToConsole(`<span class="console-error">Error: ${escapeHtml(data.error || 'Unknown error')}</span>`);
         }
     })
     .catch(error => {
@@ -345,97 +306,16 @@ function checkRconStatus() {
             if (data.connected) {
                 statusElement.className = 'badge bg-success';
                 statusElement.textContent = 'Connected';
-                rconAuthenticated = true;
             } else {
                 statusElement.className = 'badge bg-danger';
                 statusElement.textContent = 'Disconnected';
-                rconAuthenticated = false;
             }
         })
         .catch(error => {
             const statusElement = document.getElementById('rcon-status');
             statusElement.className = 'badge bg-warning';
             statusElement.textContent = 'Error';
-            rconAuthenticated = false;
         });
-}
-
-// Show password modal
-function showPasswordModal() {
-    document.getElementById('rcon-password').value = '';
-    document.getElementById('rcon-error-message').classList.add('d-none');
-    rconPasswordModal.show();
-    setTimeout(() => {
-        document.getElementById('rcon-password').focus();
-    }, 500);
-}
-
-// Authenticate RCON
-function authenticateRcon() {
-    const password = document.getElementById('rcon-password').value;
-    const errorDiv = document.getElementById('rcon-error-message');
-    
-    if (!password) {
-        showError('Please enter a password');
-        return;
-    }
-    
-    // Test the password
-    fetch('/console/authenticate', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-        },
-        body: JSON.stringify({password: password})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            rconAuthenticated = true;
-            rconPasswordModal.hide();
-            checkRconStatus();
-            
-            // Execute pending command if any
-            if (window.pendingCommand) {
-                executeCommand(window.pendingCommand);
-                window.pendingCommand = null;
-            }
-            
-            appendToConsole('<span class="console-response">RCON authentication successful</span>');
-        } else {
-            showError(data.error || 'Authentication failed');
-        }
-    })
-    .catch(error => {
-        showError('Connection error: ' + error.message);
-    });
-    
-    function showError(message) {
-        errorDiv.textContent = message;
-        errorDiv.classList.remove('d-none');
-    }
-}
-
-// Disconnect RCON
-function disconnectRcon() {
-    fetch('/console/disconnect', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-        }
-    })
-    .then(() => {
-        rconAuthenticated = false;
-        rconPasswordModal.hide();
-        checkRconStatus();
-        appendToConsole('<span class="console-response">RCON disconnected</span>');
-    })
-    .catch(error => {
-        rconPasswordModal.hide();
-        appendToConsole(`<span class="console-error">Disconnect error: ${escapeHtml(error.message)}</span>`);
-    });
 }
 
 // Helper functions
@@ -450,6 +330,6 @@ function getCSRFToken() {
 }
 
 // Check RCON status periodically
-setInterval(checkRconStatus, 10000);
+setInterval(checkRconStatus, 30000);
 </script>
 {% endblock %}
