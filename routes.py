@@ -324,21 +324,21 @@ def console():
 def console_status():
     """Check RCON connection status"""
     try:
-        from mcstatus.server import JavaServer
+        from mcrcon import MCRcon
         
         # Get server connection details
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
         rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
         rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', '')
         
-        # Create server connection for RCON
-        server = JavaServer.lookup(f"{server_host}:{rcon_port}")
+        current_app.logger.info(f'RCON status check: connecting to {server_host}:{rcon_port} with password: {"(set)" if rcon_password else "(empty)"}')
         
-        # Test RCON connection - correct API usage
-        with server.rcon(rcon_password) as rcon_client:
+        # Test RCON connection using mcrcon
+        with MCRcon(server_host, rcon_password, port=rcon_port) as mcr:
             # Simple test command
-            response = rcon_client.command("help")
+            response = mcr.command("help")
             
+        current_app.logger.info(f'RCON status check: connection successful')
         return jsonify({
             'connected': True,
             'host': server_host,
@@ -346,7 +346,7 @@ def console_status():
         })
         
     except Exception as e:
-        current_app.logger.debug(f'RCON status check failed: {e}')
+        current_app.logger.error(f'RCON status check failed: {str(e)} (type: {type(e).__name__})')
         return jsonify({
             'connected': False,
             'error': str(e)
@@ -367,19 +367,16 @@ def console_execute():
                 'error': 'No command provided'
             }), 400
         
-        from mcstatus.server import JavaServer
+        from mcrcon import MCRcon
         
         # Get server connection details
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
         rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
         rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', '')
         
-        # Create server connection for RCON
-        server = JavaServer.lookup(f"{server_host}:{rcon_port}")
-        
         # Execute command via RCON
-        with server.rcon(rcon_password) as rcon_client:
-            response = rcon_client.command(command)
+        with MCRcon(server_host, rcon_password, port=rcon_port) as mcr:
+            response = mcr.command(command)
             
         current_app.logger.info(f'RCON command executed: {command}')
         
