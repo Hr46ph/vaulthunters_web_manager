@@ -7,6 +7,7 @@ from services.system_control import SystemControlService
 from services.log_service import LogService
 from services.config_manager import ConfigManager
 from services.backup_manager import BackupManager
+from services.server_properties import ServerPropertiesParser
 import os
 import logging
 
@@ -326,10 +327,24 @@ def console_status():
     try:
         from mcrcon import MCRcon
         
-        # Get server connection details
+        # Get server connection details from server.properties
+        server_props = ServerPropertiesParser()
+        
+        if not server_props.is_rcon_enabled():
+            return jsonify({
+                'connected': False,
+                'error': 'RCON is not enabled in server.properties'
+            })
+        
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-        rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
-        rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', '')
+        rcon_port = server_props.get_rcon_port()
+        rcon_password = server_props.get_rcon_password()
+        
+        if not rcon_password:
+            return jsonify({
+                'connected': False,
+                'error': 'RCON password not set in server.properties'
+            })
         
         current_app.logger.info(f'RCON status check: connecting to {server_host}:{rcon_port} with password: {"(set)" if rcon_password else "(empty)"}')
         
@@ -369,10 +384,24 @@ def console_execute():
         
         from mcrcon import MCRcon
         
-        # Get server connection details
+        # Get server connection details from server.properties
+        server_props = ServerPropertiesParser()
+        
+        if not server_props.is_rcon_enabled():
+            return jsonify({
+                'success': False,
+                'error': 'RCON is not enabled in server.properties'
+            }), 500
+        
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-        rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
-        rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', '')
+        rcon_port = server_props.get_rcon_port()
+        rcon_password = server_props.get_rcon_password()
+        
+        if not rcon_password:
+            return jsonify({
+                'success': False,
+                'error': 'RCON password not set in server.properties'
+            }), 500
         
         # Execute command via RCON
         with MCRcon(server_host, rcon_password, port=rcon_port) as mcr:

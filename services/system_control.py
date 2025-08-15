@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta
 from flask import current_app
 import logging
+from .server_properties import ServerPropertiesParser
 
 # Global cache for status data
 _status_cache = {}
@@ -112,10 +113,22 @@ class SystemControlService:
             
         except subprocess.TimeoutExpired:
             self.logger.error("Timeout getting service status")
-            return {'running': False, 'uptime': 'Unknown', 'players': 0, 'max_players': 20}
+            # Get max players from server.properties
+            try:
+                server_props = ServerPropertiesParser()
+                max_players = server_props.get_max_players()
+            except Exception:
+                max_players = 20
+            return {'running': False, 'uptime': 'Unknown', 'players': 0, 'max_players': max_players}
         except Exception as e:
             self.logger.error(f"Error getting service status: {e}")
-            return {'running': False, 'uptime': 'Error', 'players': 0, 'max_players': 20}
+            # Get max players from server.properties
+            try:
+                server_props = ServerPropertiesParser()
+                max_players = server_props.get_max_players()
+            except Exception:
+                max_players = 20
+            return {'running': False, 'uptime': 'Error', 'players': 0, 'max_players': max_players}
     
     def start_service(self):
         """Start the systemd service"""
@@ -211,10 +224,11 @@ class SystemControlService:
         try:
             from mcstatus.server import JavaServer
             
-            # Get server host and query port from config
+            # Get server connection details from server.properties and config
+            server_props = ServerPropertiesParser()
             server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-            server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
-            query_port = current_app.config.get('MINECRAFT_QUERY_PORT', 25565)
+            server_port = server_props.get_server_port()
+            query_port = server_props.get_query_port()
             
             # Try server query first (most reliable)
             try:
