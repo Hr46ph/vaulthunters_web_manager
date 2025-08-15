@@ -2,6 +2,7 @@ import subprocess
 import logging
 import os
 import glob
+import shutil
 from datetime import datetime
 from flask import current_app
 
@@ -303,3 +304,187 @@ class LogService:
         except Exception as e:
             self.logger.error(f"Error tailing log file: {e}")
             return {'success': False, 'error': str(e)}
+    
+    def rotate_log_file(self, log_type):
+        """Rotate (clear) a log file by renaming it and creating a new empty file"""
+        try:
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
+            if not server_path:
+                return {'success': False, 'error': 'Server path not configured'}
+            
+            log_file_map = {
+                'latest': f'{server_path}/logs/latest.log',
+                'debug': f'{server_path}/logs/debug.log'
+            }
+            
+            if log_type == 'crash':
+                # For crash reports, we'll clear the crash-reports directory
+                return self._clear_crash_reports(server_path)
+            
+            log_file = log_file_map.get(log_type)
+            if not log_file:
+                return {'success': False, 'error': f'Unknown log type: {log_type}'}
+            
+            if not os.path.exists(log_file):
+                return {'success': False, 'error': f'Log file not found: {log_file}'}
+            
+            # Create backup filename with timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_filename = f"{log_file}.{timestamp}.rotated"
+            
+            # Move current log file to backup
+            shutil.move(log_file, backup_filename)
+            
+            # Create new empty log file
+            open(log_file, 'a').close()
+            
+            # Set same permissions as backup file
+            if os.path.exists(backup_filename):
+                stat_info = os.stat(backup_filename)
+                os.chmod(log_file, stat_info.st_mode)
+            
+            return {
+                'success': True,
+                'message': f'{log_type.title()} log rotated successfully',
+                'rotated_file': os.path.basename(backup_filename)
+            }
+            
+        except PermissionError:
+            return {'success': False, 'error': 'Permission denied - cannot rotate log file'}
+        except Exception as e:
+            self.logger.error(f"Error rotating log file: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def _clear_crash_reports(self, server_path):
+        """Clear crash reports by moving them to a backup directory"""
+        try:
+            crash_dir = f'{server_path}/crash-reports'
+            if not os.path.exists(crash_dir):
+                return {
+                    'success': True,
+                    'message': 'No crash reports to clear'
+                }
+            
+            # Count existing crash reports
+            crash_files = glob.glob(f'{crash_dir}/crash-*.txt')
+            if not crash_files:
+                return {
+                    'success': True,
+                    'message': 'No crash reports found to clear'
+                }
+            
+            # Create backup directory
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_dir = f'{crash_dir}_backup_{timestamp}'
+            os.makedirs(backup_dir, exist_ok=True)
+            
+            # Move all crash files to backup directory
+            moved_count = 0
+            for crash_file in crash_files:
+                try:
+                    shutil.move(crash_file, backup_dir)
+                    moved_count += 1
+                except Exception as e:
+                    self.logger.warning(f"Failed to move crash file {crash_file}: {e}")
+            
+            return {
+                'success': True,
+                'message': f'Moved {moved_count} crash reports to backup directory',
+                'rotated_file': os.path.basename(backup_dir)
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error clearing crash reports: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def get_crash_reports_list(self):
+        """Get list of available crash reports"""
+        try:
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
+            if not server_path:
+                return []
+            
+            crash_dir = f'{server_path}/crash-reports'
+            if not os.path.exists(crash_dir):
+                return []
+            
+            crash_files = glob.glob(f'{crash_dir}/crash-*.txt')
+            crash_reports = []
+            
+            for crash_file in crash_files:
+                try:
+                    stat = os.stat(crash_file)
+                    filename = os.path.basename(crash_file)
+                    crash_reports.append({
+                        'filename': filename,
+                        'path': crash_file,
+                        'size': stat.st_size,
+                        'size_human': self._human_readable_size(stat.st_size),
+                        'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        'modified_human': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                    })
+                except Exception as e:
+                    self.logger.warning(f"Error getting info for crash file {crash_file}: {e}")
+                    continue
+            
+            # Sort by modification time, newest first
+            return sorted(crash_reports, key=lambda x: x['modified'], reverse=True)
+            
+        except Exception as e:
+            self.logger.error(f"Error getting crash reports list: {e}")
+            return []
+    
+    def get_crash_report_content(self, filename):
+        """Get content of a specific crash report"""
+        try:
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
+            if not server_path:
+                return {'success': False, 'error': 'Server path not configured'}
+            
+            # Security check - ensure filename is safe
+            if '..' in filename or '/' in filename or '\\' in filename:
+                return {'success': False, 'error': 'Invalid filename'}
+            
+            if not filename.startswith('crash-') or not filename.endswith('.txt'):
+                return {'success': False, 'error': 'Invalid crash report filename format'}
+            
+            crash_file = f'{server_path}/crash-reports/{filename}'
+            
+            if not os.path.exists(crash_file):
+                return {'success': False, 'error': f'Crash report not found: {filename}'}
+            
+            # Check if file is too large (limit to 5MB for web viewing)
+            file_size = os.path.getsize(crash_file)
+            if file_size > 5 * 1024 * 1024:
+                return {'success': False, 'error': 'Crash report too large for web viewing (max 5MB)'}
+            
+            with open(crash_file, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+            
+            stat = os.stat(crash_file)
+            return {
+                'success': True,
+                'content': content,
+                'size': file_size,
+                'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
+            }
+            
+        except UnicodeDecodeError:
+            return {'success': False, 'error': 'File contains non-UTF8 content'}
+        except PermissionError:
+            return {'success': False, 'error': 'Permission denied reading crash report'}
+        except Exception as e:
+            self.logger.error(f"Error reading crash report {filename}: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def _human_readable_size(self, size_bytes):
+        """Convert bytes to human readable format"""
+        if size_bytes == 0:
+            return "0 B"
+        
+        size_names = ["B", "KB", "MB", "GB"]
+        import math
+        i = int(math.floor(math.log(size_bytes, 1024)))
+        p = math.pow(1024, i)
+        s = round(size_bytes / p, 2)
+        return f"{s} {size_names[i]}"

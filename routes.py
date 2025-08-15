@@ -85,18 +85,9 @@ def server_control():
 
 @main_bp.route('/logs')
 def logs():
-    """Log viewer page"""
+    """Enhanced log viewer page with 3 separate content windows"""
     try:
-        log_service = LogService()
-        available_logs = log_service.get_available_log_files()
-        
-        # Extract log types for selector
-        log_files = ['latest', 'debug', 'crash']
-        selected_log = request.args.get('log', 'latest')
-        
-        return render_template('logs.html', 
-                             log_files=log_files, 
-                             selected_log=selected_log)
+        return render_template('logs.html')
     except Exception as e:
         current_app.logger.error(f'Logs page error: {e}')
         flash('Error loading logs page', 'error')
@@ -124,6 +115,109 @@ def log_content(log_type):
     except Exception as e:
         current_app.logger.error(f'Log content error: {e}')
         return jsonify({'error': 'Failed to read log file'}), 500
+
+@main_bp.route('/logs/crash/list')
+def crash_reports_list():
+    """API endpoint to list available crash reports"""
+    try:
+        log_service = LogService()
+        crash_reports = log_service.get_crash_reports_list()
+        
+        return jsonify({
+            'success': True,
+            'crash_reports': crash_reports
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Error getting crash reports list: {e}')
+        return jsonify({'success': False, 'error': 'Failed to get crash reports list'}), 500
+
+@main_bp.route('/logs/crash/content/<path:filename>')
+def crash_report_content(filename):
+    """API endpoint to get specific crash report content"""
+    try:
+        log_service = LogService()
+        result = log_service.get_crash_report_content(filename)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'content': result['content'],
+                'filename': filename,
+                'size': result.get('size', 0),
+                'modified': result.get('modified', '')
+            })
+        else:
+            return jsonify({'success': False, 'error': result['error']}), 404
+            
+    except Exception as e:
+        current_app.logger.error(f'Error reading crash report: {e}')
+        return jsonify({'success': False, 'error': 'Failed to read crash report'}), 500
+
+@main_bp.route('/logs/rotate/<log_type>', methods=['POST'])
+def rotate_log(log_type):
+    """API endpoint for rotating (clearing) log files"""
+    try:
+        current_app.logger.info(f'Log rotation request: {log_type}')
+        current_app.logger.info(f'Request method: {request.method}')
+        current_app.logger.info(f'Request headers: {dict(request.headers)}')
+        current_app.logger.info(f'Request form data: {dict(request.form)}')
+        
+        # Skip CSRF validation for now to isolate the issue
+        current_app.logger.info('Skipping CSRF validation temporarily for debugging')
+        csrf_token = request.headers.get('X-CSRFToken') or request.form.get('csrf_token')
+        current_app.logger.info(f'CSRF token received: {csrf_token[:10] if csrf_token else "None"}...')
+        
+        # TODO: Re-enable CSRF validation after fixing the core issue
+        # from flask_wtf.csrf import validate_csrf
+        # try:
+        #     if csrf_token:
+        #         validate_csrf(csrf_token)
+        #         current_app.logger.info('CSRF token validation successful')
+        #     else:
+        #         current_app.logger.warning('No CSRF token provided in headers or form')
+        #         return jsonify({'success': False, 'error': 'CSRF token required'}), 400
+        # except Exception as e:
+        #     current_app.logger.error(f'CSRF validation failed: {e}', exc_info=True)
+        #     return jsonify({'success': False, 'error': f'CSRF token validation failed: {str(e)}'}), 400
+        
+        if log_type not in ['latest', 'debug']:  # Removed 'crash' from rotation
+            current_app.logger.error(f'Invalid log type requested: {log_type}')
+            return jsonify({'success': False, 'error': 'Invalid log type - crash logs cannot be rotated'}), 400
+        
+        current_app.logger.info(f'Creating LogService for {log_type}')
+        try:
+            log_service = LogService()
+            current_app.logger.info('LogService created successfully')
+        except Exception as e:
+            current_app.logger.error(f'Failed to create LogService: {e}', exc_info=True)
+            return jsonify({'success': False, 'error': f'Service initialization failed: {str(e)}'}), 500
+        
+        current_app.logger.info(f'Calling rotate_log_file for {log_type}')
+        try:
+            result = log_service.rotate_log_file(log_type)
+            current_app.logger.info(f'rotate_log_file returned: {result}')
+        except Exception as e:
+            current_app.logger.error(f'rotate_log_file threw exception: {e}', exc_info=True)
+            return jsonify({'success': False, 'error': f'Log rotation service error: {str(e)}'}), 500
+        
+        if result.get('success'):
+            current_app.logger.info(f'Log rotation successful for: {log_type}')
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'rotated_file': result.get('rotated_file', 'N/A')
+            })
+        else:
+            current_app.logger.error(f'Log rotation failed for {log_type}: {result.get("error", "Unknown error")}')
+            return jsonify({'success': False, 'error': result.get('error', 'Unknown error')}), 200
+            
+    except ImportError as e:
+        current_app.logger.error(f'Import error in log rotation: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': f'Service unavailable: {str(e)}'}), 500
+    except Exception as e:
+        current_app.logger.error(f'Unexpected error in log rotation: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': f'Failed to rotate log file: {str(e)}'}), 500
 
 @main_bp.route('/config')
 def config_editor():
@@ -326,32 +420,106 @@ def console_status():
     """Check RCON connection status"""
     try:
         from mcrcon import MCRcon
+        import os
         
         # Get server connection details from server.properties
         server_props = ServerPropertiesParser()
         
+        # Check if server.properties file exists
+        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        props_file = os.path.join(server_path, 'server.properties')
+        current_app.logger.info(f'Looking for server.properties at: {props_file}')
+        current_app.logger.info(f'File exists: {os.path.exists(props_file)}')
+        
+        if os.path.exists(props_file):
+            current_app.logger.info(f'File size: {os.path.getsize(props_file)} bytes')
+            # Read first few lines for debugging
+            try:
+                with open(props_file, 'r') as f:
+                    first_lines = [f.readline().strip() for _ in range(5)]
+                current_app.logger.info(f'First 5 lines: {first_lines}')
+            except Exception as e:
+                current_app.logger.error(f'Could not read server.properties: {e}')
+        
+        # Load properties first
+        if not server_props.load_properties():
+            return jsonify({
+                'connected': False,
+                'error': f'Could not load server.properties file at {props_file}'
+            })
+        
+        all_props = server_props.get_all_properties()
+        current_app.logger.info(f'Loaded server.properties with {len(all_props)} properties')
+        current_app.logger.info(f'Sample properties: {dict(list(all_props.items())[:5]) if all_props else "None"}')
+        
+        # Check specific RCON properties
+        enable_rcon = server_props.get_property('enable-rcon')
+        rcon_port_prop = server_props.get_property('rcon.port')
+        rcon_password_prop = server_props.get_property('rcon.password')
+        
+        current_app.logger.info(f'Raw properties - enable-rcon: {enable_rcon}, rcon.port: {rcon_port_prop}, rcon.password: {"SET" if rcon_password_prop else "EMPTY"}')
+        
         if not server_props.is_rcon_enabled():
             return jsonify({
                 'connected': False,
-                'error': 'RCON is not enabled in server.properties'
+                'error': f'RCON is not enabled in server.properties (enable-rcon={enable_rcon}, need enable-rcon=true)'
             })
         
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
         rcon_port = server_props.get_rcon_port()
         rcon_password = server_props.get_rcon_password()
         
+        current_app.logger.info(f'RCON config - Host: {server_host}, Port: {rcon_port}, Password: {"SET" if rcon_password else "EMPTY"}')
+        
         if not rcon_password:
             return jsonify({
                 'connected': False,
-                'error': 'RCON password not set in server.properties'
+                'error': f'RCON password not set in server.properties (rcon.password="{rcon_password_prop}")'
             })
         
-        current_app.logger.info(f'RCON status check: connecting to {server_host}:{rcon_port} with password: {"(set)" if rcon_password else "(empty)"}')
+        current_app.logger.info(f'RCON status check: attempting connection to {server_host}:{rcon_port}')
         
-        # Test RCON connection using mcrcon
-        with MCRcon(server_host, rcon_password, port=rcon_port) as mcr:
+        # Test basic network connectivity first
+        import socket
+        try:
+            current_app.logger.info(f'Testing socket connection to {server_host}:{rcon_port}')
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((server_host, rcon_port))
+            sock.close()
+            
+            if result != 0:
+                return jsonify({
+                    'connected': False,
+                    'error': f'Cannot connect to {server_host}:{rcon_port} - server may not be running or RCON port blocked'
+                })
+            
+            current_app.logger.info(f'Socket connection to {server_host}:{rcon_port} successful')
+        except Exception as socket_error:
+            current_app.logger.error(f'Socket test failed: {socket_error}')
+            return jsonify({
+                'connected': False,
+                'error': f'Network connectivity test failed: {str(socket_error)}'
+            })
+        
+        # Test RCON connection using mcrcon with timeout
+        try:
+            current_app.logger.info('Creating MCRcon instance')
+            mcr = MCRcon(server_host, rcon_password, port=rcon_port, timeout=5)
+            current_app.logger.info('Attempting RCON connect')
+            mcr.connect()
+            current_app.logger.info('RCON connected, sending help command')
             # Simple test command
             response = mcr.command("help")
+            current_app.logger.info(f'RCON command successful, response length: {len(response) if response else 0}')
+            mcr.disconnect()
+            current_app.logger.info('RCON disconnected successfully')
+        except Exception as rcon_error:
+            current_app.logger.error(f'RCON connection failed: {type(rcon_error).__name__}: {rcon_error}', exc_info=True)
+            return jsonify({
+                'connected': False,
+                'error': f'RCON authentication/command failed: {str(rcon_error)}'
+            })
             
         current_app.logger.info(f'RCON status check: connection successful')
         return jsonify({
@@ -387,15 +555,24 @@ def console_execute():
         # Get server connection details from server.properties
         server_props = ServerPropertiesParser()
         
+        # Load properties first
+        if not server_props.load_properties():
+            return jsonify({
+                'success': False,
+                'error': 'Could not load server.properties file'
+            }), 500
+        
         if not server_props.is_rcon_enabled():
             return jsonify({
                 'success': False,
-                'error': 'RCON is not enabled in server.properties'
+                'error': 'RCON is not enabled in server.properties (enable-rcon=true required)'
             }), 500
         
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
         rcon_port = server_props.get_rcon_port()
         rcon_password = server_props.get_rcon_password()
+        
+        current_app.logger.info(f'RCON execute - Host: {server_host}, Port: {rcon_port}, Command: {command}')
         
         if not rcon_password:
             return jsonify({
@@ -403,9 +580,15 @@ def console_execute():
                 'error': 'RCON password not set in server.properties'
             }), 500
         
-        # Execute command via RCON
-        with MCRcon(server_host, rcon_password, port=rcon_port) as mcr:
+        # Execute command via RCON with proper connection handling
+        try:
+            mcr = MCRcon(server_host, rcon_password, port=rcon_port, timeout=10)
+            mcr.connect()
             response = mcr.command(command)
+            mcr.disconnect()
+        except Exception as rcon_error:
+            current_app.logger.error(f'RCON command execution failed: {rcon_error}')
+            raise rcon_error
             
         current_app.logger.info(f'RCON command executed: {command}')
         

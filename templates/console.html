@@ -306,15 +306,27 @@ function checkRconStatus() {
             if (data.connected) {
                 statusElement.className = 'badge bg-success';
                 statusElement.textContent = 'Connected';
+                statusElement.title = `Connected to ${data.host}:${data.port}`;
             } else {
                 statusElement.className = 'badge bg-danger';
                 statusElement.textContent = 'Disconnected';
+                statusElement.title = data.error || 'Connection failed';
+                
+                // Also show error in console
+                console.error('RCON Connection Failed:', data.error);
+                
+                // Add error message to console output
+                appendToConsole(`<span class="console-error">RCON Connection Error: ${escapeHtml(data.error || 'Unknown error')}</span>`);
             }
         })
         .catch(error => {
             const statusElement = document.getElementById('rcon-status');
             statusElement.className = 'badge bg-warning';
-            statusElement.textContent = 'Error';
+            statusElement.textContent = 'Network Error';
+            statusElement.title = error.message;
+            
+            console.error('RCON Status Check Error:', error);
+            appendToConsole(`<span class="console-error">RCON Status Check Failed: ${escapeHtml(error.message)}</span>`);
         });
 }
 

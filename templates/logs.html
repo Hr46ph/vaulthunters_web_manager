@@ -2,67 +2,616 @@
 
 {% block title %}Logs - VaultHunter Web Manager{% endblock %}
 
+{% block extra_css %}
+<style>
+    .log-window {
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        height: 350px;
+        overflow-y: auto;
+        padding: 10px;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 5px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        resize: vertical;
+    }
+    
+    /* Dark theme specific log styling */
+    [data-bs-theme="dark"] .log-window {
+        background-color: #1e1e1e;
+        color: #ffffff;
+        border-color: #444;
+    }
+    
+    /* Light theme specific log styling */
+    [data-bs-theme="light"] .log-window {
+        background-color: #f8f9fa;
+        color: #212529;
+        border-color: #dee2e6;
+    }
+    
+    .log-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .log-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+    
+    .log-controls .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    .log-title {
+        font-weight: 600;
+        margin: 0;
+        color: var(--bs-body-color);
+    }
+    
+    .form-check {
+        margin: 0;
+    }
+    
+    .badge-status {
+        font-size: 0.75em;
+        margin-left: 8px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-        <div class="card">
-            <div class="card-header">
-                <h5>Server Logs</h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <select class="form-select" id="log-selector">
-                        {% for log_file in log_files %}
-                            <option value="{{ log_file }}" {{ 'selected' if log_file == selected_log else '' }}>
-                                {{ log_file|title }} Log
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <button class="btn btn-outline-primary" onclick="refreshLogs()">Refresh</button>
-                    <div class="form-check form-switch d-inline-block ms-3">
-                        <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
-                        <label class="form-check-label" for="auto-refresh">Auto-refresh</label>
+    <div class="row">
+        <!-- Latest Log -->
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <div class="log-header">
+                        <h6 class="log-title">
+                            Latest Server Log
+                            <span class="badge bg-success badge-status" id="latest-status">●</span>
+                        </h6>
+                        <div class="log-controls">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="follow-latest">
+                                <label class="form-check-label" for="follow-latest">Follow</label>
+                            </div>
+                            <button class="btn btn-outline-primary btn-sm" onclick="refreshLog('latest')">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" onclick="clearLog('latest')" title="Rotate log file - moves current log to backup and creates new empty log">
+                                <i class="fas fa-sync-alt"></i> Rotate
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <textarea id="log-content" class="form-control" readonly style="height: 400px; font-family: monospace; resize: none;">Loading logs...</textarea>
+                <div class="card-body">
+                    <div id="latest-log" class="log-window">Loading latest log...</div>
+                </div>
             </div>
         </div>
+        
+        <!-- Debug and Crash Logs Row -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <div class="log-header">
+                        <h6 class="log-title">
+                            Debug Log
+                            <span class="badge bg-info badge-status" id="debug-status">●</span>
+                        </h6>
+                        <div class="log-controls">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="follow-debug">
+                                <label class="form-check-label" for="follow-debug">Follow</label>
+                            </div>
+                            <button class="btn btn-outline-primary btn-sm" onclick="refreshLog('debug')">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" onclick="clearLog('debug')" title="Rotate log file - moves current log to backup and creates new empty log">
+                                <i class="fas fa-sync-alt"></i> Rotate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="debug-log" class="log-window">Loading debug log...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <div class="log-header">
+                        <h6 class="log-title">
+                            Crash Reports
+                            <span class="badge bg-info badge-status" id="crash-status">●</span>
+                        </h6>
+                        <div class="log-controls">
+                            <select class="form-select form-select-sm" id="crash-selector" style="width: auto; min-width: 200px;">
+                                <option value="">Loading crash reports...</option>
+                            </select>
+                            <button class="btn btn-outline-primary btn-sm" onclick="refreshCrashList()">
+                                <i class="fas fa-sync"></i> Refresh List
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="crash-log" class="log-window">Select a crash report from the dropdown above</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Global Controls -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Server Log Controls</h6>
+                            <small class="text-muted">Control server logs (Latest & Debug)</small>
+                        </div>
+                        <div class="log-controls">
+                            <button class="btn btn-success btn-sm" onclick="startFollowServerLogs()">
+                                <i class="fas fa-play"></i> Follow Server Logs
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="stopFollowServerLogs()">
+                                <i class="fas fa-pause"></i> Stop Following
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="refreshServerLogs()">
+                                <i class="fas fa-sync"></i> Refresh Server Logs
+                            </button>
+                            <button class="btn btn-warning btn-sm" onclick="rotateServerLogs()" title="Rotate server log files (Latest & Debug)">
+                                <i class="fas fa-sync-alt"></i> Rotate Server Logs
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block modals %}
+<!-- Log Rotation Confirmation Modal -->
+<div class="modal fade" id="rotateLogModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sync-alt"></i> Rotate Log
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Confirm Log Rotation</strong>
+                </div>
+                <p id="rotate-message">Are you sure you want to rotate this log?</p>
+                <p class="text-muted small">
+                    <strong>What this does:</strong><br>
+                    • Moves the current log file to a timestamped backup<br>
+                    • Creates a new empty log file<br>
+                    • Preserves all existing log data in the backup
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirmRotateBtn">
+                    <i class="fas fa-sync-alt"></i> Rotate Log
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Rotate Server Logs Confirmation Modal -->
+<div class="modal fade" id="rotateServerLogsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sync-alt"></i> Rotate Server Logs
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Confirm Server Log Rotation</strong>
+                </div>
+                <p>Are you sure you want to rotate the server log files?</p>
+                <p class="text-muted small">
+                    <strong>This will:</strong><br>
+                    • Rotate the Latest server log<br>
+                    • Rotate the Debug log<br>
+                    • Create new empty log files<br>
+                    • Preserve all data in timestamped backups
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirmRotateServerLogsBtn">
+                    <i class="fas fa-sync-alt"></i> Rotate Server Logs
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
-    <script>
-        function refreshLogs() {
-            const logType = document.getElementById('log-selector').value;
-            const logContent = document.getElementById('log-content');
-            
-            logContent.value = 'Loading...';
-            
-            fetch(`/logs/content/${logType}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        logContent.value = `Error: ${data.error}`;
-                    } else {
-                        logContent.value = data.content;
-                        logContent.scrollTop = logContent.scrollHeight;
-                    }
-                })
-                .catch(error => {
-                    logContent.value = `Network error: ${error}`;
-                });
+<script>
+    // Global variables for follow intervals
+    const followIntervals = {
+        latest: null,
+        debug: null
+    };
+    
+    // Global variable for crash reports
+    let crashReports = [];
+    let selectedCrashReport = '';
+    
+    // Get CSRF token
+    function getCSRFToken() {
+        const tokenMeta = document.querySelector('meta[name=csrf-token]');
+        if (!tokenMeta) {
+            console.error('CSRF token meta tag not found');
+            return '';
+        }
+        const token = tokenMeta.getAttribute('content');
+        if (!token) {
+            console.error('CSRF token content is empty');
+            return '';
+        }
+        console.log('CSRF token retrieved successfully');
+        return token;
+    }
+    
+    // Crash report functions
+    function refreshCrashList() {
+        const statusElement = document.getElementById('crash-status');
+        const selector = document.getElementById('crash-selector');
+        
+        statusElement.className = 'badge bg-warning badge-status';
+        selector.innerHTML = '<option value="">Loading...</option>';
+        
+        fetch('/logs/crash/list')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.crash_reports) {
+                    crashReports = data.crash_reports;
+                    updateCrashSelector();
+                    statusElement.className = 'badge bg-success badge-status';
+                    statusElement.title = `${crashReports.length} crash reports found`;
+                } else {
+                    selector.innerHTML = '<option value="">No crash reports found</option>';
+                    statusElement.className = 'badge bg-secondary badge-status';
+                    statusElement.title = 'No crash reports';
+                    document.getElementById('crash-log').textContent = 'No crash reports found';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading crash reports:', error);
+                selector.innerHTML = '<option value="">Error loading crash reports</option>';
+                statusElement.className = 'badge bg-danger badge-status';
+                statusElement.title = 'Error loading crash reports';
+                document.getElementById('crash-log').textContent = 'Error loading crash reports: ' + error.message;
+            });
+    }
+    
+    function updateCrashSelector() {
+        const selector = document.getElementById('crash-selector');
+        
+        if (crashReports.length === 0) {
+            selector.innerHTML = '<option value="">No crash reports found</option>';
+            return;
         }
         
-        document.addEventListener('DOMContentLoaded', function() {
-            refreshLogs();
-            
-            document.getElementById('log-selector').addEventListener('change', refreshLogs);
-            
-            // Auto-refresh every 30 seconds if enabled
-            setInterval(() => {
-                if (document.getElementById('auto-refresh').checked) {
-                    refreshLogs();
-                }
-            }, 30000);
+        let options = '<option value="">Select a crash report...</option>';
+        crashReports.forEach(report => {
+            options += `<option value="${report.filename}" title="${report.size_human} - ${report.modified_human}">${report.filename} (${report.size_human})</option>`;
         });
-    </script>
+        
+        selector.innerHTML = options;
+        
+        // Auto-select the latest crash report
+        if (crashReports.length > 0 && !selectedCrashReport) {
+            selectedCrashReport = crashReports[0].filename;
+            selector.value = selectedCrashReport;
+            loadCrashReport(selectedCrashReport);
+        }
+    }
+    
+    function loadCrashReport(filename) {
+        if (!filename) {
+            document.getElementById('crash-log').textContent = 'Select a crash report from the dropdown above';
+            return;
+        }
+        
+        const logElement = document.getElementById('crash-log');
+        const statusElement = document.getElementById('crash-status');
+        
+        logElement.textContent = `Loading crash report: ${filename}...`;
+        statusElement.className = 'badge bg-warning badge-status';
+        
+        fetch(`/logs/crash/content/${encodeURIComponent(filename)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    logElement.textContent = data.content;
+                    statusElement.className = 'badge bg-success badge-status';
+                    statusElement.title = `${filename} - ${data.size} bytes`;
+                    
+                    // Auto-scroll to bottom
+                    logElement.scrollTop = logElement.scrollHeight;
+                } else {
+                    logElement.textContent = `Error loading crash report: ${data.error}`;
+                    statusElement.className = 'badge bg-danger badge-status';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading crash report:', error);
+                logElement.textContent = `Network error loading crash report: ${error.message}`;
+                statusElement.className = 'badge bg-danger badge-status';
+            });
+    }
+    
+    // Log refresh function
+    function refreshLog(logType) {
+        const logElement = document.getElementById(`${logType}-log`);
+        const statusElement = document.getElementById(`${logType}-status`);
+        
+        if (!logElement) return;
+        
+        // Update status to loading
+        statusElement.className = 'badge bg-warning badge-status';
+        statusElement.textContent = '●';
+        
+        fetch(`/logs/content/${logType}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    logElement.textContent = `Error loading ${logType} log: ${data.error}`;
+                    statusElement.className = 'badge bg-danger badge-status';
+                } else {
+                    logElement.textContent = data.content || `No ${logType} log data available`;
+                    statusElement.className = 'badge bg-success badge-status';
+                    
+                    // Auto-scroll to bottom
+                    logElement.scrollTop = logElement.scrollHeight;
+                }
+            })
+            .catch(error => {
+                logElement.textContent = `Network error loading ${logType} log: ${error.message}`;
+                statusElement.className = 'badge bg-danger badge-status';
+                console.error(`${logType} log fetch error:`, error);
+            });
+    }
+    
+    // Global variable to store the log type being rotated
+    let pendingRotateLogType = null;
+    
+    // Clear/rotate log file - show modal for confirmation (server logs only)
+    function clearLog(logType) {
+        if (logType === 'crash') {
+            console.error('Crash reports cannot be rotated - use the dropdown to select reports');
+            return;
+        }
+        
+        pendingRotateLogType = logType;
+        
+        // Update modal message and show rotate modal
+        const messageElement = document.getElementById('rotate-message');
+        messageElement.textContent = `Are you sure you want to rotate the ${logType} log?`;
+        const rotateModal = new bootstrap.Modal(document.getElementById('rotateLogModal'));
+        rotateModal.show();
+    }
+    
+    // Execute log rotation after modal confirmation
+    function executeLogRotation(logType) {
+        const logElement = document.getElementById(`${logType}-log`);
+        const statusElement = document.getElementById(`${logType}-status`);
+        
+        if (!logElement) return;
+        
+        // Update status to processing
+        statusElement.className = 'badge bg-warning badge-status';
+        logElement.textContent = `${logType === 'crash' ? 'Archiving' : 'Rotating'} ${logType} log...`;
+        
+        const csrfToken = getCSRFToken();
+        console.log(`Preparing to rotate ${logType} log`);
+        console.log(`CSRF token: ${csrfToken ? csrfToken.substring(0, 10) + '...' : 'NULL'}`);
+        
+        const formData = new FormData();
+        formData.append('csrf_token', csrfToken);
+        
+        console.log('FormData contents:', Array.from(formData.entries()));
+        
+        fetch(`/logs/rotate/${logType}`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                if (logType === 'crash') {
+                    logElement.textContent = `Crash reports archived successfully.\nBackup directory: ${data.rotated_file}\n\nCrash reports directory is now clear.`;
+                } else {
+                    logElement.textContent = `${logType.charAt(0).toUpperCase() + logType.slice(1)} log rotated successfully.\nBackup created: ${data.rotated_file}\n\nNew log file is now active and empty.`;
+                }
+                statusElement.className = 'badge bg-success badge-status';
+                
+                // Auto-refresh after 3 seconds to show new content
+                setTimeout(() => {
+                    refreshLog(logType);
+                }, 3000);
+            } else {
+                logElement.textContent = `Error ${logType === 'crash' ? 'archiving' : 'rotating'} ${logType} log: ${data.error || 'Unknown error'}`;
+                statusElement.className = 'badge bg-danger badge-status';
+            }
+        })
+        .catch(error => {
+            console.error(`${logType} log rotation error:`, error);
+            logElement.textContent = `Network error ${logType === 'crash' ? 'archiving' : 'rotating'} ${logType} log: ${error.message}\n\nPlease check the browser console for more details.`;
+            statusElement.className = 'badge bg-danger badge-status';
+        });
+    }
+    
+    // Start following a log
+    function startFollow(logType) {
+        const followCheckbox = document.getElementById(`follow-${logType}`);
+        if (!followCheckbox) {
+            console.error(`Follow checkbox not found for ${logType}`);
+            return;
+        }
+        
+        console.log(`Starting follow for ${logType}`);
+        
+        // Stop existing follow if any
+        stopFollow(logType);
+        
+        if (followCheckbox.checked) {
+            // Refresh immediately
+            refreshLog(logType);
+            
+            // Set up interval for continuous following (every 10 seconds)
+            followIntervals[logType] = setInterval(() => {
+                const checkbox = document.getElementById(`follow-${logType}`);
+                if (checkbox && checkbox.checked) {
+                    console.log(`Auto-refreshing ${logType} log`);
+                    refreshLog(logType);
+                } else {
+                    console.log(`Stopping follow for ${logType} - checkbox unchecked`);
+                    stopFollow(logType);
+                }
+            }, 10000);
+            
+            console.log(`Follow interval set for ${logType}`);
+        }
+    }
+    
+    // Stop following a log
+    function stopFollow(logType) {
+        if (followIntervals[logType]) {
+            clearInterval(followIntervals[logType]);
+            followIntervals[logType] = null;
+        }
+    }
+    
+    // Server log control functions  
+    function startFollowServerLogs() {
+        ['latest', 'debug'].forEach(logType => {
+            const checkbox = document.getElementById(`follow-${logType}`);
+            if (checkbox) {
+                checkbox.checked = true;
+                startFollow(logType);
+            }
+        });
+    }
+    
+    function stopFollowServerLogs() {
+        ['latest', 'debug'].forEach(logType => {
+            const checkbox = document.getElementById(`follow-${logType}`);
+            if (checkbox) {
+                checkbox.checked = false;
+                stopFollow(logType);
+            }
+        });
+    }
+    
+    function refreshServerLogs() {
+        ['latest', 'debug'].forEach(refreshLog);
+    }
+    
+    function rotateServerLogs() {
+        // Show rotate server logs modal
+        const rotateModal = new bootstrap.Modal(document.getElementById('rotateServerLogsModal'));
+        rotateModal.show();
+    }
+    
+    function executeRotateServerLogs() {
+        ['latest', 'debug'].forEach(logType => {
+            setTimeout(() => executeLogRotation(logType), Math.random() * 1000); // Stagger the requests
+        });
+    }
+    
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set up checkbox event listeners for server logs
+        ['latest', 'debug'].forEach(logType => {
+            const checkbox = document.getElementById(`follow-${logType}`);
+            if (checkbox) {
+                checkbox.addEventListener('change', function() {
+                    console.log(`${logType} follow checkbox changed: ${this.checked}`);
+                    if (this.checked) {
+                        startFollow(logType);
+                    } else {
+                        stopFollow(logType);
+                    }
+                });
+            }
+        });
+        
+        // Set up crash report selector
+        const crashSelector = document.getElementById('crash-selector');
+        crashSelector.addEventListener('change', function() {
+            selectedCrashReport = this.value;
+            loadCrashReport(selectedCrashReport);
+        });
+        
+        // Initial load of server logs and crash reports
+        setTimeout(() => {
+            refreshServerLogs();
+            refreshCrashList();
+        }, 100);
+        
+        console.log('Enhanced logs page initialized');
+        
+        // Set up modal event handlers
+        setupModalHandlers();
+    });
+    
+    // Setup modal event handlers
+    function setupModalHandlers() {
+        // Rotate log modal confirm button
+        document.getElementById('confirmRotateBtn').addEventListener('click', function() {
+            if (pendingRotateLogType) {
+                executeLogRotation(pendingRotateLogType);
+                pendingRotateLogType = null;
+                bootstrap.Modal.getInstance(document.getElementById('rotateLogModal')).hide();
+            }
+        });
+        
+        // Rotate server logs modal confirm button
+        document.getElementById('confirmRotateServerLogsBtn').addEventListener('click', function() {
+            executeRotateServerLogs();
+            bootstrap.Modal.getInstance(document.getElementById('rotateServerLogsModal')).hide();
+        });
+    }
+    
+    // Cleanup intervals when page is unloaded
+    window.addEventListener('beforeunload', function() {
+        Object.keys(followIntervals).forEach(stopFollow);
+    });
+</script>
 {% endblock %}
