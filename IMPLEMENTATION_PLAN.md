@@ -16,12 +16,14 @@
 ## Phase 2: Backend Services ✅ COMPLETED & ENHANCED
 
 ### 2.1 System Integration Services ✅ ENHANCED
-- [x] Create `services/system_control.py` for systemd service management
-  - Server start/stop/restart functions
-  - Service status checking with uptime, memory, and CPU usage
-  - Error handling for service operations
+- [x] Create `services/system_control.py` for **direct process management**
+  - Direct Java process launching, monitoring, and control
+  - Process status checking with uptime, memory, and CPU usage via psutil
+  - Graceful shutdown and force-kill capabilities
+  - **NEW**: Real-time process statistics and PID tracking
   - **NEW**: Accurate player count using mcstatus library with Minecraft query protocol
   - **NEW**: Fallback to server.properties for max players when query fails
+  - **NEW**: Threading compatibility for RCON operations
 
 ### 2.2 File Management Services ✅
 - [x] Create `services/log_service.py` for log file operations
@@ -56,11 +58,14 @@
 - [x] Add AJAX for real-time status updates (every 10 seconds) and service journal viewing
 - [x] **NEW**: Add Console quick action button
 
-### 3.3 Log Viewer ✅
-- [x] Create `templates/logs.html` for log viewing interface
-- [x] Add log file selector dropdown (latest, debug, crash)
-- [x] Implement auto-refresh functionality with toggle
+### 3.3 Log Viewer ✅ ENHANCED
+- [x] Create `templates/logs.html` for **3-window log viewing interface**
+  - **NEW**: Separate content windows for latest, debug, and crash logs
+  - **NEW**: Individual follow/refresh/clear controls for each log type
+  - **NEW**: Crash report dropdown selector (replaces archival functionality)
+- [x] Implement auto-refresh functionality with individual toggles
 - [x] Dark mode compatible log display with textarea styling
+- [x] **NEW**: Bootstrap modals replace JavaScript confirm dialogs
 
 ### 3.4 Configuration Editor ✅ ENHANCED
 - [x] Create `templates/config.html` with **multi-category interface**:
@@ -70,7 +75,7 @@
 - [x] Add file validation, automatic backup creation, and cancel/save functionality
 - [x] Implement organized workflow replacing overwhelming dropdown with categorized buttons
 
-### 3.5 RCON Console ✅ NEW FEATURE
+### 3.5 RCON Console ✅ NEW FEATURE (ENHANCED)
 - [x] Create `templates/console.html` with terminal-style interface
 - [x] Add RCON authentication via secure modal popup (no password storage)
 - [x] Implement full server command execution via RCON
@@ -78,6 +83,8 @@
 - [x] Include quick command buttons for common tasks
 - [x] Session-based authentication with automatic re-authentication
 - [x] Add Console navigation item and quick action integration
+- [x] **NEW**: Resolved threading issues with direct process management
+- [x] **NEW**: Automatic server.properties parsing for RCON configuration
 
 ### 3.6 Backup Manager ✅
 - [x] Create `templates/backups.html` for backup management
@@ -169,6 +176,13 @@ After comprehensive code analysis, **ALL planned features are fully implemented 
   - Config Directory: File browser with selection and editing panes
 - **Improved UX**: Category buttons, file browser, and dedicated save/cancel actions
 
+### **Enhanced Log Monitoring** ✅ NEW
+- **3-Window Interface**: Separate content windows for latest, debug, and crash logs
+- **Individual Controls**: Each log window has its own follow, refresh, and clear buttons
+- **Crash Report Dropdown**: Browse and select individual crash reports (removed archival)
+- **Bootstrap Modals**: Replaced JavaScript confirm dialogs with professional modals
+- **Real-time Updates**: Independent auto-refresh for each log type
+
 ### **Dark Mode Implementation** 
 - **Universal Support**: All pages, templates, and components support dark/light themes
 - **Persistent Settings**: Theme preference saved in localStorage
@@ -180,11 +194,13 @@ After comprehensive code analysis, **ALL planned features are fully implemented 
 - **Server Configuration**: Port, player limits, game settings extraction
 - **Production-Grade**: Comprehensive error handling and logging
 
-### **Enhanced RCON Implementation** ✅ NEW
+### **Enhanced RCON Implementation** ✅ NEW (FULLY RESOLVED)
 - **Real RCON Connection**: Using `mcrcon` library for actual server communication
+- **Threading Compatibility**: Resolved "signal only works in main thread" error with direct process management
 - **Auto-Configuration**: Reads RCON settings from server.properties automatically
-- **Connection Status**: Real-time RCON availability checking
+- **Connection Status**: Real-time RCON availability checking with network testing
 - **Secure Authentication**: No password storage, modal-based authentication
+- **Full Functionality**: All RCON commands work perfectly with direct process architecture
 
 ### **Performance Optimizations** ✅ NEW
 - **Status Caching**: 5-second cache for server status to reduce system calls
@@ -208,9 +224,11 @@ After comprehensive code analysis, **ALL planned features are fully implemented 
 ## Implementation Verification Summary
 
 **VERIFIED IMPLEMENTED:**
-✅ Subprocess module for systemd service control - **COMPLETE**
+✅ **Direct Java process management** (replaced systemd) - **COMPLETE**
 ✅ File locking for config edits via atomic writes - **COMPLETE** 
-✅ Real-time status updates via AJAX - **COMPLETE**
+✅ Real-time status updates via AJAX with process monitoring - **COMPLETE**
+✅ Enhanced 3-window log interface with crash report dropdown - **COMPLETE**
+✅ RCON threading compatibility resolved - **COMPLETE**
 ✅ Proper MIME types for backup downloads - **COMPLETE**
 ✅ Flask-WTF for form handling and CSRF protection - **COMPLETE**
 ✅ Session management via Flask sessions - **COMPLETE**

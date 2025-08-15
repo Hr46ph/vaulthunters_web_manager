@@ -8,9 +8,9 @@ A comprehensive, production-ready web interface for managing your VaultHunter Mi
 
 ### ✅ **VERIFIED IMPLEMENTED FEATURES**
 
-- **Server Control**: Start, stop, and restart your VaultHunter server with real-time status monitoring and accurate player counts using mcstatus library
-- **RCON Console**: Full server console access with mcrcon integration, automatic server.properties parsing, and secure modal authentication
-- **Advanced Log Monitoring**: View server logs, crash reports, and debug logs with auto-refresh, systemd journal access, and dark mode support
+- **Server Control**: Direct Java process management for start/stop/restart with real-time status monitoring and accurate player counts
+- **RCON Console**: Full server console access with mcrcon integration, automatic server.properties parsing, secure modal authentication, and threading compatibility
+- **Enhanced Log Monitoring**: 3-window log interface (latest/debug/crash) with individual controls, crash report dropdown selector, and dark mode support
 - **Comprehensive Configuration Management**: 
   - Multi-category config editor with three organized sections:
     - Server Properties: Dedicated editor for `server.properties` with validation
@@ -39,12 +39,12 @@ A comprehensive, production-ready web interface for managing your VaultHunter Mi
 
 - Python 3.7+
 - VaultHunter Minecraft server installation
-- Linux/Unix system with systemd (for service management)
+- Linux/Unix system with Java 8+ (for Minecraft server execution)
 - Dependencies automatically installed via `requirements.txt`:
   - Flask 3.0.0 with Flask-WTF for security
   - mcstatus 11.0.0 for Minecraft server integration
   - mcrcon 0.7.0 for RCON console functionality
-  - psutil 5.9.6 for system monitoring
+  - psutil 5.9.6 for process monitoring and management
   - Bootstrap 5.3.0 (CDN) for responsive UI
 
 ## Installation
@@ -76,17 +76,18 @@ cp config.py.example config.py
 # Server paths
 MINECRAFT_SERVER_PATH = "/home/minecraft/vaulthunter"
 BACKUP_PATH = "/home/minecraft/backups"
-SERVICE_NAME = "vaulthunter"  # systemd service name
 
-# Minecraft server connection settings
+# Java and server settings for direct process management
+JAVA_EXECUTABLE = "java"  # or full path like "/usr/lib/jvm/java-17-openjdk/bin/java"
+SERVER_JAR = "forge-1.18.2-40.2.21-universal.jar"
+
+# Minecraft server connection settings (RCON details auto-read from server.properties)
 MINECRAFT_SERVER_HOST = "localhost"
 MINECRAFT_SERVER_PORT = 25565
-MINECRAFT_QUERY_PORT = 25565    # For player count queries
-MINECRAFT_RCON_PORT = 25575     # For console commands
 
 # Web interface settings
 HOST = "0.0.0.0"
-PORT = 8889
+PORT = 8080
 SECRET_KEY = "change-this-to-a-random-secret"
 ```
 
@@ -124,29 +125,17 @@ sudo systemctl start vaulthunter_web_manager.service
 
 ### Server Setup
 
-Ensure your VaultHunter server is set up as a systemd service. Create `/etc/systemd/system/vaulthunters.service`:
+**Direct Process Management** - No separate systemd service needed for the Minecraft server! The web manager handles process launching directly.
 
-```ini
-[Unit]
-Description=VaultHunters Minecraft Server
-After=network.target
-
-[Service]
-Type=forking
-User=minecraft
-Group=minecraft
-WorkingDirectory=/home/minecraft/vaulthunters
-ExecStart=/home/minecraft/vaulthunters/run.sh
-ExecStop=/bin/kill -TERM $MAINPID
-Restart=on-failure
-RestartSec=5
-User=natie
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-```
+Ensure your VaultHunter server directory contains:
+- `server.properties` with RCON enabled:
+  ```properties
+  enable-rcon=true
+  rcon.port=25575
+  rcon.password=your-secure-password
+  ```
+- Server jar file (e.g., `forge-1.18.2-40.2.21-universal.jar`)
+- Java 8+ installed and accessible via `java` command
 
 ### Web Manager Configuration
 
@@ -158,11 +147,10 @@ cp config.py.example config.py
 
 - `MINECRAFT_SERVER_PATH`: Full path to your VaultHunter server directory
 - `BACKUP_PATH`: Directory where backups are stored
-- `SERVICE_NAME`: Name of your systemd service
+- `JAVA_EXECUTABLE`: Java command or full path (e.g., `/usr/lib/jvm/java-17-openjdk/bin/java`)
+- `SERVER_JAR`: Minecraft server jar filename
 - `MINECRAFT_SERVER_HOST`: Minecraft server hostname (usually `localhost`)
 - `MINECRAFT_SERVER_PORT`: Minecraft server port (default: 25565)
-- `MINECRAFT_QUERY_PORT`: Query protocol port for player counts (default: 25565)
-- `MINECRAFT_RCON_PORT`: RCON port for console commands (default: 25575)
 - `HOST`: Interface to bind to (use `127.0.0.1` for localhost only)
 - `PORT`: Port for the web interface
 - `SECRET_KEY`: Random secret for session security
@@ -203,23 +191,26 @@ server {
 1. Open your web browser and navigate to `http://your-server-ip:8080`
 
 2. **Server Control Panel**:
-   - Green button: Start server
-   - Yellow button: Restart server
-   - Red button: Stop server
-   - Current status displayed at the top with accurate player counts (updates every 10 seconds)
+   - Green button: Start server (direct Java process launch)
+   - Yellow button: Restart server (graceful stop + start)
+   - Red button: Stop server (graceful shutdown with force-kill fallback)
+   - Current status with real-time process monitoring and player counts (updates every 10 seconds)
 
 3. **RCON Console**:
-   - Full server console access through web interface
-   - Enter RCON password via secure modal popup
+   - Full server console access through web interface (threading issues resolved)
+   - Automatic RCON configuration reading from server.properties
    - Execute any Minecraft command (`/list`, `/tp`, `/give`, `/gamemode`, etc.)
    - Command history with arrow key navigation
    - Quick command buttons for common tasks
    - Terminal-style interface with auto-scroll
+   - Real-time connection status with network testing
 
-4. **Log Viewer**:
-   - Switch between different log files using the dropdown
-   - Auto-refresh every 30 seconds
-   - Scroll to bottom for latest entries
+4. **Enhanced Log Viewer**:
+   - **3 separate content windows**: Latest, Debug, and Crash logs displayed simultaneously
+   - **Individual controls**: Each window has its own follow, refresh, and clear buttons
+   - **Crash report dropdown**: Select and view individual crash reports by timestamp
+   - Auto-refresh with independent toggles for each log type
+   - Bootstrap modals replace JavaScript confirm dialogs
 
 5. **Configuration Editor**:
    - **Server Properties**: Direct editor for `server.properties` with reload and save buttons
@@ -301,29 +292,24 @@ sudo journalctl -u vaulthunter_web_manager.service -f
 ```
 
 ### Server Control Not Working
-- Verify systemd service name matches `config.py`
-- Check that the user has passwordless sudo access for systemctl commands. Add to `/etc/sudoers.d/vaulthunter_web`:
-```
-username ALL=NOPASSWD: /bin/systemctl start vaulthunters.service, \
-                       /bin/systemctl stop vaulthunters.service, \
-                       /bin/systemctl restart vaulthunters.service, \
-                       /bin/systemctl status vaulthunters.service, \
-                       /bin/journalctl -u vaulthunters.service -n * --no-pager, \
-                       /bin/journalctl -u vaulthunter_web_manager.service -n * --no-pager
-```
+- Verify `JAVA_EXECUTABLE` path in `config.py` (try `which java` to find it)
+- Check `SERVER_JAR` filename matches your actual server jar file
+- Ensure `MINECRAFT_SERVER_PATH` is correct and contains server files
+- Verify Java version compatibility (Java 8+ required for VaultHunter)
+- Check server directory permissions (readable/writable by web manager user)
 
-### Service Status Button Asks for Password
-The "Service Status" button shows `journalctl` logs. If it asks for a password, add the journalctl commands to your sudoers file:
-```bash
-# Add these lines to /etc/sudoers.d/vaulthunter_web (replace 'username' with your actual username)
-username ALL=NOPASSWD: /bin/journalctl -u vaulthunters.service -n * --no-pager, \
-                       /bin/journalctl -u vaulthunter_web_manager.service -n * --no-pager
-```
+### RCON Console Not Working
+- Verify `enable-rcon=true` in server.properties
+- Check `rcon.port` and `rcon.password` are set in server.properties
+- Ensure Minecraft server is running (start it via web interface first)
+- Test network connectivity: `telnet localhost 25575` (or your RCON port)
+- Check server logs for RCON initialization messages
 
-Alternatively, add the user to the `systemd-journal` group:
-```bash
-sudo usermod -a -G systemd-journal username
-```
+### Process Management Issues
+- If server won't start: check Java path and version compatibility
+- If server won't stop: web manager uses graceful shutdown (SIGTERM) then force-kill
+- Memory issues: adjust JVM arguments in `config.py` JAVA_ARGS section
+- Check application logs: `sudo journalctl -u vaulthunter_web_manager.service -f`
 
 ### Backup Downloads Failing
 - Ensure backup directory exists and is readable
