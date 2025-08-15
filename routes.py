@@ -38,8 +38,8 @@ def index():
 def server_status():
     """API endpoint for server status"""
     try:
-        service_name = current_app.config.get('SERVICE_NAME', 'vaulthunters')
-        system_control = SystemControlService(service_name)
+        # Use new direct process management (service_name parameter is optional now)
+        system_control = SystemControlService()
         status = system_control.get_service_status()
         return jsonify(status)
     except Exception as e:
@@ -58,16 +58,16 @@ def server_control():
             return jsonify({'error': 'Invalid action'}), 400
         
         try:
-            service_name = current_app.config.get('SERVICE_NAME', 'vaulthunters')
-            system_control = SystemControlService(service_name)
+            # Use new direct process management
+            system_control = SystemControlService()
             
             # Execute the requested action
             if action == 'start':
-                result = system_control.start_service()
+                result = system_control.start_server()
             elif action == 'stop':
-                result = system_control.stop_service()
+                result = system_control.stop_server()
             elif action == 'restart':
-                result = system_control.restart_service()
+                result = system_control.restart_server()
             
             if result['success']:
                 current_app.logger.info(f'Server control action {action} successful')
@@ -502,24 +502,34 @@ def console_status():
                 'error': f'Network connectivity test failed: {str(socket_error)}'
             })
         
-        # Test RCON connection using mcrcon with timeout
+        # Test RCON connection using Python library (should work now with direct process management)
         try:
-            current_app.logger.info('Creating MCRcon instance')
-            mcr = MCRcon(server_host, rcon_password, port=rcon_port, timeout=5)
-            current_app.logger.info('Attempting RCON connect')
-            mcr.connect()
-            current_app.logger.info('RCON connected, sending help command')
-            # Simple test command
-            response = mcr.command("help")
-            current_app.logger.info(f'RCON command successful, response length: {len(response) if response else 0}')
-            mcr.disconnect()
-            current_app.logger.info('RCON disconnected successfully')
+            current_app.logger.info('Testing RCON connection with Python library')
+            
+            with MCRcon(server_host, rcon_password, port=rcon_port) as mcr:
+                current_app.logger.info('RCON connected, sending list command')
+                response = mcr.command("list")
+                current_app.logger.info(f'RCON command successful, response: {response[:50] if response else "empty"}...')
+                
         except Exception as rcon_error:
             current_app.logger.error(f'RCON connection failed: {type(rcon_error).__name__}: {rcon_error}', exc_info=True)
-            return jsonify({
-                'connected': False,
-                'error': f'RCON authentication/command failed: {str(rcon_error)}'
-            })
+            
+            error_message = str(rcon_error).lower()
+            if 'refused' in error_message or 'timeout' in error_message:
+                return jsonify({
+                    'connected': False,
+                    'error': f'RCON server not responding on {server_host}:{rcon_port}. Check if Minecraft server is running and RCON is enabled.'
+                })
+            elif 'auth' in error_message or 'password' in error_message:
+                return jsonify({
+                    'connected': False,
+                    'error': f'RCON authentication failed. Check rcon.password in server.properties.'
+                })
+            else:
+                return jsonify({
+                    'connected': False,
+                    'error': f'RCON connection error: {str(rcon_error)}'
+                })
             
         current_app.logger.info(f'RCON status check: connection successful')
         return jsonify({
@@ -580,15 +590,33 @@ def console_execute():
                 'error': 'RCON password not set in server.properties'
             }), 500
         
-        # Execute command via RCON with proper connection handling
+        # Execute command via RCON using Python library (should work now with direct process management)
         try:
-            mcr = MCRcon(server_host, rcon_password, port=rcon_port, timeout=10)
-            mcr.connect()
-            response = mcr.command(command)
-            mcr.disconnect()
+            current_app.logger.info(f'Executing RCON command: {command}')
+            
+            with MCRcon(server_host, rcon_password, port=rcon_port) as mcr:
+                response = mcr.command(command)
+                current_app.logger.info(f'RCON command successful')
+                
         except Exception as rcon_error:
             current_app.logger.error(f'RCON command execution failed: {rcon_error}')
-            raise rcon_error
+            
+            error_message = str(rcon_error).lower()
+            if 'refused' in error_message or 'timeout' in error_message:
+                return jsonify({
+                    'success': False,
+                    'error': 'RCON server not responding. Check if Minecraft server is running.'
+                }), 500
+            elif 'auth' in error_message or 'password' in error_message:
+                return jsonify({
+                    'success': False,
+                    'error': 'RCON authentication failed. Check server password.'
+                }), 500
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': f'Command execution failed: {str(rcon_error)}'
+                }), 500
             
         current_app.logger.info(f'RCON command executed: {command}')
         

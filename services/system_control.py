@@ -2,6 +2,9 @@ import subprocess
 import psutil
 import time
 import re
+import os
+import signal
+import threading
 from datetime import datetime, timedelta
 from flask import current_app
 import logging
@@ -11,17 +14,64 @@ from .server_properties import ServerPropertiesParser
 _status_cache = {}
 _cache_duration = 5  # Cache for 5 seconds
 
+# Global process tracking
+_minecraft_process = None
+_process_lock = threading.Lock()
+
 class SystemControlService:
-    """Service for managing systemd service and system operations"""
+    """Service for managing Minecraft server process directly"""
     
-    def __init__(self, service_name):
-        self.service_name = service_name
+    def __init__(self, server_name=None):
+        self.server_name = server_name or "minecraft"
         self.logger = logging.getLogger(__name__)
+        self.server_path = None
+        self.java_executable = None
+        self.server_jar = None
+        self._initialize_server_config()
     
-    def get_service_status(self):
-        """Get detailed service status from systemd with caching"""
+    def _initialize_server_config(self):
+        """Initialize server configuration from Flask config"""
+        try:
+            self.server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+            self.java_executable = current_app.config.get('JAVA_EXECUTABLE', 'java')
+            self.server_jar = current_app.config.get('SERVER_JAR', 'forge-1.18.2-40.2.21-universal.jar')
+            self.java_args = current_app.config.get('JAVA_ARGS', [
+                '-Xmx8G', '-Xms4G',
+                '-XX:+UseG1GC',
+                '-XX:+ParallelRefProcEnabled',
+                '-XX:MaxGCPauseMillis=200',
+                '-XX:+UnlockExperimentalVMOptions',
+                '-XX:+DisableExplicitGC',
+                '-XX:+AlwaysPreTouch',
+                '-XX:G1NewSizePercent=30',
+                '-XX:G1MaxNewSizePercent=40',
+                '-XX:G1HeapRegionSize=8M',
+                '-XX:G1ReservePercent=20',
+                '-XX:G1HeapWastePercent=5',
+                '-XX:G1MixedGCCountTarget=4',
+                '-XX:InitiatingHeapOccupancyPercent=15',
+                '-XX:G1MixedGCLiveThresholdPercent=90',
+                '-XX:G1RSetUpdatingPauseTimePercent=5',
+                '-XX:SurvivorRatio=32',
+                '-XX:+PerfDisableSharedMem',
+                '-XX:MaxTenuringThreshold=1',
+                '-Dusing.aikars.flags=https://mcflags.emc.gs',
+                '-Daikars.new.flags=true'
+            ])
+            
+            self.logger.info(f"Server config - Path: {self.server_path}, Jar: {self.server_jar}")
+            
+        except Exception as e:
+            self.logger.error(f"Error initializing server config: {e}")
+            # Fallback defaults
+            self.server_path = '/home/minecraft/vaulthunter'
+            self.java_executable = 'java'
+            self.server_jar = 'forge-1.18.2-40.2.21-universal.jar'
+    
+    def get_server_status(self):
+        """Get detailed server status with caching"""
         # Check cache first
-        cache_key = f"status_{self.service_name}"
+        cache_key = f"status_{self.server_name}"
         now = time.time()
         
         if cache_key in _status_cache:
@@ -31,14 +81,6 @@ class SystemControlService:
                 return cached_data
         
         try:
-            # Get service status with reduced timeout
-            result = subprocess.run(
-                ['sudo', '/bin/systemctl', 'status', f'{self.service_name}.service'],
-                capture_output=True,
-                text=True,
-                timeout=5  # Reduced from 10 to 5 seconds
-            )
-            
             status_info = {
                 'running': False,
                 'uptime': '0 minutes',
@@ -46,242 +88,265 @@ class SystemControlService:
                 'max_players': 20,
                 'last_update': datetime.now().isoformat(),
                 'memory_usage': 0,
-                'cpu_usage': 0.0
+                'cpu_usage': 0.0,
+                'pid': None
             }
             
-            # Parse systemctl status output
-            if result.returncode == 0:
-                output = result.stdout
+            # Check if Minecraft process is running
+            minecraft_proc = self._get_minecraft_process()
+            
+            if minecraft_proc and minecraft_proc.is_running():
+                status_info['running'] = True
+                status_info['pid'] = minecraft_proc.pid
                 
-                # Check if service is active
-                if 'Active: active (running)' in output:
-                    status_info['running'] = True
+                try:
+                    # Get process info
+                    proc_info = minecraft_proc.as_dict(attrs=['pid', 'create_time', 'memory_info', 'cpu_percent'])
                     
-                    # Extract uptime
-                    uptime_match = re.search(r'Active: active \(running\) since (.+?);', output)
-                    if uptime_match:
-                        start_time_str = uptime_match.group(1).strip()
-                        try:
-                            # Parse the start time (format may vary)
-                            start_time = datetime.strptime(start_time_str, '%a %Y-%m-%d %H:%M:%S %Z')
-                            uptime_delta = datetime.now() - start_time
-                            status_info['uptime'] = self._format_uptime(uptime_delta)
-                        except ValueError:
-                            # Try alternative format
-                            try:
-                                start_time = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S')
-                                uptime_delta = datetime.now() - start_time
-                                status_info['uptime'] = self._format_uptime(uptime_delta)
-                            except ValueError:
-                                status_info['uptime'] = 'Unknown'
+                    # Calculate uptime
+                    create_time = datetime.fromtimestamp(proc_info['create_time'])
+                    uptime_seconds = (datetime.now() - create_time).total_seconds()
+                    status_info['uptime'] = self._format_uptime(uptime_seconds)
                     
-                    # Extract PID and get process info
-                    pid_match = re.search(r'Main PID: (\d+)', output)
-                    if pid_match:
-                        main_pid = int(pid_match.group(1))
-                        try:
-                            # Get memory and CPU usage (optimized)
-                            process = psutil.Process(main_pid)
-                            memory_info = process.memory_info()
-                            status_info['memory_usage'] = memory_info.rss // (1024 * 1024)  # MB
-                            status_info['cpu_usage'] = process.cpu_percent(interval=0.1)  # Quick sample
-                            
-                            # Get child processes (for Java process) - limit recursion
-                            try:
-                                children = process.children(recursive=False)  # Only direct children
-                                for child in children[:5]:  # Limit to 5 children max
-                                    if 'java' in child.name().lower():
-                                        child_memory = child.memory_info()
-                                        status_info['memory_usage'] += child_memory.rss // (1024 * 1024)
-                                        status_info['cpu_usage'] += child.cpu_percent(interval=0.1)
-                                        break  # Only check first Java process
-                            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                pass
-                        except (psutil.NoSuchProcess, psutil.AccessDenied):
-                            pass
+                    # Get memory usage (in MB)
+                    if proc_info['memory_info']:
+                        status_info['memory_usage'] = round(proc_info['memory_info'].rss / 1024 / 1024)
                     
-                    # Try to get player count from server logs if available
-                    try:
-                        player_info = self._get_player_count()
-                        status_info.update(player_info)
-                    except Exception as e:
-                        self.logger.debug(f"Could not get player count: {e}")
+                    # Get CPU usage
+                    cpu_percent = proc_info.get('cpu_percent', 0)
+                    if cpu_percent is not None:
+                        status_info['cpu_usage'] = cpu_percent
+                        
+                except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                    self.logger.warning(f"Error getting process info: {e}")
+            
+            # Get player count using mcstatus if available
+            try:
+                from mcstatus import JavaServer
+                server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+                server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
+                
+                server = JavaServer(server_host, server_port)
+                query_status = server.status(timeout=3)
+                
+                if query_status:
+                    status_info['players'] = query_status.players.online
+                    status_info['max_players'] = query_status.players.max
+                    
+            except Exception as e:
+                self.logger.debug(f"Player count query failed: {e}")
+                # Try to get from server.properties as fallback
+                try:
+                    server_props = ServerPropertiesParser()
+                    if server_props.load_properties():
+                        max_players = server_props.get_property('max-players', '20')
+                        status_info['max_players'] = int(max_players) if max_players.isdigit() else 20
+                except Exception:
+                    pass
             
             # Cache the result
             _status_cache[cache_key] = (status_info, now)
             return status_info
             
-        except subprocess.TimeoutExpired:
-            self.logger.error("Timeout getting service status")
-            # Get max players from server.properties
-            try:
-                server_props = ServerPropertiesParser()
-                max_players = server_props.get_max_players()
-            except Exception:
-                max_players = 20
-            return {'running': False, 'uptime': 'Unknown', 'players': 0, 'max_players': max_players}
         except Exception as e:
-            self.logger.error(f"Error getting service status: {e}")
-            # Get max players from server.properties
-            try:
-                server_props = ServerPropertiesParser()
-                max_players = server_props.get_max_players()
-            except Exception:
-                max_players = 20
-            return {'running': False, 'uptime': 'Error', 'players': 0, 'max_players': max_players}
+            self.logger.error(f"Error getting server status: {e}")
+            return {
+                'running': False,
+                'uptime': 'Unknown',
+                'players': 0,
+                'max_players': 20,
+                'last_update': datetime.now().isoformat(),
+                'memory_usage': 0,
+                'cpu_usage': 0.0,
+                'pid': None,
+                'error': str(e)
+            }
     
-    def start_service(self):
-        """Start the systemd service"""
-        try:
-            result = subprocess.run(
-                ['sudo', '/bin/systemctl', 'start', f'{self.service_name}.service'],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            if result.returncode == 0:
-                self.logger.info(f"Service {self.service_name} started successfully")
-                return {'success': True, 'message': f'Service {self.service_name} started'}
-            else:
-                error_msg = result.stderr.strip() or result.stdout.strip()
-                self.logger.error(f"Failed to start service: {error_msg}")
-                return {'success': False, 'error': f'Failed to start service: {error_msg}'}
-                
-        except subprocess.TimeoutExpired:
-            self.logger.error("Timeout starting service")
-            return {'success': False, 'error': 'Service start timeout'}
-        except Exception as e:
-            self.logger.error(f"Error starting service: {e}")
-            return {'success': False, 'error': str(e)}
-    
-    def stop_service(self):
-        """Stop the systemd service"""
-        try:
-            result = subprocess.run(
-                ['sudo', '/bin/systemctl', 'stop', f'{self.service_name}.service'],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            if result.returncode == 0:
-                self.logger.info(f"Service {self.service_name} stopped successfully")
-                return {'success': True, 'message': f'Service {self.service_name} stopped'}
-            else:
-                error_msg = result.stderr.strip() or result.stdout.strip()
-                self.logger.error(f"Failed to stop service: {error_msg}")
-                return {'success': False, 'error': f'Failed to stop service: {error_msg}'}
-                
-        except subprocess.TimeoutExpired:
-            self.logger.error("Timeout stopping service")
-            return {'success': False, 'error': 'Service stop timeout'}
-        except Exception as e:
-            self.logger.error(f"Error stopping service: {e}")
-            return {'success': False, 'error': str(e)}
-    
-    def restart_service(self):
-        """Restart the systemd service"""
-        try:
-            result = subprocess.run(
-                ['sudo', '/bin/systemctl', 'restart', f'{self.service_name}.service'],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            
-            if result.returncode == 0:
-                self.logger.info(f"Service {self.service_name} restarted successfully")
-                return {'success': True, 'message': f'Service {self.service_name} restarted'}
-            else:
-                error_msg = result.stderr.strip() or result.stdout.strip()
-                self.logger.error(f"Failed to restart service: {error_msg}")
-                return {'success': False, 'error': f'Failed to restart service: {error_msg}'}
-                
-        except subprocess.TimeoutExpired:
-            self.logger.error("Timeout restarting service")
-            return {'success': False, 'error': 'Service restart timeout'}
-        except Exception as e:
-            self.logger.error(f"Error restarting service: {e}")
-            return {'success': False, 'error': str(e)}
-    
-    def _format_uptime(self, uptime_delta):
-        """Format uptime delta to human readable string"""
-        total_seconds = int(uptime_delta.total_seconds())
-        days = total_seconds // 86400
-        hours = (total_seconds % 86400) // 3600
-        minutes = (total_seconds % 3600) // 60
+    def _get_minecraft_process(self):
+        """Find the running Minecraft server process"""
+        global _minecraft_process
         
-        if days > 0:
-            return f"{days} days, {hours} hours"
-        elif hours > 0:
-            return f"{hours} hours, {minutes} minutes"
+        with _process_lock:
+            # Check if we have a cached process and it's still running
+            if _minecraft_process and _minecraft_process.is_running():
+                return _minecraft_process
+            
+            # Search for Minecraft process
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    cmdline = proc.info['cmdline']
+                    if not cmdline:
+                        continue
+                    
+                    # Look for Java process with Minecraft server jar
+                    if (any('java' in arg.lower() for arg in cmdline) and
+                        any(self.server_jar in arg for arg in cmdline)):
+                        _minecraft_process = proc
+                        self.logger.info(f"Found Minecraft process: PID {proc.pid}")
+                        return _minecraft_process
+                        
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            
+            _minecraft_process = None
+            return None
+    
+    def start_server(self):
+        """Start the Minecraft server process"""
+        try:
+            # Check if server is already running
+            if self._get_minecraft_process():
+                return {'success': False, 'error': 'Server is already running'}
+            
+            # Verify server files exist
+            server_jar_path = os.path.join(self.server_path, self.server_jar)
+            if not os.path.exists(server_jar_path):
+                return {'success': False, 'error': f'Server jar not found: {server_jar_path}'}
+            
+            # Prepare the command
+            cmd = [self.java_executable] + self.java_args + ['-jar', self.server_jar, 'nogui']
+            
+            self.logger.info(f"Starting Minecraft server in {self.server_path}")
+            self.logger.info(f"Command: {' '.join(cmd[:3])} ... [java args] ... {' '.join(cmd[-3:])}")
+            
+            # Start the process
+            process = subprocess.Popen(
+                cmd,
+                cwd=self.server_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE,
+                universal_newlines=True,
+                bufsize=1
+            )
+            
+            # Wait a moment to see if the process starts successfully
+            time.sleep(2)
+            
+            if process.poll() is None:  # Process is still running
+                global _minecraft_process
+                with _process_lock:
+                    _minecraft_process = psutil.Process(process.pid)
+                
+                self.logger.info(f"Minecraft server started successfully with PID {process.pid}")
+                
+                # Clear the status cache
+                _status_cache.clear()
+                
+                return {'success': True, 'message': f'Server started with PID {process.pid}'}
+            else:
+                # Process exited immediately
+                stdout, stderr = process.communicate()
+                error_msg = f"Server failed to start. Exit code: {process.returncode}"
+                if stdout:
+                    error_msg += f". Output: {stdout[:500]}"
+                
+                self.logger.error(error_msg)
+                return {'success': False, 'error': error_msg}
+                
+        except FileNotFoundError as e:
+            error_msg = f"Java executable not found: {self.java_executable}"
+            self.logger.error(error_msg)
+            return {'success': False, 'error': error_msg}
+        except Exception as e:
+            error_msg = f"Failed to start server: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {'success': False, 'error': error_msg}
+    
+    def stop_server(self):
+        """Stop the Minecraft server process gracefully"""
+        try:
+            minecraft_proc = self._get_minecraft_process()
+            
+            if not minecraft_proc:
+                return {'success': False, 'error': 'Server is not running'}
+            
+            pid = minecraft_proc.pid
+            self.logger.info(f"Stopping Minecraft server (PID {pid})")
+            
+            # Try graceful shutdown first (SIGTERM)
+            minecraft_proc.terminate()
+            
+            # Wait up to 30 seconds for graceful shutdown
+            try:
+                minecraft_proc.wait(timeout=30)
+                self.logger.info(f"Server stopped gracefully")
+            except psutil.TimeoutExpired:
+                # Force kill if graceful shutdown fails
+                self.logger.warning("Graceful shutdown timed out, force killing")
+                minecraft_proc.kill()
+                minecraft_proc.wait(timeout=10)  # Wait for force kill
+                self.logger.info("Server force killed")
+            
+            # Clear cached process
+            global _minecraft_process
+            with _process_lock:
+                _minecraft_process = None
+            
+            # Clear status cache
+            _status_cache.clear()
+            
+            return {'success': True, 'message': f'Server stopped (was PID {pid})'}
+            
+        except psutil.NoSuchProcess:
+            return {'success': False, 'error': 'Server process not found'}
+        except Exception as e:
+            error_msg = f"Failed to stop server: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {'success': False, 'error': error_msg}
+    
+    def restart_server(self):
+        """Restart the Minecraft server"""
+        try:
+            # Stop the server first
+            stop_result = self.stop_server()
+            if not stop_result['success'] and 'not running' not in stop_result['error']:
+                return stop_result
+            
+            # Wait a moment before starting
+            time.sleep(3)
+            
+            # Start the server
+            start_result = self.start_server()
+            
+            if start_result['success']:
+                return {'success': True, 'message': 'Server restarted successfully'}
+            else:
+                return start_result
+                
+        except Exception as e:
+            error_msg = f"Failed to restart server: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {'success': False, 'error': error_msg}
+    
+    def _format_uptime(self, seconds):
+        """Format uptime in human readable format"""
+        if seconds < 60:
+            return f"{int(seconds)} seconds"
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            return f"{minutes} minute{'s' if minutes != 1 else ''}"
+        elif seconds < 86400:
+            hours = int(seconds / 3600)
+            minutes = int((seconds % 3600) / 60)
+            return f"{hours} hour{'s' if hours != 1 else ''}, {minutes} minute{'s' if minutes != 1 else ''}"
         else:
-            return f"{minutes} minutes"
+            days = int(seconds / 86400)
+            hours = int((seconds % 86400) / 3600)
+            return f"{days} day{'s' if days != 1 else ''}, {hours} hour{'s' if hours != 1 else ''}"
+
+    # Compatibility methods for existing code
+    def get_service_status(self):
+        """Compatibility method - redirects to get_server_status"""
+        return self.get_server_status()
     
-    def _get_player_count(self):
-        """Get player count using mcstatus server query"""
-        try:
-            from mcstatus.server import JavaServer
-            
-            # Get server connection details from server.properties and config
-            server_props = ServerPropertiesParser()
-            server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-            server_port = server_props.get_server_port()
-            query_port = server_props.get_query_port()
-            
-            # Try server query first (most reliable)
-            try:
-                server = JavaServer.lookup(f"{server_host}:{query_port}")
-                query = server.query()
-                return {
-                    'players': query.players.online,
-                    'max_players': query.players.max,
-                    'player_names': query.players.names if hasattr(query.players, 'names') else []
-                }
-            except Exception as query_error:
-                self.logger.debug(f"Query failed, trying status ping: {query_error}")
-                
-                # Fallback to status ping
-                server = JavaServer.lookup(f"{server_host}:{server_port}")
-                status = server.status()
-                return {
-                    'players': status.players.online,
-                    'max_players': status.players.max,
-                    'player_names': []
-                }
-                
-        except Exception as e:
-            self.logger.debug(f"Could not get player count via mcstatus: {e}")
-            # Final fallback - try old method
-            return self._get_player_count_fallback()
-    
-    def _get_player_count_fallback(self):
-        """Fallback method using server.properties"""
-        try:
-            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
-            if not server_path:
-                return {'players': 0, 'max_players': 20, 'player_names': []}
-            
-            max_players = 20
-            # Try to find server.properties for max players
-            try:
-                props_result = subprocess.run(
-                    ['grep', 'max-players', f"{server_path}/server.properties"],
-                    capture_output=True,
-                    text=True,
-                    timeout=2  # Reduced timeout for file operation
-                )
-                if props_result.returncode == 0:
-                    match = re.search(r'max-players=(\d+)', props_result.stdout)
-                    if match:
-                        max_players = int(match.group(1))
-            except:
-                pass
-            
-            return {'players': 0, 'max_players': max_players, 'player_names': []}
-            
-        except Exception as e:
-            self.logger.debug(f"Fallback player count failed: {e}")
-        
-        return {'players': 0, 'max_players': 20, 'player_names': []}
+    def control_service(self, action):
+        """Compatibility method for service control"""
+        if action == 'start':
+            return self.start_server()
+        elif action == 'stop':
+            return self.stop_server()
+        elif action == 'restart':
+            return self.restart_server()
+        else:
+            return {'success': False, 'error': f'Unknown action: {action}'}
