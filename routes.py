@@ -329,7 +329,7 @@ def console_status():
         # Get server connection details
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
         rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
-        rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', 'minecraft')
+        rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', '')
         
         # Create server connection for RCON
         server = JavaServer.lookup(f"{server_host}:{rcon_port}")
@@ -372,7 +372,7 @@ def console_execute():
         # Get server connection details
         server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
         rcon_port = current_app.config.get('MINECRAFT_RCON_PORT', 25575)
-        rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', 'minecraft')
+        rcon_password = current_app.config.get('MINECRAFT_RCON_PASSWORD', '')
         
         # Create server connection for RCON
         server = JavaServer.lookup(f"{server_host}:{rcon_port}")
