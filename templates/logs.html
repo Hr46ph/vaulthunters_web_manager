@@ -294,7 +294,7 @@
             const statusElement = document.getElementById(`${logType}-status`);
             
             eventSource.onopen = function(event) {
-                console.log(`SSE connection opened for ${logType}`);
+                console.log(`SSE connection opened for ${logType}`, event);
                 statusElement.className = 'badge bg-success badge-status';
                 statusElement.title = 'Real-time streaming active';
             };
@@ -302,6 +302,12 @@
             eventSource.onmessage = function(event) {
                 try {
                     const data = JSON.parse(event.data);
+                    
+                    // Ensure status is green when receiving any valid message
+                    if (statusElement.className !== 'badge bg-success badge-status') {
+                        statusElement.className = 'badge bg-success badge-status';
+                        statusElement.title = 'Real-time streaming active';
+                    }
                     
                     switch(data.type) {
                         case 'initial':
@@ -358,19 +364,30 @@
             
             eventSource.onerror = function(event) {
                 console.error(`SSE error for ${logType}:`, event);
-                statusElement.className = 'badge bg-danger badge-status';
-                statusElement.title = 'Connection error';
+                console.error(`SSE readyState: ${eventSource.readyState}`);
+                console.error(`SSE url: ${eventSource.url}`);
                 
-                // Auto-reconnect after 5 seconds if checkbox is still checked
-                setTimeout(() => {
-                    const checkbox = document.getElementById(`follow-${logType}`);
-                    if (checkbox && checkbox.checked) {
-                        console.log(`Attempting to reconnect ${logType} stream`);
-                        statusElement.className = 'badge bg-warning badge-status';
-                        statusElement.title = 'Reconnecting...';
-                        startFollow(logType);
-                    }
-                }, 5000);
+                // Only show error status if connection is actually closed (readyState 2)
+                // ReadyState 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
+                if (eventSource.readyState === 2) {
+                    statusElement.className = 'badge bg-danger badge-status';
+                    statusElement.title = 'Connection error';
+                    
+                    // Auto-reconnect after 5 seconds if checkbox is still checked
+                    setTimeout(() => {
+                        const checkbox = document.getElementById(`follow-${logType}`);
+                        if (checkbox && checkbox.checked) {
+                            console.log(`Attempting to reconnect ${logType} stream`);
+                            statusElement.className = 'badge bg-warning badge-status';
+                            statusElement.title = 'Reconnecting...';
+                            startFollow(logType);
+                        }
+                    }, 5000);
+                } else if (eventSource.readyState === 0) {
+                    // Still connecting, show connecting status
+                    statusElement.className = 'badge bg-warning badge-status';
+                    statusElement.title = 'Connecting...';
+                }
             };
             
             console.log(`SSE connection established for ${logType}`);
