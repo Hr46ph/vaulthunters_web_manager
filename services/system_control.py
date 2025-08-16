@@ -113,6 +113,8 @@ class SystemControlService:
                     server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
                     server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
                     
+                    self.logger.info(f"mcstatus attempting connection to {server_host}:{server_port}")
+                    
                     server = JavaServer(server_host, server_port)
                     query_status = server.status(timeout=5)  # Increased timeout
                     
@@ -122,10 +124,10 @@ class SystemControlService:
                         status_info['max_players'] = query_status.players.max
                         status_info['server_ready'] = True
                         status_info['status'] = 'running'
-                        self.logger.debug("Server is ready and accepting connections")
+                        self.logger.info(f"mcstatus connected successfully - {query_status.players.online}/{query_status.players.max} players")
                         
                 except Exception as e:
-                    self.logger.info(f"Server connection check failed: {type(e).__name__}: {e}")
+                    self.logger.warning(f"mcstatus connection to {server_host}:{server_port} failed: {type(e).__name__}: {e}")
                     
                     # Check process uptime to distinguish between starting vs connection issues
                     proc_info = minecraft_proc.as_dict(attrs=['create_time'])
