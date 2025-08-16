@@ -80,25 +80,41 @@ class Config:
     """Base configuration class"""
     
     def __init__(self):
-        self.toml_config = load_toml_config()
-        flask_config = create_flask_config(self.toml_config)
+        # Load TOML config and apply to class attributes
+        toml_config = load_toml_config()
+        flask_config = create_flask_config(toml_config)
         
         # Apply all configuration values to this class
         for key, value in flask_config.items():
             setattr(self, key, value)
 
-class DevelopmentConfig(Config):
+# Load configuration once at module level
+_toml_config = load_toml_config()
+_flask_config = create_flask_config(_toml_config)
+
+class DevelopmentConfig:
     """Development configuration"""
     DEBUG = True
 
-class ProductionConfig(Config):
+class ProductionConfig:
     """Production configuration"""
     DEBUG = False
 
-class TestingConfig(Config):
+class TestingConfig:
     """Testing configuration"""
     TESTING = True
     DEBUG = True
+
+# Apply TOML configuration to all config classes
+for config_class in [DevelopmentConfig, ProductionConfig, TestingConfig]:
+    for key, value in _flask_config.items():
+        setattr(config_class, key, value)
+
+# Override specific settings for each environment
+DevelopmentConfig.DEBUG = True
+ProductionConfig.DEBUG = False
+TestingConfig.TESTING = True
+TestingConfig.DEBUG = True
 
 # Configuration dictionary for Flask factory pattern
 config = {
