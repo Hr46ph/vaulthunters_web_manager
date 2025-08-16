@@ -21,6 +21,16 @@ A Flask-based web interface for managing VaultHunters Minecraft servers. Provide
 - Linux/Unix system with Java 8+
 - Dependencies automatically installed via `requirements.txt`
 
+## Screenshots
+
+<img width="1429" height="1032" alt="image" src="https://github.com/user-attachments/assets/a9006b12-8a2c-4ddf-ad90-c7073708be2d" />
+
+<img width="1429" height="1214" alt="image" src="https://github.com/user-attachments/assets/7e9da505-662a-4f45-803f-fb7e9bf1fbba" />
+
+<img width="1429" height="841" alt="image" src="https://github.com/user-attachments/assets/e226a838-6b5a-49da-817a-864eea18f7fd" />
+
+<img width="1429" height="876" alt="image" src="https://github.com/user-attachments/assets/92712c7c-c4a0-440e-ac64-795a291bd9c1" />
+
 ## Installation
 
 ### Quick Install (Recommended)
