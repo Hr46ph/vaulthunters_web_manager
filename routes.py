@@ -214,6 +214,12 @@ def server_control():
             current_app.logger.info(f'Server control action {action} successful')
             response_data = {'success': True, 'message': result['message']}
             
+            # Include RCON command data if available (for console display)
+            if 'rcon_command' in result:
+                response_data['rcon_command'] = result['rcon_command']
+            if 'rcon_response' in result:
+                response_data['rcon_response'] = result['rcon_response']
+            
             # For start action, include PID if available
             if action == 'start':
                 # Try to get the PID from the system control service
