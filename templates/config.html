@@ -511,8 +511,10 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert('success', 'Aikar\'s flags applied successfully!');
-                    loadJvmArgs(); // Reload to show the new content
+                    // Small delay to ensure file write completes before reload
+                    setTimeout(() => {
+                        loadJvmArgs(); // Reload to show the new content
+                    }, 200);
                 } else {
                     showAlert('error', 'Error: ' + (data.error || 'Failed to apply Aikar\'s flags'));
                 }
@@ -535,7 +537,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert('success', successMessage);
+                    // Success - no notification needed
                 } else {
                     showAlert('error', 'Error: ' + (data.error || 'Save failed'));
                 }
