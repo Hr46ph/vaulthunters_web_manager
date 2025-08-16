@@ -4,41 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VaultHunter Web Manager is a Flask-based web application for managing VaultHunter Minecraft servers. It provides server control, log monitoring, configuration management, and backup downloads through a Bootstrap-based web interface.
+VaultHunters Web Manager is a Flask-based web application for managing VaultHunters Minecraft servers. It provides server control, log monitoring, configuration management, and backup downloads through a Bootstrap-based web interface.
 
-## Current Status
+## Architecture
 
-**IMPLEMENTATION COMPLETE** - The VaultHunter Web Manager is fully implemented with all planned features plus additional enhancements:
-
-- ✅ Complete Flask application with direct process management system
-- ✅ Dashboard with accurate real-time player counts and process monitoring (PID, dynamic MB/GB memory display)
-- ✅ **Integrated RCON console** on dashboard with custom socket client (threading issues resolved)
-- ✅ **Streamlined log monitoring** with 2-window interface (latest + debug/crash toggle)
-- ✅ **Real-time log streaming** with Server-Sent Events (SSE) replacing 10-second polling
-- ✅ **Process independence** - Server survives web application restarts
-- ✅ Multi-category configuration editor with atomic file operations
-- ✅ Backup management system with download and inspection
-- ✅ Dark mode support and responsive Bootstrap design
-- ✅ Direct Minecraft server process control with **proper Forge launcher support**
-
-## Architecture (Implemented)
-
-Direct process management architecture with enhanced features:
+Direct process management architecture:
 
 - **Flask Application** (`app.py`): Main web server with routes for server control, log viewing, config editing, backup management, and RCON console
 - **Configuration** (`config.py.example`): Configuration template with Java/JVM settings, server paths, web interface settings, and Minecraft connection details
 - **Process Management** (`services/system_control.py`): Direct Java process launching with detached execution, monitoring, and control with psutil integration
-- **Templates** (`templates/`): Jinja2 templates with enhanced logs page (3 content windows) and crash report dropdown selector
+- **Templates** (`templates/`): Jinja2 templates with logs page and crash report dropdown selector
 - **Static Files** (`static/`): CSS and JavaScript for Bootstrap-based responsive UI with RCON functionality
 - **Requirements** (`requirements.txt`): Python dependencies including Flask, mcstatus, mcrcon, and psutil
 
 ## Key Implementation Requirements
 
-- **Server Control**: **Process-independent** Java management with Forge launcher support - server survives web app restarts
-- **Integrated RCON Console**: Dashboard-embedded console with custom socket client, no confirmation modals, and VaultHunters-specific commands
+- **Server Control**: Process-independent Java management with Forge launcher support - server survives web app restarts
+- **Integrated RCON Console**: Dashboard-embedded console with custom socket client and VaultHunters-specific commands
 - **Smart Process Detection**: Accurate Java process identification (not bash wrappers) with PID display and dynamic MB/GB memory formatting
-- **Real-time Log Monitoring**: **Server-Sent Events (SSE)** for instant log updates with `tail -F` log rotation support
-- **Streamlined Log Interface**: 2-window log viewer (latest + debug/crash toggle) with simplified controls
+- **Real-time Log Monitoring**: Server-Sent Events (SSE) for instant log updates with `tail -F` log rotation support
+- **Log Interface**: 2-window log viewer (latest + debug/crash toggle) with follow controls
 - **Configuration Management**: Multi-category config editor with atomic file operations and automatic backups
 - **Backup Management**: List, download, and inspect backups from configured backup directory
 - **Real-time Monitoring**: Accurate server status and player counts using mcstatus and process statistics
@@ -66,7 +51,7 @@ pip install -r requirements.txt
 
 ## Configuration Paths
 
-- Minecraft server: `/home/minecraft/vaulthunter` (configurable)
+- Minecraft server: `/home/minecraft/vaulthunters` (configurable)
 - Backups: `/home/minecraft/backups` (configurable)
 - Java executable: `java` (configurable with full path support)
 - Server jar: `forge-1.18.2-40.2.21-universal.jar` (configurable)
@@ -81,20 +66,16 @@ pip install -r requirements.txt
 - `python app.py` - Run development server (in venv)
 - `pip install -r requirements.txt` - Install dependencies (in venv)
 - `deactivate` - Exit virtual environment
-- For production: systemd service `vaulthunter_web_manager.service` uses `./venv/bin/python app.py`
+- For production: systemd service `vaulthunters_web_manager.service` uses `./venv/bin/python app.py`
 - Server control: Direct process management (no separate systemd service needed for Minecraft)
 
-## Implementation Reference
+## Implementation Status
 
-See `IMPLEMENTATION_PLAN.md` for detailed development phases and technical considerations. 
-
-**VERIFIED IMPLEMENTATION POINTS:**
-- ✅ Direct Java process management - IMPLEMENTED in `services/system_control.py` with psutil integration
-- ✅ Atomic file writes for config edits - IMPLEMENTED in `services/config_manager.py`
-- ✅ CSRF protection and input validation - IMPLEMENTED with Flask-WTF across all routes
-- ✅ AJAX for real-time server status updates - IMPLEMENTED in `static/js/app.js`
-- ✅ Enhanced log viewing with 3-window interface - IMPLEMENTED in `services/log_service.py`
-- ✅ RCON threading compatibility resolved - IMPLEMENTED with custom socket client avoiding signal issues
-- ✅ Production-ready security and error handling - IMPLEMENTED throughout all services
-
-**STATUS:** 🎉 **PRODUCTION READY - ALL FEATURES VERIFIED FUNCTIONAL**
+**All features are implemented and functional:**
+- Direct Java process management in `services/system_control.py` with psutil integration
+- Atomic file writes for config edits in `services/config_manager.py`
+- CSRF protection and input validation with Flask-WTF across all routes
+- AJAX for real-time server status updates in `static/js/app.js`
+- Log viewing with real-time streaming in `services/log_service.py`
+- RCON custom socket client avoiding signal issues
+- Production-ready security and error handling throughout all services

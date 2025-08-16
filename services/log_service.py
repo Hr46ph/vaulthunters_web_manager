@@ -80,7 +80,7 @@ class LogService:
     
     def get_web_manager_journal(self, lines=50):
         """Get journal logs for the web manager service itself"""
-        web_service_name = 'vaulthunter_web_manager'
+        web_service_name = 'vaulthunters_web_manager'
         return self.get_service_journal(web_service_name, lines)
     
     def get_minecraft_server_logs(self, log_type='latest', lines=100):

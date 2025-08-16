@@ -368,7 +368,7 @@ def config_files_list():
         
         # Filter to only config directory files for the file browser
         config_dir_files = []
-        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
         config_dir_path = f"{server_path}/config/"
         
         for config in available_configs:
@@ -397,7 +397,7 @@ def config_content(config_file):
         config_manager = ConfigManager()
         
         # Get server path and construct full config path
-        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
         
         # Handle different file locations
         if config_file in ['server.properties', 'banned-ips.json', 'banned-players.json', 'whitelist.json']:
@@ -436,7 +436,7 @@ def save_config():
         config_manager = ConfigManager()
         
         # Get server path and construct full config path
-        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
         
         # Handle different file locations
         if config_file in ['server.properties', 'banned-ips.json', 'banned-players.json', 'whitelist.json']:
@@ -556,7 +556,7 @@ def console_status():
         server_props = ServerPropertiesParser()
         
         # Check if server.properties file exists
-        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
         props_file = os.path.join(server_path, 'server.properties')
         current_app.logger.info(f'Looking for server.properties at: {props_file}')
         current_app.logger.info(f'File exists: {os.path.exists(props_file)}')

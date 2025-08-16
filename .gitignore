@@ -158,7 +158,7 @@ cython_debug/
 #  project, it is recommended to use the local gitignore from PyCharm:
 #  https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 
-# VaultHunter Web Manager specific
+# VaultHunters Web Manager specific
 config.py
 logs/
 *.log

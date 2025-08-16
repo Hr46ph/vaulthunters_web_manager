@@ -1,4 +1,4 @@
-# Services package for VaultHunter Web Manager
+# Services package for VaultHunters Web Manager
 
 from .system_control import SystemControlService
 from .log_service import LogService

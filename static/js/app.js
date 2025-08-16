@@ -1,4 +1,4 @@
-// VaultHunter Web Manager JavaScript
+// VaultHunters Web Manager JavaScript
 
 // Get CSRF token
 function getCSRFToken() {
@@ -435,5 +435,5 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(checkRconStatus, 30000);
     }
     
-    console.log('VaultHunter Web Manager loaded');
+    console.log('VaultHunters Web Manager loaded');
 });

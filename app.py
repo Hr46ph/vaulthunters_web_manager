@@ -24,14 +24,14 @@ def create_app(config_name=None):
         if not os.path.exists('logs'):
             os.mkdir('logs')
         
-        file_handler = logging.FileHandler('logs/vaulthunter_web.log')
+        file_handler = logging.FileHandler('logs/vaulthunters_web.log')
         file_handler.setFormatter(logging.Formatter(
             '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
         ))
         file_handler.setLevel(logging.INFO)
         app.logger.addHandler(file_handler)
         app.logger.setLevel(logging.INFO)
-        app.logger.info('VaultHunter Web Manager startup')
+        app.logger.info('VaultHunters Web Manager startup')
     
     # Register error handlers
     @app.errorhandler(404)
@@ -63,7 +63,7 @@ def create_app(config_name=None):
     def inject_common_vars():
         return {
             'current_year': datetime.now().year,
-            'app_name': 'VaultHunter Web Manager'
+            'app_name': 'VaultHunters Web Manager'
         }
     
     # Register routes
@@ -81,7 +81,7 @@ def main():
     port = app.config.get('PORT', 8080)
     debug = app.config.get('DEBUG', False)
     
-    print(f"Starting VaultHunter Web Manager on {host}:{port}")
+    print(f"Starting VaultHunters Web Manager on {host}:{port}")
     print(f"Debug mode: {debug}")
     print(f"Environment: {config_name}")
     

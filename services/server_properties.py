@@ -1,5 +1,5 @@
 """
-Server.properties parser service for VaultHunter Web Manager.
+Server.properties parser service for VaultHunters Web Manager.
 
 Reads and parses Minecraft server.properties files to extract configuration.
 """
@@ -14,7 +14,7 @@ class ServerPropertiesParser:
     
     def __init__(self, server_path: Optional[str] = None):
         """Initialize parser with optional server path."""
-        self.server_path = server_path or current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+        self.server_path = server_path or current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
         self.properties_file = os.path.join(self.server_path, 'server.properties')
         self._properties = {}
         self._loaded = False

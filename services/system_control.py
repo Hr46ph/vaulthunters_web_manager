@@ -32,7 +32,7 @@ class SystemControlService:
     def _initialize_server_config(self):
         """Initialize server configuration from Flask config"""
         try:
-            self.server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+            self.server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
             self.java_executable = current_app.config.get('JAVA_EXECUTABLE', 'java')
             self.forge_startup_command = current_app.config.get('FORGE_STARTUP_COMMAND', [
                 '@user_jvm_args.txt',
@@ -45,7 +45,7 @@ class SystemControlService:
         except Exception as e:
             self.logger.error(f"Error initializing server config: {e}")
             # Fallback defaults
-            self.server_path = '/home/minecraft/vaulthunter'
+            self.server_path = '/home/minecraft/vaulthunters'
             self.java_executable = 'java'
             self.forge_startup_command = [
                 '@user_jvm_args.txt',
@@ -276,7 +276,7 @@ class SystemControlService:
             return {'success': False, 'error': error_msg}
     
     def stop_server(self):
-        """Stop the Minecraft server process gracefully"""
+        """Stop the Minecraft server process gracefully using RCON commands"""
         try:
             minecraft_proc = self._get_minecraft_process()
             
@@ -284,21 +284,63 @@ class SystemControlService:
                 return {'success': False, 'error': 'Server is not running'}
             
             pid = minecraft_proc.pid
-            self.logger.info(f"Stopping Minecraft server (PID {pid})")
+            self.logger.info(f"Stopping Minecraft server (PID {pid}) using RCON")
             
-            # Try graceful shutdown first (SIGTERM)
-            minecraft_proc.terminate()
-            
-            # Wait up to 30 seconds for graceful shutdown
+            # Try to stop using RCON commands first
             try:
-                minecraft_proc.wait(timeout=30)
-                self.logger.info(f"Server stopped gracefully")
-            except psutil.TimeoutExpired:
-                # Force kill if graceful shutdown fails
-                self.logger.warning("Graceful shutdown timed out, force killing")
-                minecraft_proc.kill()
-                minecraft_proc.wait(timeout=10)  # Wait for force kill
-                self.logger.info("Server force killed")
+                from .rcon_client import RconClient
+                from .server_properties import ServerPropertiesParser
+                
+                # Get RCON configuration
+                server_props = ServerPropertiesParser()
+                if server_props.load_properties():
+                    rcon_port = int(server_props.get_property('rcon.port', '25575'))
+                    rcon_password = server_props.get_property('rcon.password', '')
+                    server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+                    
+                    if rcon_password:
+                        # Execute RCON stop sequence
+                        with RconClient(server_host, rcon_port, rcon_password) as rcon:
+                            self.logger.info("Executing RCON stop sequence")
+                            rcon.command("save-off")
+                            time.sleep(1)
+                            rcon.command("save-all flush")
+                            time.sleep(2)
+                            rcon.command("stop")
+                            
+                        # Wait up to 30 seconds for graceful shutdown
+                        for i in range(30):
+                            if not minecraft_proc.is_running():
+                                self.logger.info("Server stopped gracefully via RCON")
+                                break
+                            time.sleep(1)
+                        else:
+                            self.logger.warning("RCON stop timed out, falling back to SIGTERM")
+                            minecraft_proc.terminate()
+                            minecraft_proc.wait(timeout=10)
+                    else:
+                        self.logger.warning("No RCON password configured, using SIGTERM")
+                        minecraft_proc.terminate()
+                        minecraft_proc.wait(timeout=30)
+                else:
+                    self.logger.warning("Cannot read server.properties, using SIGTERM")
+                    minecraft_proc.terminate()
+                    minecraft_proc.wait(timeout=30)
+                    
+            except Exception as rcon_error:
+                self.logger.warning(f"RCON stop failed: {rcon_error}, falling back to SIGTERM")
+                minecraft_proc.terminate()
+                
+                # Wait up to 30 seconds for graceful shutdown
+                try:
+                    minecraft_proc.wait(timeout=30)
+                    self.logger.info(f"Server stopped gracefully")
+                except psutil.TimeoutExpired:
+                    # Force kill if graceful shutdown fails
+                    self.logger.warning("Graceful shutdown timed out, force killing")
+                    minecraft_proc.kill()
+                    minecraft_proc.wait(timeout=10)  # Wait for force kill
+                    self.logger.info("Server force killed")
             
             # Clear cached process
             global _minecraft_process

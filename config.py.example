@@ -1,5 +1,5 @@
 """
-VaultHunter Web Manager Configuration Template
+VaultHunters Web Manager Configuration Template
 
 Copy this file to config.py and customize the settings for your environment.
 DO NOT commit config.py to version control - it contains environment-specific settings.
@@ -10,14 +10,14 @@ from datetime import timedelta
 
 class Config:
     # Server paths - adjust these to match your setup
-    MINECRAFT_SERVER_PATH = os.environ.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
+    MINECRAFT_SERVER_PATH = os.environ.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
     BACKUP_PATH = os.environ.get('BACKUP_PATH', '/home/minecraft/backups')
     
     # Java and server settings for direct process management
     JAVA_EXECUTABLE = os.environ.get('JAVA_EXECUTABLE', 'java')
     SERVER_JAR = os.environ.get('SERVER_JAR', 'forge-1.18.2-40.2.21-universal.jar')
     
-    # Java JVM arguments - optimized for VaultHunter (Aikar's flags)
+    # Java JVM arguments - optimized for VaultHunters (Aikar's flags)
     JAVA_ARGS = [
         '-Xmx8G', '-Xms4G',  # Adjust memory allocation as needed
         '-XX:+UseG1GC',

@@ -3,7 +3,7 @@
 {% block content %}
 
         <div class="row">
-            <div class="col-md-8">
+            <div class="col-12">
                 <div class="card">
                     <div class="card-header">
                         <h5>Server Status</h5>
@@ -33,27 +33,12 @@
                             <button type="button" class="btn btn-success" onclick="serverControl('start')" disabled>
                                 Start Server
                             </button>
-                            <button type="button" class="btn btn-warning" onclick="serverControl('restart')" disabled>
-                                Restart Server
-                            </button>
                             <button type="button" class="btn btn-danger" onclick="serverControl('stop')" disabled>
                                 Stop Server
                             </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h6>Quick Actions</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-grid gap-2">
-                            <a href="{{ url_for('main.logs') }}" class="btn btn-outline-primary">View Logs</a>
-                            <a href="{{ url_for('main.config_editor') }}" class="btn btn-outline-secondary">Edit Config</a>
-                            <a href="{{ url_for('main.backups') }}" class="btn btn-outline-info">Manage Backups</a>
+                            <button type="button" class="btn btn-warning" onclick="serverControl('restart')" disabled>
+                                Restart Server
+                            </button>
                         </div>
                     </div>
                 </div>
