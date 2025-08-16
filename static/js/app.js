@@ -298,8 +298,20 @@ let autoScroll = true;
 let commandHistory = [];
 let historyIndex = -1;
 
-// Execute command
-function executeCommand(command) {
+// Append text to console (globally available)
+window.appendToConsole = function(text) {
+    const output = document.getElementById('console-output');
+    if (!output) return;  // Console not available on this page
+    
+    output.innerHTML += text + '\n';
+    
+    if (autoScroll) {
+        output.scrollTop = output.scrollHeight;
+    }
+}
+
+// Execute command (globally available)
+window.executeCommand = function(command) {
     const output = document.getElementById('console-output');
     if (!output) return;
     

@@ -439,9 +439,18 @@
             }
         });
         
-        // Initial load of server logs
+        // Initial load of server logs and start following if checkboxes are checked
         setTimeout(() => {
             refreshServerLogs();
+            
+            // Start following for any checked follow checkboxes
+            ['latest', 'debug'].forEach(logType => {
+                const checkbox = document.getElementById(`follow-${logType}`);
+                if (checkbox && checkbox.checked) {
+                    console.log(`Starting follow for ${logType} (checkbox was checked on page load)`);
+                    startFollow(logType);
+                }
+            });
         }, 100);
         
         console.log('Enhanced logs page initialized');

@@ -254,17 +254,6 @@ function setupCommandHistory() {
 }
 
 
-// Append text to console (globally available)
-window.appendToConsole = function(text) {
-    const output = document.getElementById('console-output');
-    if (!output) return;  // Console not available on this page
-    
-    output.innerHTML += text + '\n';
-    
-    if (typeof autoScroll !== 'undefined' && autoScroll) {
-        output.scrollTop = output.scrollHeight;
-    }
-}
 
 // Clear console
 function clearConsole() {
