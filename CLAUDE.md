@@ -11,8 +11,8 @@ VaultHunter Web Manager is a Flask-based web application for managing VaultHunte
 **IMPLEMENTATION COMPLETE** - The VaultHunter Web Manager is fully implemented with all planned features plus additional enhancements:
 
 - ✅ Complete Flask application with direct process management system
-- ✅ Dashboard with accurate real-time player counts and process monitoring
-- ✅ Full RCON console with secure modal authentication (threading issues resolved)
+- ✅ Dashboard with accurate real-time player counts and process monitoring (PID, dynamic MB/GB memory display)
+- ✅ **Integrated RCON console** on dashboard with custom socket client (threading issues resolved)
 - ✅ **Streamlined log monitoring** with 2-window interface (latest + debug/crash toggle)
 - ✅ **Real-time log streaming** with Server-Sent Events (SSE) replacing 10-second polling
 - ✅ **Process independence** - Server survives web application restarts
@@ -35,7 +35,8 @@ Direct process management architecture with enhanced features:
 ## Key Implementation Requirements
 
 - **Server Control**: **Process-independent** Java management with Forge launcher support - server survives web app restarts
-- **RCON Console**: Full server console access with secure modal authentication and threading compatibility
+- **Integrated RCON Console**: Dashboard-embedded console with custom socket client, no confirmation modals, and VaultHunters-specific commands
+- **Smart Process Detection**: Accurate Java process identification (not bash wrappers) with PID display and dynamic MB/GB memory formatting
 - **Real-time Log Monitoring**: **Server-Sent Events (SSE)** for instant log updates with `tail -F` log rotation support
 - **Streamlined Log Interface**: 2-window log viewer (latest + debug/crash toggle) with simplified controls
 - **Configuration Management**: Multi-category config editor with atomic file operations and automatic backups
@@ -93,7 +94,7 @@ See `IMPLEMENTATION_PLAN.md` for detailed development phases and technical consi
 - ✅ CSRF protection and input validation - IMPLEMENTED with Flask-WTF across all routes
 - ✅ AJAX for real-time server status updates - IMPLEMENTED in `static/js/app.js`
 - ✅ Enhanced log viewing with 3-window interface - IMPLEMENTED in `services/log_service.py`
-- ✅ RCON threading compatibility resolved - IMPLEMENTED with direct process management
+- ✅ RCON threading compatibility resolved - IMPLEMENTED with custom socket client avoiding signal issues
 - ✅ Production-ready security and error handling - IMPLEMENTED throughout all services
 
 **STATUS:** 🎉 **PRODUCTION READY - ALL FEATURES VERIFIED FUNCTIONAL**

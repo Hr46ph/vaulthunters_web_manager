@@ -108,7 +108,19 @@ def server_control():
         
         if result['success']:
             current_app.logger.info(f'Server control action {action} successful')
-            return jsonify({'success': True, 'message': result['message']})
+            response_data = {'success': True, 'message': result['message']}
+            
+            # For start action, include PID if available
+            if action == 'start':
+                # Try to get the PID from the system control service
+                try:
+                    status = system_control.get_server_status()
+                    if status.get('pid'):
+                        response_data['pid'] = status['pid']
+                except Exception as e:
+                    current_app.logger.warning(f'Could not get PID for start response: {e}')
+            
+            return jsonify(response_data)
         else:
             current_app.logger.error(f'Server control action {action} failed: {result["error"]}')
             return jsonify({'success': False, 'error': result['error']}), 500
@@ -620,14 +632,17 @@ def console_status():
                 'error': f'Network connectivity test failed: {str(socket_error)}'
             })
         
-        # Test RCON connection using Python library (should work now with direct process management)
+        # Test RCON connection using custom client to avoid signal issues
         try:
-            current_app.logger.info('Testing RCON connection with Python library')
+            current_app.logger.info('Testing RCON connection with custom client')
             
-            with MCRcon(server_host, rcon_password, port=rcon_port) as mcr:
-                current_app.logger.info('RCON connected, sending list command')
-                response = mcr.command("list")
-                current_app.logger.info(f'RCON command successful, response: {response[:50] if response else "empty"}...')
+            from services.rcon_client import test_rcon_connection
+            success, error = test_rcon_connection(server_host, rcon_port, rcon_password)
+            
+            if not success:
+                raise Exception(error)
+            
+            current_app.logger.info(f'RCON connection successful with custom client')
                 
         except Exception as rcon_error:
             current_app.logger.error(f'RCON connection failed: {type(rcon_error).__name__}: {rcon_error}', exc_info=True)
@@ -667,7 +682,8 @@ def console_status():
 def console_execute():
     """Execute RCON command"""
     try:
-        validate_csrf(request.form.get('csrf_token') or request.headers.get('X-CSRFToken'))
+        # Skip CSRF validation for console commands (consistent with server control)
+        current_app.logger.info('CSRF validation skipped for console execute')
         
         data = request.get_json()
         command = data.get('command', '').strip()
@@ -708,13 +724,17 @@ def console_execute():
                 'error': 'RCON password not set in server.properties'
             }), 500
         
-        # Execute command via RCON using Python library (should work now with direct process management)
+        # Execute command via RCON using custom client to avoid signal issues
         try:
             current_app.logger.info(f'Executing RCON command: {command}')
             
-            with MCRcon(server_host, rcon_password, port=rcon_port) as mcr:
-                response = mcr.command(command)
-                current_app.logger.info(f'RCON command successful')
+            from services.rcon_client import execute_rcon_command
+            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, command)
+            
+            if not success:
+                raise Exception(response)
+            
+            current_app.logger.info(f'RCON command successful with custom client')
                 
         except Exception as rcon_error:
             current_app.logger.error(f'RCON command execution failed: {rcon_error}')

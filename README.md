@@ -8,8 +8,8 @@ A comprehensive, production-ready web interface for managing your VaultHunter Mi
 
 ### ✅ **VERIFIED IMPLEMENTED FEATURES**
 
-- **Server Control**: **Process-independent** Java management - server survives web app restarts with real-time status monitoring and accurate player counts
-- **RCON Console**: Full server console access with mcrcon integration, automatic server.properties parsing, secure modal authentication, and threading compatibility
+- **Server Control**: **Process-independent** Java management - server survives web app restarts with real-time status monitoring, PID display, and dynamic MB/GB memory formatting
+- **Integrated RCON Console**: Dashboard-embedded console with custom socket client, VaultHunters-compatible commands (/forge tps), and zero threading issues
 - **Streamlined Log Monitoring**: 2-window log interface (latest + debug/crash toggle) with simplified controls, **real-time Server-Sent Events streaming**, and dark mode support
 - **Comprehensive Configuration Management**: 
   - Multi-category config editor with three organized sections:
@@ -191,19 +191,17 @@ server {
 1. Open your web browser and navigate to `http://your-server-ip:8080`
 
 2. **Server Control Panel**:
-   - Green button: Start server (direct Java process launch)
-   - Yellow button: Restart server (graceful stop + start)
-   - Red button: Stop server (graceful shutdown with force-kill fallback)
-   - Current status with real-time process monitoring and player counts (updates every 10 seconds)
+   - Green button: Start server (direct Java process launch, no confirmation)
+   - Yellow button: Restart server (confirmation required, graceful stop + start)
+   - Red button: Stop server (confirmation required, graceful shutdown with force-kill fallback)
+   - Current status with PID display and dynamic memory formatting (MB/GB), updates every 10 seconds
 
-3. **RCON Console**:
-   - Full server console access through web interface (threading issues resolved)
-   - Automatic RCON configuration reading from server.properties
-   - Execute any Minecraft command (`/list`, `/tp`, `/give`, `/gamemode`, etc.)
-   - Command history with arrow key navigation
-   - Quick command buttons for common tasks
-   - Terminal-style interface with auto-scroll
-   - Real-time connection status with network testing
+3. **Integrated RCON Console**:
+   - Dashboard-embedded console (replaced System Information section)
+   - Custom socket client completely resolves threading issues
+   - VaultHunters-compatible quick commands (`/forge tps`, `/list`, `/help`, `/whitelist list`)
+   - Execute any Minecraft command with command history and arrow key navigation
+   - Real-time connection status and automatic configuration from server.properties
 
 4. **Streamlined Log Viewer**:
    - **2-window interface**: Latest log + debug/crash toggle window
@@ -213,13 +211,13 @@ server {
    - **Auto-follow**: Latest log following enabled by default
    - **Log Rotation Support**: Automatically handles server restarts and log file rotation using `tail -F`
 
-5. **Configuration Editor**:
+4. **Configuration Editor**:
    - **Server Properties**: Direct editor for `server.properties` with reload and save buttons
    - **Bans & Whitelist**: Three-panel interface for managing `banned-ips.json`, `banned-players.json`, and `whitelist.json` simultaneously
    - **Config Directory**: File browser for all config files with dedicated editor pane featuring cancel and save options
    - All editors include automatic backup creation and file validation
 
-6. **Backup Manager**:
+5. **Backup Manager**:
    - View available backups with timestamps and sizes
    - Download backups directly to your computer
    - Automatic cleanup of old backups (configurable)

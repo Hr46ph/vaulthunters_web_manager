@@ -155,10 +155,12 @@ class SystemControlService:
             if _minecraft_process and _minecraft_process.is_running():
                 return _minecraft_process
             
-            # Search for Minecraft process
+            # Search for Minecraft process - prioritize actual Java process over bash wrapper
+            java_processes = []
             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
                     cmdline = proc.info['cmdline']
+                    name = proc.info['name']
                     if not cmdline:
                         continue
                     
@@ -167,12 +169,23 @@ class SystemControlService:
                         (any('user_jvm_args.txt' in arg for arg in cmdline) or
                          any('unix_args.txt' in arg for arg in cmdline) or
                          any('forge' in arg.lower() for arg in cmdline))):
-                        _minecraft_process = proc
-                        self.logger.info(f"Found Minecraft process: PID {proc.pid}")
-                        return _minecraft_process
+                        
+                        # Prioritize actual java processes over bash wrappers
+                        if name == 'java':
+                            _minecraft_process = proc
+                            self.logger.info(f"Found Java Minecraft process: PID {proc.pid}")
+                            return _minecraft_process
+                        else:
+                            java_processes.append(proc)
                         
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
+            
+            # If no direct java process found, use any qualifying process
+            if java_processes:
+                _minecraft_process = java_processes[0]
+                self.logger.info(f"Found Minecraft wrapper process: PID {_minecraft_process.pid}")
+                return _minecraft_process
             
             _minecraft_process = None
             return None

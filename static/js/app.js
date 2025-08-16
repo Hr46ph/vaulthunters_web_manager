@@ -31,13 +31,17 @@ function showConfirm(title, message, callback) {
 
 // Server control functions
 function serverControl(action) {
-    showConfirm(
-        'Confirm Server Action', 
-        `Are you sure you want to ${action} the server?`,
-        function() {
-            executeServerControl(action);
-        }
-    );
+    if (action === 'start') {
+        executeServerControl(action);
+    } else {
+        showConfirm(
+            'Confirm Server Action', 
+            `Are you sure you want to ${action} the server?`,
+            function() {
+                executeServerControl(action);
+            }
+        );
+    }
 }
 
 function executeServerControl(action) {
@@ -79,9 +83,9 @@ function executeServerControl(action) {
         });
     })
     .then(data => {
+        console.log('Server control response:', data);
         if (data.success) {
-            showAlert('Success', data.message);
-            // Refresh server status after a delay
+            // For all actions, just refresh status without modal
             setTimeout(updateServerStatus, 2000);
         } else {
             showAlert('Error', data.error || 'Server control failed');
@@ -122,6 +126,7 @@ function updateServerStatus() {
         showStatusError('Network error loading status');
     });
 }
+
 
 // Show status loading error
 function showStatusError(message) {
@@ -168,8 +173,14 @@ function updateStatusDisplay(status) {
             </h6>
             <p>Uptime: ${status.uptime}</p>
         `;
+        if (status.running && status.pid) {
+            html += `<p>PID: ${status.pid}</p>`;
+        }
         if (status.memory_usage > 0) {
-            html += `<p>Memory: ${status.memory_usage} MB</p>`;
+            const memoryDisplay = status.memory_usage >= 1024 
+                ? `${(status.memory_usage / 1024).toFixed(1)} GB`
+                : `${status.memory_usage} MB`;
+            html += `<p>Memory: ${memoryDisplay}</p>`;
         }
         leftCol.innerHTML = html;
     }
@@ -197,35 +208,6 @@ function updateButtonStates(isRunning) {
     if (stopBtn) stopBtn.disabled = !isRunning;
 }
 
-// Server journal functions
-function showServerJournal() {
-    const modal = new bootstrap.Modal(document.getElementById('serverJournalModal'));
-    modal.show();
-    
-    // Load initial content
-    refreshServerJournal();
-}
-
-function refreshServerJournal() {
-    const contentElement = document.getElementById('serverJournalContent');
-    contentElement.textContent = 'Loading...';
-    
-    fetch('/server/journal?lines=100')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                contentElement.textContent = data.logs || 'No logs available';
-            } else {
-                contentElement.textContent = `Error: ${data.error || 'Failed to load logs'}`;
-            }
-            // Auto-scroll to bottom
-            contentElement.scrollTop = contentElement.scrollHeight;
-        })
-        .catch(error => {
-            console.error('Journal fetch error:', error);
-            contentElement.textContent = 'Network error loading logs';
-        });
-}
 
 // Dark mode functions
 function toggleDarkMode() {
@@ -284,6 +266,154 @@ function showFlashAlert(type, message) {
     }, 5000);
 }
 
+// Console functions
+let autoScroll = true;
+let commandHistory = [];
+let historyIndex = -1;
+
+// Execute command
+function executeCommand(command) {
+    const output = document.getElementById('console-output');
+    if (!output) return;
+    
+    const timestamp = new Date().toLocaleTimeString();
+    
+    // Add command to output
+    appendToConsole(`<span class="console-timestamp">[${timestamp}]</span> <span class="console-command">/${command}</span>`);
+    
+    // Update last command
+    const lastCommandElement = document.getElementById('last-command');
+    if (lastCommandElement) {
+        lastCommandElement.textContent = command;
+    }
+    
+    // Send command to server
+    fetch('/console/execute', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({command: command})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.response) {
+                appendToConsole(`<span class="console-response">${escapeHtml(data.response)}</span>`);
+            } else {
+                appendToConsole(`<span class="console-response">Command executed successfully</span>`);
+            }
+        } else {
+            appendToConsole(`<span class="console-error">Error: ${escapeHtml(data.error || 'Unknown error')}</span>`);
+        }
+    })
+    .catch(error => {
+        appendToConsole(`<span class="console-error">Connection error: ${escapeHtml(error.message)}</span>`);
+    });
+}
+
+// Append text to console
+function appendToConsole(text) {
+    const output = document.getElementById('console-output');
+    if (!output) return;
+    
+    output.innerHTML += text + '\n';
+    
+    if (autoScroll) {
+        output.scrollTop = output.scrollHeight;
+    }
+}
+
+// Check RCON status
+function checkRconStatus() {
+    const statusElement = document.getElementById('rcon-status');
+    if (!statusElement) return;
+    
+    fetch('/console/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.connected) {
+                statusElement.className = 'badge bg-success';
+                statusElement.textContent = 'Connected';
+                statusElement.title = `Connected to ${data.host}:${data.port}`;
+            } else {
+                statusElement.className = 'badge bg-danger';
+                statusElement.textContent = 'Disconnected';
+                statusElement.title = data.error || 'Connection failed';
+                
+                // Also show error in console
+                console.error('RCON Connection Failed:', data.error);
+                
+                // Add error message to console output
+                appendToConsole(`<span class="console-error">RCON Connection Error: ${escapeHtml(data.error || 'Unknown error')}</span>`);
+            }
+        })
+        .catch(error => {
+            statusElement.className = 'badge bg-warning';
+            statusElement.textContent = 'Network Error';
+            statusElement.title = error.message;
+            
+            console.error('RCON Status Check Error:', error);
+            appendToConsole(`<span class="console-error">RCON Status Check Failed: ${escapeHtml(error.message)}</span>`);
+        });
+}
+
+// Helper function
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Setup console form and history
+function setupConsole() {
+    const consoleForm = document.getElementById('console-form');
+    const commandInput = document.getElementById('command-input');
+    
+    if (!consoleForm || !commandInput) return;
+    
+    // Handle form submission
+    consoleForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const command = commandInput.value.trim();
+        
+        if (command) {
+            executeCommand(command);
+            commandInput.value = '';
+            
+            // Add to history
+            if (commandHistory[commandHistory.length - 1] !== command) {
+                commandHistory.push(command);
+                if (commandHistory.length > 50) {
+                    commandHistory.shift();
+                }
+            }
+            historyIndex = commandHistory.length;
+        }
+    });
+    
+    // Setup command history navigation
+    commandInput.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (historyIndex > 0) {
+                historyIndex--;
+                commandInput.value = commandHistory[historyIndex];
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyIndex < commandHistory.length - 1) {
+                historyIndex++;
+                commandInput.value = commandHistory[historyIndex];
+            } else {
+                historyIndex = commandHistory.length;
+                commandInput.value = '';
+            }
+        }
+    });
+}
+
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize theme
@@ -294,6 +424,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up periodic status updates (every 10 seconds)
     setInterval(updateServerStatus, 10000);
+    
+    // Setup console if present on page
+    setupConsole();
+    
+    // Check RCON status if console is present
+    if (document.getElementById('rcon-status')) {
+        checkRconStatus();
+        // Check RCON status periodically
+        setInterval(checkRconStatus, 30000);
+    }
     
     console.log('VaultHunter Web Manager loaded');
 });

@@ -195,12 +195,13 @@ After comprehensive code analysis, **ALL planned features are fully implemented 
 - **Production-Grade**: Comprehensive error handling and logging
 
 ### **Enhanced RCON Implementation** ✅ NEW (FULLY RESOLVED)
-- **Real RCON Connection**: Using `mcrcon` library for actual server communication
-- **Threading Compatibility**: Resolved "signal only works in main thread" error with direct process management
+- **Custom Socket Client**: Implemented raw socket RCON client in `services/rcon_client.py` to avoid signal issues
+- **Dashboard Integration**: RCON console embedded directly in dashboard (replaced System Information section)
+- **Streamlined UX**: Removed confirmation modals for server control, PID display in status box
+- **Threading Compatibility**: Completely resolved "signal only works in main thread" error with custom client
 - **Auto-Configuration**: Reads RCON settings from server.properties automatically
-- **Connection Status**: Real-time RCON availability checking with network testing
-- **Secure Authentication**: No password storage, modal-based authentication
-- **Full Functionality**: All RCON commands work perfectly with direct process architecture
+- **VaultHunters Support**: TPS command updated to `/forge tps` for modpack compatibility
+- **Smart Process Detection**: Accurate Java process identification (not bash wrappers) with real memory usage
 
 ### **Performance Optimizations** ✅ NEW
 - **Status Caching**: 5-second cache for server status to reduce system calls
