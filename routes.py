@@ -49,44 +49,85 @@ def _execute_rcon_server_control(action):
         from services.rcon_client import execute_rcon_command
         
         if action == 'stop':
-            # Execute stop command via RCON
-            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'stop')
-            if success:
-                return {
-                    'success': True,
-                    'message': 'Server stop command sent via RCON',
-                    'rcon_command': 'stop',
-                    'rcon_response': response
-                }
-            else:
+            # Execute safe shutdown sequence via RCON (save first, then stop)
+            try:
+                # Step 1: Disable auto-save
+                success1, response1 = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-off')
+                if not success1:
+                    current_app.logger.warning(f'save-off command failed: {response1}')
+                
+                # Step 2: Force save all chunks  
+                import time
+                time.sleep(1)
+                success2, response2 = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-all flush')
+                if not success2:
+                    current_app.logger.warning(f'save-all flush command failed: {response2}')
+                
+                # Step 3: Stop the server
+                time.sleep(2)
+                success3, response3 = execute_rcon_command(server_host, rcon_port, rcon_password, 'stop')
+                
+                if success3:
+                    return {
+                        'success': True,
+                        'message': 'Server shutdown sequence completed (save-off → save-all flush → stop)',
+                        'rcon_command': 'save-off; save-all flush; stop',
+                        'rcon_response': f'save-off: {response1 or "OK"} | save-all: {response2 or "OK"} | stop: {response3 or "OK"}'
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': f'RCON stop command failed: {response3}'
+                    }
+            except Exception as e:
                 return {
                     'success': False,
-                    'error': f'RCON stop command failed: {response}'
+                    'error': f'RCON shutdown sequence failed: {str(e)}'
                 }
                 
         elif action == 'restart':
-            # First stop via RCON
-            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'stop')
-            if success:
-                # Wait a moment for server to shut down
+            # Execute safe shutdown sequence via RCON, then start
+            try:
+                # Step 1: Disable auto-save
+                success1, response1 = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-off')
+                if not success1:
+                    current_app.logger.warning(f'save-off command failed during restart: {response1}')
+                
+                # Step 2: Force save all chunks  
                 import time
-                time.sleep(3)
+                time.sleep(1)
+                success2, response2 = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-all flush')
+                if not success2:
+                    current_app.logger.warning(f'save-all flush command failed during restart: {response2}')
                 
-                # Then start using system control
-                system_control = SystemControlService()
-                start_result = system_control.start_server()
+                # Step 3: Stop the server
+                time.sleep(2)
+                success3, response3 = execute_rcon_command(server_host, rcon_port, rcon_password, 'stop')
                 
-                return {
-                    'success': start_result['success'],
-                    'message': f"Server restart: RCON stop successful, start {'successful' if start_result['success'] else 'failed'}",
-                    'rcon_command': 'stop',
-                    'rcon_response': response,
-                    'start_result': start_result
-                }
-            else:
+                if success3:
+                    # Wait a moment for server to shut down
+                    time.sleep(3)
+                    
+                    # Then start using system control
+                    system_control = SystemControlService()
+                    start_result = system_control.start_server()
+                    
+                    return {
+                        'success': start_result['success'],
+                        'message': f"Server restart: Safe shutdown completed (save-off → save-all flush → stop), start {'successful' if start_result['success'] else 'failed'}",
+                        'rcon_command': 'save-off; save-all flush; stop',
+                        'rcon_response': f'save-off: {response1 or "OK"} | save-all: {response2 or "OK"} | stop: {response3 or "OK"}',
+                        'start_result': start_result
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': f'RCON stop command failed during restart: {response3}'
+                    }
+            except Exception as e:
                 return {
                     'success': False,
-                    'error': f'RCON stop command failed during restart: {response}'
+                    'error': f'RCON restart sequence failed: {str(e)}'
                 }
                 
         elif action == 'save':
