@@ -312,12 +312,16 @@
                             
                         case 'connected':
                             console.log(`SSE connected to ${logType} stream`);
+                            statusElement.className = 'badge bg-success badge-status';
+                            statusElement.title = 'Real-time streaming active';
                             break;
                             
                         case 'reconnected':
                             console.log(`SSE reconnected to ${logType} stream: ${data.message}`);
                             logElement.textContent += '\n[RECONNECTED] ' + data.message;
                             logElement.scrollTop = logElement.scrollHeight;
+                            statusElement.className = 'badge bg-success badge-status';
+                            statusElement.title = 'Real-time streaming active';
                             break;
                             
                         case 'line':
@@ -362,6 +366,8 @@
                     const checkbox = document.getElementById(`follow-${logType}`);
                     if (checkbox && checkbox.checked) {
                         console.log(`Attempting to reconnect ${logType} stream`);
+                        statusElement.className = 'badge bg-warning badge-status';
+                        statusElement.title = 'Reconnecting...';
                         startFollow(logType);
                     }
                 }, 5000);
