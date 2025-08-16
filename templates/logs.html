@@ -311,7 +311,13 @@
                             break;
                             
                         case 'connected':
-                            console.log(`SSE connected to ${logType} stream (client: ${data.client_id})`);
+                            console.log(`SSE connected to ${logType} stream`);
+                            break;
+                            
+                        case 'reconnected':
+                            console.log(`SSE reconnected to ${logType} stream: ${data.message}`);
+                            logElement.textContent += '\n[RECONNECTED] ' + data.message;
+                            logElement.scrollTop = logElement.scrollHeight;
                             break;
                             
                         case 'line':

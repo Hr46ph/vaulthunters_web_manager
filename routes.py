@@ -349,38 +349,94 @@ def log_stream(log_type):
                 yield f"data: {json.dumps({'type': 'error', 'error': f'Failed to read initial content: {str(e)}'})}\n\n"
                 return
             
-            # Start tail -F process for real-time following (follows log rotation)
+            # Start streaming with robust log rotation handling
             try:
                 import select
                 import fcntl
                 import os as os_module
                 
-                # Use -F flag to follow log rotation (when file is recreated)
-                tail_process = subprocess.Popen(
-                    ['tail', '-F', log_path],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    universal_newlines=True,
-                    bufsize=0  # Unbuffered
-                )
+                last_activity = time.time()
+                last_file_check = time.time()
+                file_stat = None
                 
-                # Make stdout non-blocking
-                fd = tail_process.stdout.fileno()
-                fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-                fcntl.fcntl(fd, fcntl.F_SETFL, fl | os_module.O_NONBLOCK)
+                # Get initial file stats
+                try:
+                    file_stat = os.stat(log_path)
+                except OSError:
+                    file_stat = None
                 
                 yield f"data: {json.dumps({'type': 'connected', 'log_type': log_type})}\n\n"
                 
-                # Stream new lines as they arrive with timeout
-                last_activity = time.time()
+                def start_tail_process():
+                    """Start a new tail process"""
+                    process = subprocess.Popen(
+                        ['tail', '-f', log_path],  # Use -f instead of -F for better control
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        universal_newlines=True,
+                        bufsize=0
+                    )
+                    
+                    # Make stdout non-blocking
+                    fd = process.stdout.fileno()
+                    fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+                    fcntl.fcntl(fd, fcntl.F_SETFL, fl | os_module.O_NONBLOCK)
+                    
+                    return process
+                
+                tail_process = start_tail_process()
+                current_app.logger.info(f"Started tail process for {log_type}")
+                
+                # Stream with file rotation detection
                 while True:
+                    current_time = time.time()
+                    
                     # Check if process is still running
                     if tail_process.poll() is not None:
-                        current_app.logger.warning(f"Tail process for {log_type} terminated unexpectedly")
-                        break
+                        current_app.logger.warning(f"Tail process for {log_type} terminated, restarting...")
+                        try:
+                            tail_process = start_tail_process()
+                            yield f"data: {json.dumps({'type': 'reconnected', 'message': 'Restarted tail process', 'log_type': log_type})}\n\n"
+                        except Exception as e:
+                            current_app.logger.error(f"Failed to restart tail process: {e}")
+                            break
+                    
+                    # Check for file rotation every 5 seconds
+                    if current_time - last_file_check > 5:
+                        try:
+                            new_stat = os.stat(log_path)
+                            # Check if file was recreated (inode changed) or truncated (size decreased significantly)
+                            if (file_stat is None or 
+                                new_stat.st_ino != file_stat.st_ino or 
+                                (new_stat.st_size < file_stat.st_size - 1000)):  # File truncated by more than 1KB
+                                
+                                current_app.logger.info(f"Log file rotation detected for {log_type}, restarting tail")
+                                
+                                # Kill old tail process
+                                tail_process.terminate()
+                                try:
+                                    tail_process.wait(timeout=2)
+                                except subprocess.TimeoutExpired:
+                                    tail_process.kill()
+                                
+                                # Start new tail process
+                                tail_process = start_tail_process()
+                                file_stat = new_stat
+                                
+                                yield f"data: {json.dumps({'type': 'rotation', 'message': f'Log file rotated - following new file', 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
+                            else:
+                                file_stat = new_stat
+                                
+                        except OSError:
+                            # File doesn't exist, wait for it to be created
+                            if file_stat is not None:
+                                current_app.logger.info(f"Log file {log_type} disappeared, waiting for recreation")
+                                file_stat = None
+                        
+                        last_file_check = current_time
                     
                     # Use select to check for data availability with timeout
-                    ready, _, _ = select.select([tail_process.stdout], [], [], 1.0)  # 1 second timeout
+                    ready, _, _ = select.select([tail_process.stdout], [], [], 1.0)
                     
                     if ready:
                         try:
@@ -388,27 +444,19 @@ def log_stream(log_type):
                             if line:
                                 line = line.rstrip()
                                 if line:
-                                    # Check for log rotation messages from tail -F
-                                    if line.startswith('==> ') and ' <==' in line:
-                                        # Log rotation detected
-                                        yield f"data: {json.dumps({'type': 'rotation', 'message': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
-                                    else:
-                                        # Regular log line
-                                        yield f"data: {json.dumps({'type': 'line', 'line': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
-                                last_activity = time.time()
+                                    yield f"data: {json.dumps({'type': 'line', 'line': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
+                                    last_activity = current_time
                         except IOError:
                             # No data available, continue
                             pass
                     else:
                         # Send keepalive every 30 seconds
-                        current_time = time.time()
                         if current_time - last_activity > 30:
                             yield f"data: {json.dumps({'type': 'keepalive', 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
                             last_activity = current_time
                     
-                    # Exit if client disconnected (this is a simple check)
+                    # Check for client disconnect
                     try:
-                        # Force flush to detect client disconnect
                         yield ""
                     except GeneratorExit:
                         current_app.logger.info(f"Client disconnected from {log_type} stream")
