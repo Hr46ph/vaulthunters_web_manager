@@ -548,26 +548,26 @@ class ConfigManager:
             return self._get_default_aikars_flags()
     
     def _get_default_aikars_flags(self):
-        """Get default Aikar's flags if config.toml is not available"""
+        """Get default Aikar's flags if config.toml is not available - matches official script generator"""
         return [
-            'UseG1GC',
-            'ParallelRefProcEnabled',
-            'MaxGCPauseMillis=200',
-            'UnlockExperimentalVMOptions',
-            'DisableExplicitGC',
-            'AlwaysPreTouch',
-            'G1NewSizePercent=30',
-            'G1MaxNewSizePercent=40',
-            'G1HeapRegionSize=8M',
-            'G1ReservePercent=20',
-            'G1HeapWastePercent=5',
-            'G1MixedGCCountTarget=4',
-            'InitiatingHeapOccupancyPercent=15',
-            'G1MixedGCLiveThresholdPercent=90',
-            'G1RSetUpdatingPauseTimePercent=5',
-            'SurvivorRatio=32',
-            'PerfDisableSharedMem',
-            'MaxTenuringThreshold=1',
+            'XX:+AlwaysPreTouch',
+            'XX:+DisableExplicitGC',
+            'XX:+ParallelRefProcEnabled',
+            'XX:+PerfDisableSharedMem',
+            'XX:+UnlockExperimentalVMOptions',
+            'XX:+UseG1GC',
+            'XX:G1HeapRegionSize=8M',
+            'XX:G1HeapWastePercent=5',
+            'XX:G1MaxNewSizePercent=40',
+            'XX:G1MixedGCCountTarget=4',
+            'XX:G1MixedGCLiveThresholdPercent=90',
+            'XX:G1NewSizePercent=30',
+            'XX:G1RSetUpdatingPauseTimePercent=5',
+            'XX:G1ReservePercent=20',
+            'XX:InitiatingHeapOccupancyPercent=15',
+            'XX:MaxGCPauseMillis=200',
+            'XX:MaxTenuringThreshold=1',
+            'XX:SurvivorRatio=32',
             'Dusing.aikars.flags=https://mcflags.emc.gs',
             'Daikars.new.flags=true'
         ]
