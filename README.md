@@ -31,7 +31,7 @@ A regular user account that will own and run both the Minecraft server and web m
 
 A second user account with sudo privileges to create systemd unit file for the web manager application and to place the restricted sudo permissions file for the other account.
 
-Technically, you can do everything with a default user account that has unlimited sudo with 'nopasswd'. For any Java application, especially Minecraft servers exposed to the internet this is a HUGE security risk. There have been major security vulnerabilities in Java and in Minecraft servers in general. You take a massive risk by running all this with an unrestricted user account.
+Technically, you can do everything with a default user account that has unlimited sudo with 'nopasswd', or even as root itself. You shouldn't. For any Java application, especially Minecraft servers exposed to the internet this is a HUGE security risk. There have been major security vulnerabilities in Java and in Minecraft servers in general, which have been actively used in the past. You take a massive risk by running all this as root, or with an unrestricted user account.
 
 ### Installation Steps
 
