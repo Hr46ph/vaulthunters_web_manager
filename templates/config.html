@@ -19,10 +19,13 @@
                             Bans & Whitelist
                         </button>
                         <button class="btn btn-outline-info" id="btn-config-files" onclick="showCategory('config-files')">
-                            Config Directory
+                            Configuration Files
                         </button>
-                        <button class="btn btn-outline-success" id="btn-jvm-config" onclick="showCategory('jvm-config')">
-                            JVM Configuration
+                        <button class="btn btn-outline-success" id="btn-user-jvm-args" onclick="showCategory('user-jvm-args')">
+                            user_jvm_args.txt
+                        </button>
+                        <button class="btn btn-outline-secondary" id="btn-unix-args" onclick="showCategory('unix-args')">
+                            unix_args.txt
                         </button>
                     </div>
                 </div>
@@ -139,59 +142,55 @@
                 </div>
             </div>
 
-            <!-- JVM Configuration Tab -->
-            <div id="jvm-config-content" class="config-category" style="display: none;">
-                <div class="row">
-                    <!-- user_jvm_args.txt -->
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h6>user_jvm_args.txt</h6>
-                                <div>
-                                    <button class="btn btn-sm btn-success" onclick="applyAikarsFlags()" title="Apply Aikar's performance flags">
-                                        <i class="fas fa-magic"></i> Apply Aikar's Flags
-                                    </button>
-                                    <button class="btn btn-sm btn-secondary" onclick="reloadJvmArgs()">
-                                        <i class="fas fa-sync"></i> Reload
-                                    </button>
-                                    <button class="btn btn-sm btn-primary" onclick="saveJvmArgs()">
-                                        <i class="fas fa-save"></i> Save
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <textarea id="jvm-args-editor" class="form-control" rows="20" style="font-family: monospace;" placeholder="JVM arguments (one per line)...">Loading user_jvm_args.txt...</textarea>
-                                <small class="text-muted mt-2 d-block">
-                                    <i class="fas fa-info-circle"></i> 
-                                    JVM arguments for memory allocation and performance tuning. 
-                                    Use Aikar's flags for optimal Minecraft performance.
-                                </small>
-                            </div>
+            <!-- user_jvm_args.txt Tab -->
+            <div id="user-jvm-args-content" class="config-category" style="display: none;">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6>user_jvm_args.txt</h6>
+                        <div>
+                            <button class="btn btn-sm btn-success" onclick="applyAikarsFlags()" title="Apply Aikar's performance flags">
+                                <i class="fas fa-magic"></i> Apply Aikar's Flags
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="reloadJvmArgs()">
+                                <i class="fas fa-sync"></i> Reload
+                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="saveJvmArgs()">
+                                <i class="fas fa-save"></i> Save
+                            </button>
                         </div>
                     </div>
-                    <!-- unix_args.txt -->
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h6>unix_args.txt</h6>
-                                <div>
-                                    <button class="btn btn-sm btn-secondary" onclick="reloadUnixArgs()">
-                                        <i class="fas fa-sync"></i> Reload
-                                    </button>
-                                    <button class="btn btn-sm btn-primary" onclick="saveUnixArgs()">
-                                        <i class="fas fa-save"></i> Save
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <textarea id="unix-args-editor" class="form-control" rows="20" style="font-family: monospace;" placeholder="Forge launcher arguments..." readonly>Loading unix_args.txt...</textarea>
-                                <small class="text-muted mt-2 d-block">
-                                    <i class="fas fa-exclamation-triangle"></i> 
-                                    Forge launcher arguments - typically read-only. 
-                                    Modify only if you understand the implications.
-                                </small>
-                            </div>
+                    <div class="card-body">
+                        <textarea id="jvm-args-editor" class="form-control" rows="25" style="font-family: monospace;" placeholder="JVM arguments (one per line)...">Loading user_jvm_args.txt...</textarea>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="fas fa-info-circle"></i> 
+                            JVM arguments for memory allocation and performance tuning. 
+                            Use Aikar's flags for optimal Minecraft performance.
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- unix_args.txt Tab -->
+            <div id="unix-args-content" class="config-category" style="display: none;">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6>unix_args.txt</h6>
+                        <div>
+                            <button class="btn btn-sm btn-secondary" onclick="reloadUnixArgs()">
+                                <i class="fas fa-sync"></i> Reload
+                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="saveUnixArgs()">
+                                <i class="fas fa-save"></i> Save
+                            </button>
                         </div>
+                    </div>
+                    <div class="card-body">
+                        <textarea id="unix-args-editor" class="form-control" rows="25" style="font-family: monospace;" placeholder="Forge launcher arguments..." readonly>Loading unix_args.txt...</textarea>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            Forge launcher arguments - typically read-only. 
+                            Modify only if you understand the implications.
+                        </small>
                     </div>
                 </div>
             </div>
@@ -242,8 +241,8 @@
             // Update button states
             document.querySelectorAll('.btn[id^="btn-"]').forEach(btn => {
                 btn.classList.remove('active');
-                btn.classList.add('btn-outline-primary', 'btn-outline-warning', 'btn-outline-info');
-                btn.classList.remove('btn-primary', 'btn-warning', 'btn-info');
+                btn.classList.add('btn-outline-primary', 'btn-outline-warning', 'btn-outline-info', 'btn-outline-success', 'btn-outline-secondary');
+                btn.classList.remove('btn-primary', 'btn-warning', 'btn-info', 'btn-success', 'btn-secondary');
             });
             
             // Activate clicked button
@@ -258,9 +257,12 @@
             } else if (category === 'config-files') {
                 activeBtn.classList.remove('btn-outline-info');
                 activeBtn.classList.add('btn-info');
-            } else if (category === 'jvm-config') {
+            } else if (category === 'user-jvm-args') {
                 activeBtn.classList.remove('btn-outline-success');
                 activeBtn.classList.add('btn-success');
+            } else if (category === 'unix-args') {
+                activeBtn.classList.remove('btn-outline-secondary');
+                activeBtn.classList.add('btn-secondary');
             }
             
             // Hide all categories
@@ -278,8 +280,10 @@
                 loadBanWhitelist();
             } else if (category === 'config-files') {
                 loadConfigFilesList();
-            } else if (category === 'jvm-config') {
-                loadJvmConfig();
+            } else if (category === 'user-jvm-args') {
+                loadJvmArgs();
+            } else if (category === 'unix-args') {
+                loadUnixArgs();
             }
         }
         
@@ -437,10 +441,6 @@
         }
         
         // JVM Configuration Functions
-        function loadJvmConfig() {
-            loadJvmArgs();
-            loadUnixArgs();
-        }
         
         function loadJvmArgs() {
             const editor = document.getElementById('jvm-args-editor');
@@ -499,10 +499,6 @@
         }
         
         function applyAikarsFlags() {
-            if (!confirm('This will replace the current JVM arguments with Aikar\'s optimized flags. Continue?')) {
-                return;
-            }
-            
             fetch('/config/jvm/apply_aikars_flags', {
                 method: 'POST',
                 headers: {

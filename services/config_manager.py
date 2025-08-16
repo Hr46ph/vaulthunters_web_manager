@@ -405,27 +405,88 @@ class ConfigManager:
             return {'success': False, 'error': str(e)}
     
     def apply_aikars_flags(self):
-        """Apply Aikar's flags to user_jvm_args.txt"""
+        """Apply Aikar's flags to user_jvm_args.txt, merging with existing content"""
         try:
             # Get Aikar's flags from config.toml
             aikars_flags = self._get_aikars_flags_from_config()
             if not aikars_flags:
                 return {'success': False, 'error': 'Could not load Aikar\'s flags from configuration'}
             
-            # Build JVM args content
-            content_lines = [
+            # Read existing content
+            current_content = self.read_jvm_args_file('user_jvm_args')
+            if not current_content['success']:
+                return current_content
+            
+            existing_lines = current_content['content'].split('\n')
+            
+            # Parse existing JVM args to preserve non-Aikar settings
+            preserved_lines = []
+            preserved_memory_settings = []
+            
+            # Aikar's flag patterns to identify and replace
+            aikar_patterns = [
+                'UseG1GC', 'ParallelRefProcEnabled', 'MaxGCPauseMillis', 'UnlockExperimentalVMOptions',
+                'DisableExplicitGC', 'AlwaysPreTouch', 'G1NewSizePercent', 'G1MaxNewSizePercent',
+                'G1HeapRegionSize', 'G1ReservePercent', 'G1HeapWastePercent', 'G1MixedGCCountTarget',
+                'InitiatingHeapOccupancyPercent', 'G1MixedGCLiveThresholdPercent', 'G1RSetUpdatingPauseTimePercent',
+                'SurvivorRatio', 'PerfDisableSharedMem', 'MaxTenuringThreshold', 'using.aikars.flags', 'aikars.new.flags'
+            ]
+            
+            for line in existing_lines:
+                line = line.strip()
+                
+                # Skip empty lines and existing Aikar flags comment sections
+                if not line or line.startswith('# Aikar\'s Flags') or line.startswith('# Source: https://docs.papermc.io') or line.startswith('# Applied on:'):
+                    continue
+                
+                # Preserve memory settings but extract them
+                if line.startswith('-Xms') or line.startswith('-Xmx'):
+                    preserved_memory_settings.append(line)
+                    continue
+                
+                # Check if this line contains an Aikar flag
+                is_aikar_flag = False
+                for pattern in aikar_patterns:
+                    if pattern in line:
+                        is_aikar_flag = True
+                        break
+                
+                # Preserve non-Aikar flags
+                if not is_aikar_flag:
+                    preserved_lines.append(line)
+            
+            # Build new content
+            content_lines = []
+            
+            # Add preserved non-Aikar content first
+            if preserved_lines:
+                content_lines.extend([line for line in preserved_lines if line.strip()])
+                if content_lines:  # Only add separator if there are preserved lines
+                    content_lines.append('')
+            
+            # Add Aikar's flags section
+            content_lines.extend([
                 '# Aikar\'s Flags - Optimized JVM arguments for Minecraft servers',
                 '# Source: https://docs.papermc.io/paper/aikars-flags/',
                 '# Applied on: ' + datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                '',
-                '# Memory allocation (adjust -Xms and -Xmx based on your system)',
-                '-Xms4G',
-                '-Xmx8G',
-                '',
-                '# Aikar\'s optimization flags',
-            ]
+                ''
+            ])
             
-            # Add each flag
+            # Add memory settings (use preserved if available, otherwise defaults)
+            if preserved_memory_settings:
+                content_lines.append('# Memory allocation (preserved from existing settings)')
+                content_lines.extend(preserved_memory_settings)
+            else:
+                content_lines.extend([
+                    '# Memory allocation (adjust -Xms and -Xmx based on your system)',
+                    '-Xms4G',
+                    '-Xmx8G'
+                ])
+            
+            content_lines.append('')
+            content_lines.append('# Aikar\'s optimization flags')
+            
+            # Add each Aikar flag
             for flag in aikars_flags:
                 content_lines.append(f'-{flag}')
             
@@ -435,7 +496,7 @@ class ConfigManager:
             result = self.write_jvm_args_file('user_jvm_args', content)
             
             if result['success']:
-                result['message'] = 'Aikar\'s flags applied successfully'
+                result['message'] = 'Aikar\'s flags applied successfully (existing settings preserved)'
             
             return result
             
