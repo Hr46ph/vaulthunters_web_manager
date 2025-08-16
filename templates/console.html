@@ -152,6 +152,19 @@
 
         <!-- Connection Status -->
         <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Connection Status</h5>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="connectRcon()">
+                            <i class="fas fa-plug"></i> Connect
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="disconnectRcon()">
+                            <i class="fas fa-unlink"></i> Disconnect
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
@@ -228,42 +241,6 @@ function setupCommandHistory() {
     });
 }
 
-// Execute command
-function executeCommand(command) {
-    const output = document.getElementById('console-output');
-    const timestamp = new Date().toLocaleTimeString();
-    
-    // Add command to output
-    appendToConsole(`<span class="console-timestamp">[${timestamp}]</span> <span class="console-command">/${command}</span>`);
-    
-    // Update last command
-    document.getElementById('last-command').textContent = command;
-    
-    // Send command to server
-    fetch('/console/execute', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-        },
-        body: JSON.stringify({command: command})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (data.response) {
-                appendToConsole(`<span class="console-response">${escapeHtml(data.response)}</span>`);
-            } else {
-                appendToConsole(`<span class="console-response">Command executed successfully</span>`);
-            }
-        } else {
-            appendToConsole(`<span class="console-error">Error: ${escapeHtml(data.error || 'Unknown error')}</span>`);
-        }
-    })
-    .catch(error => {
-        appendToConsole(`<span class="console-error">Connection error: ${escapeHtml(error.message)}</span>`);
-    });
-}
 
 // Append text to console
 function appendToConsole(text) {
@@ -341,7 +318,115 @@ function getCSRFToken() {
     return document.querySelector('meta[name=csrf-token]').getAttribute('content');
 }
 
-// Check RCON status periodically
+// Connect RCON
+function connectRcon() {
+    const statusElement = document.getElementById('rcon-status');
+    statusElement.className = 'badge bg-warning';
+    statusElement.textContent = 'Connecting...';
+    
+    fetch('/console/connect', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusElement.className = 'badge bg-success';
+            statusElement.textContent = 'Connected';
+            appendToConsole(`<span class="console-response">✓ RCON reconnected successfully</span>`);
+            
+            // Refresh status after connection
+            setTimeout(checkRconStatus, 1000);
+        } else {
+            statusElement.className = 'badge bg-danger';
+            statusElement.textContent = 'Connection Failed';
+            appendToConsole(`<span class="console-error">✗ RCON connection failed: ${escapeHtml(data.error)}</span>`);
+        }
+    })
+    .catch(error => {
+        statusElement.className = 'badge bg-danger';
+        statusElement.textContent = 'Network Error';
+        appendToConsole(`<span class="console-error">✗ Connection request failed: ${escapeHtml(error.message)}</span>`);
+    });
+}
+
+// Disconnect RCON
+function disconnectRcon() {
+    const statusElement = document.getElementById('rcon-status');
+    statusElement.className = 'badge bg-warning';
+    statusElement.textContent = 'Disconnecting...';
+    
+    fetch('/console/disconnect', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusElement.className = 'badge bg-secondary';
+            statusElement.textContent = 'Disconnected';
+            appendToConsole(`<span class="console-response">✓ RCON disconnected</span>`);
+        } else {
+            appendToConsole(`<span class="console-error">✗ Disconnect failed: ${escapeHtml(data.error)}</span>`);
+        }
+    })
+    .catch(error => {
+        appendToConsole(`<span class="console-error">✗ Disconnect request failed: ${escapeHtml(error.message)}</span>`);
+    });
+}
+
+// Enhanced execute command with better error handling
+function executeCommand(command) {
+    const output = document.getElementById('console-output');
+    const timestamp = new Date().toLocaleTimeString();
+    
+    // Add command to output
+    appendToConsole(`<span class="console-timestamp">[${timestamp}]</span> <span class="console-command">/${command}</span>`);
+    
+    // Update last command
+    document.getElementById('last-command').textContent = command;
+    
+    // Send command to server
+    fetch('/console/execute', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({command: command})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.response) {
+                appendToConsole(`<span class="console-response">${escapeHtml(data.response)}</span>`);
+            } else {
+                appendToConsole(`<span class="console-response">Command executed successfully</span>`);
+            }
+            // Update status after successful command
+            setTimeout(checkRconStatus, 500);
+        } else {
+            appendToConsole(`<span class="console-error">Error: ${escapeHtml(data.error || 'Unknown error')}</span>`);
+            
+            // If connection-related error, suggest reconnection
+            if (data.error && (data.error.includes('connection') || data.error.includes('connect'))) {
+                appendToConsole(`<span class="console-response">💡 Try using the Connect button to reestablish connection</span>`);
+            }
+        }
+    })
+    .catch(error => {
+        appendToConsole(`<span class="console-error">Connection error: ${escapeHtml(error.message)}</span>`);
+        appendToConsole(`<span class="console-response">💡 Try using the Connect button to reestablish connection</span>`);
+    });
+}
+
+// Check RCON status periodically  
 setInterval(checkRconStatus, 30000);
 </script>
 {% endblock %}

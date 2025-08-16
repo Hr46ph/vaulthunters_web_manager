@@ -3,6 +3,9 @@ import struct
 import threading
 import time
 from typing import Optional, Tuple
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RconClient:
     """Custom RCON client using raw sockets to avoid signal handling issues"""
@@ -13,14 +16,18 @@ class RconClient:
     SERVERDATA_RESPONSE_VALUE = 0
     SERVERDATA_AUTH_RESPONSE = 2
     
-    def __init__(self, host: str, port: int, password: str, timeout: float = 10.0):
+    def __init__(self, host: str, port: int, password: str, timeout: float = 10.0, max_retries: int = 3):
         self.host = host
         self.port = port
         self.password = password
         self.timeout = timeout
+        self.max_retries = max_retries
         self.socket = None
         self.request_id = 1
         self._lock = threading.Lock()
+        self._connected = False
+        self._last_connection_attempt = 0
+        self._connection_cooldown = 5  # seconds between connection attempts
     
     def _pack_packet(self, packet_type: int, body: str) -> bytes:
         """Pack an RCON packet"""
@@ -76,6 +83,21 @@ class RconClient:
         """Connect to the RCON server and authenticate"""
         try:
             with self._lock:
+                # Check cooldown to prevent spam
+                current_time = time.time()
+                if current_time - self._last_connection_attempt < self._connection_cooldown:
+                    return False
+                
+                self._last_connection_attempt = current_time
+                
+                # Clean up existing socket
+                if self.socket:
+                    try:
+                        self.socket.close()
+                    except:
+                        pass
+                    self.socket = None
+                
                 # Create socket
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.socket.settimeout(self.timeout)
@@ -94,20 +116,49 @@ class RconClient:
                 if packet_id == -1:
                     raise ConnectionError("Authentication failed: invalid password")
                 
+                self._connected = True
+                logger.info(f"RCON connected to {self.host}:{self.port}")
                 return True
                 
         except Exception as e:
+            self._connected = False
             if self.socket:
-                self.socket.close()
+                try:
+                    self.socket.close()
+                except:
+                    pass
                 self.socket = None
+            logger.warning(f"RCON connection failed to {self.host}:{self.port}: {e}")
             raise e
     
-    def command(self, cmd: str) -> str:
-        """Execute an RCON command"""
+    def is_connected(self) -> bool:
+        """Check if RCON is currently connected"""
+        return self._connected and self.socket is not None
+    
+    def _attempt_reconnect(self) -> bool:
+        """Attempt to reconnect with retries"""
+        for attempt in range(self.max_retries):
+            try:
+                if self.connect():
+                    return True
+            except Exception as e:
+                logger.warning(f"Reconnection attempt {attempt + 1}/{self.max_retries} failed: {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(min(2 ** attempt, 10))  # Exponential backoff, max 10s
+        return False
+    
+    def command(self, cmd: str, auto_reconnect: bool = True) -> str:
+        """Execute an RCON command with automatic reconnection"""
         try:
             with self._lock:
-                if not self.socket:
-                    raise ConnectionError("Not connected to RCON server")
+                # Check if we need to reconnect
+                if not self.is_connected():
+                    if auto_reconnect:
+                        logger.info("RCON not connected, attempting to reconnect...")
+                        if not self._attempt_reconnect():
+                            raise ConnectionError("Failed to reconnect to RCON server after multiple attempts")
+                    else:
+                        raise ConnectionError("Not connected to RCON server")
                 
                 # Increment request ID
                 self.request_id += 1
@@ -137,19 +188,35 @@ class RconClient:
                 
                 return ''.join(responses)
                 
-        except Exception as e:
-            self.disconnect()
-            raise e
-    
-    def disconnect(self):
-        """Disconnect from the RCON server"""
-        with self._lock:
+        except (ConnectionError, socket.error, OSError) as e:
+            self._connected = False
             if self.socket:
                 try:
                     self.socket.close()
                 except:
                     pass
                 self.socket = None
+            
+            # Try to reconnect if auto_reconnect is enabled
+            if auto_reconnect and isinstance(e, (socket.error, OSError)):
+                logger.info("Connection lost, attempting to reconnect...")
+                if self._attempt_reconnect():
+                    # Retry the command after successful reconnection
+                    return self.command(cmd, auto_reconnect=False)
+            
+            raise e
+    
+    def disconnect(self):
+        """Disconnect from the RCON server"""
+        with self._lock:
+            self._connected = False
+            if self.socket:
+                try:
+                    self.socket.close()
+                except:
+                    pass
+                self.socket = None
+                logger.info(f"RCON disconnected from {self.host}:{self.port}")
     
     def __enter__(self):
         self.connect()
@@ -159,21 +226,91 @@ class RconClient:
         self.disconnect()
 
 
+# Global RCON connection pool
+_rcon_connections = {}
+_connection_lock = threading.Lock()
+
+class RconConnectionManager:
+    """Manages persistent RCON connections"""
+    
+    @staticmethod
+    def get_connection(host: str, port: int, password: str) -> RconClient:
+        """Get or create a persistent RCON connection"""
+        connection_key = f"{host}:{port}"
+        
+        with _connection_lock:
+            if connection_key not in _rcon_connections:
+                _rcon_connections[connection_key] = RconClient(host, port, password)
+            
+            return _rcon_connections[connection_key]
+    
+    @staticmethod
+    def disconnect_all():
+        """Disconnect all RCON connections"""
+        with _connection_lock:
+            for connection in _rcon_connections.values():
+                connection.disconnect()
+            _rcon_connections.clear()
+    
+    @staticmethod
+    def force_reconnect(host: str, port: int, password: str) -> bool:
+        """Force disconnect and reconnect for a specific connection"""
+        connection_key = f"{host}:{port}"
+        
+        with _connection_lock:
+            if connection_key in _rcon_connections:
+                _rcon_connections[connection_key].disconnect()
+                del _rcon_connections[connection_key]
+            
+            # Create new connection
+            rcon = RconClient(host, port, password)
+            try:
+                rcon.connect()
+                _rcon_connections[connection_key] = rcon
+                return True
+            except Exception as e:
+                logger.error(f"Failed to force reconnect RCON: {e}")
+                return False
+
 def test_rcon_connection(host: str, port: int, password: str) -> Tuple[bool, Optional[str]]:
     """Test RCON connection and return (success, error_message)"""
     try:
-        with RconClient(host, port, password) as rcon:
-            response = rcon.command("list")
-            return True, None
+        rcon = RconConnectionManager.get_connection(host, port, password)
+        if not rcon.is_connected():
+            rcon.connect()
+        response = rcon.command("list", auto_reconnect=True)
+        return True, None
     except Exception as e:
         return False, str(e)
 
-
 def execute_rcon_command(host: str, port: int, password: str, command: str) -> Tuple[bool, str]:
-    """Execute RCON command and return (success, response/error)"""
+    """Execute RCON command with persistent connection and auto-reconnect"""
     try:
-        with RconClient(host, port, password) as rcon:
-            response = rcon.command(command)
-            return True, response
+        rcon = RconConnectionManager.get_connection(host, port, password)
+        response = rcon.command(command, auto_reconnect=True)
+        return True, response
+    except Exception as e:
+        return False, str(e)
+
+def get_rcon_connection_status(host: str, port: int, password: str) -> Tuple[bool, Optional[str]]:
+    """Get current RCON connection status"""
+    try:
+        connection_key = f"{host}:{port}"
+        with _connection_lock:
+            if connection_key in _rcon_connections:
+                rcon = _rcon_connections[connection_key]
+                return rcon.is_connected(), None
+            return False, "No connection established"
+    except Exception as e:
+        return False, str(e)
+
+def force_rcon_reconnect(host: str, port: int, password: str) -> Tuple[bool, Optional[str]]:
+    """Force RCON reconnection"""
+    try:
+        success = RconConnectionManager.force_reconnect(host, port, password)
+        if success:
+            return True, None
+        else:
+            return False, "Reconnection failed"
     except Exception as e:
         return False, str(e)

@@ -636,10 +636,15 @@ def console_status():
         try:
             current_app.logger.info('Testing RCON connection with custom client')
             
-            from services.rcon_client import test_rcon_connection
-            success, error = test_rcon_connection(server_host, rcon_port, rcon_password)
+            from services.rcon_client import get_rcon_connection_status, test_rcon_connection
+            # First check if we have an existing connection
+            connected, error = get_rcon_connection_status(server_host, rcon_port, rcon_password)
             
-            if not success:
+            # If not connected, try to test connection
+            if not connected:
+                connected, error = test_rcon_connection(server_host, rcon_port, rcon_password)
+            
+            if not connected:
                 raise Exception(error)
             
             current_app.logger.info(f'RCON connection successful with custom client')
@@ -766,6 +771,86 @@ def console_execute():
         
     except Exception as e:
         current_app.logger.error(f'RCON command execution failed: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@main_bp.route('/console/connect', methods=['POST'])
+def console_connect():
+    """Force RCON reconnection"""
+    try:
+        from services.rcon_client import force_rcon_reconnect
+        
+        # Get server connection details from server.properties
+        server_props = ServerPropertiesParser()
+        
+        if not server_props.load_properties():
+            return jsonify({
+                'success': False,
+                'error': 'Could not load server.properties file'
+            }), 500
+        
+        if not server_props.is_rcon_enabled():
+            return jsonify({
+                'success': False,
+                'error': 'RCON is not enabled in server.properties'
+            }), 500
+        
+        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+        rcon_port = server_props.get_rcon_port()
+        rcon_password = server_props.get_rcon_password()
+        
+        if not rcon_password:
+            return jsonify({
+                'success': False,
+                'error': 'RCON password not set in server.properties'
+            }), 500
+        
+        # Force reconnection
+        success, error = force_rcon_reconnect(server_host, rcon_port, rcon_password)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'RCON reconnected successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': error or 'Failed to reconnect'
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f'RCON connect failed: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@main_bp.route('/console/disconnect', methods=['POST'])
+def console_disconnect():
+    """Disconnect RCON connection"""
+    try:
+        from services.rcon_client import RconConnectionManager
+        
+        # Get server connection details
+        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+        server_props = ServerPropertiesParser()
+        
+        if server_props.load_properties():
+            rcon_port = server_props.get_rcon_port()
+            # Disconnect the specific connection
+            connection_key = f"{server_host}:{rcon_port}"
+            RconConnectionManager.disconnect_all()  # For simplicity, disconnect all
+        
+        return jsonify({
+            'success': True,
+            'message': 'RCON disconnected successfully'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'RCON disconnect failed: {e}')
         return jsonify({
             'success': False,
             'error': str(e)

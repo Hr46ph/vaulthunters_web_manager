@@ -23,65 +23,125 @@ A Flask-based web interface for managing VaultHunters Minecraft servers. Provide
 
 ## Installation
 
-1. Clone and setup the project:
+**Important Security Note**: This application should be run as the same user running the VaultHunters Minecraft server. This user should not have sudo privileges. This user only needs sudo for managing the Web Manager systemd service. For this I will provide a special sudoers file. Do not install or run this as the root user.
+
+### Prerequisites
+
+A regular user account that will own and run both the Minecraft server and web manager. Common usernames are `minecraft` or your personal username.
+
+A second user account with sudo privileges to create systemd unit file for the web manager application and to place the restricted sudo permissions file for the other account.
+
+Technically, you can do everything with a default user account that has unlimited sudo with 'nopasswd'. For any Java application, especially Minecraft servers exposed to the internet this is a HUGE security risk. There have been major security vulnerabilities in Java and in Minecraft servers in general. You take a massive risk by running all this with an unrestricted user account.
+
+### Installation Steps
+
+1. **Log in as the user running Minecraft server** and clone the project:
 ```bash
+# Replace 'minecraft' with the username running the server
 cd /home/minecraft/
 git clone <repository-url> vaulthunters_web_manager
 cd vaulthunters_web_manager
 ```
+If the git command is not available, use your distributions' package manager to install it.
 
-2. Set up Python virtual environment:
+2. **Set up Python virtual environment** (as regular user):
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-3. Configure the application:
+3. **Configure the application** (as regular user):
 ```bash
-cp config.py.example config.py
+cp config.toml.example config.toml
 ```
 
-Edit `config.py` with your server paths and settings:
-```python
-MINECRAFT_SERVER_PATH = "/home/minecraft/vaulthunters"
-BACKUP_PATH = "/home/minecraft/backups"
-JAVA_EXECUTABLE = "java"
-MINECRAFT_SERVER_HOST = "localhost"
-MINECRAFT_SERVER_PORT = 25565
-HOST = "0.0.0.0"
-PORT = 8080
-SECRET_KEY = "change-this-to-a-random-secret"
+Edit `config.toml` with your server paths and settings. The configuration uses TOML format which is more user-friendly than Python code:
+
+```toml
+[server]
+minecraft_server_path = "/home/minecraft/vaulthunters"
+backup_path = "/home/minecraft/backups" 
+java_executable = "java"
+server_jar = "forge-1.18.2-40.2.21-universal.jar"
+minecraft_server_host = "localhost"
+minecraft_server_port = 25565
+
+[jvm]
+# Adjust memory based on your system (4G minimum, 8G recommended for VaultHunters)
+memory_min = "4G"
+memory_max = "8G"
+
+[web]
+host = "0.0.0.0"
+port = 8080
+# IMPORTANT: Change this to a random secret key!
+secret_key = "change-this-to-a-random-secret-key"
+debug = false
 ```
 
-4. Create systemd service:
+**Important**: The JVM optimization flags are pre-configured with Aikar's flags, which are specifically optimized for Minecraft servers and reduce lag spikes caused by garbage collection.
+
+4. **Create systemd service** (requires sudo):
 ```bash
 sudo systemctl edit --force --full vaulthunters_web_manager.service
 ```
 
-Add the following content:
+Add the following content (replace `minecraft` with your username):
 ```ini
 [Unit]
 Description=VaultHunters Web Manager
 After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
 User=minecraft
 Group=minecraft
 WorkingDirectory=/home/minecraft/vaulthunters_web_manager
-Environment=PATH=/usr/bin:/usr/local/bin
-ExecStart=/home/minecraft/vaulthunters_web_manager/venv/bin/python app.py
+Environment=PATH=/home/minecraft/vaulthunters_web_manager/venv/bin:/usr/bin:/usr/local/bin
+ExecStart=/home/minecraft/vaulthunters_web_manager/venv/bin/python /home/minecraft/vaulthunters_web_manager/app.py
+KillMode=process
 Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-5. Enable and start the service:
+5. **Create limited sudo permissions** for service management (requires sudo):
+
+This step allows your regular user to manage the web service without full root access:
+
+```bash
+# Replace 'minecraft' with your username
+sudo visudo -f /etc/sudoers.d/minecraft
+```
+
+Add the following content (replace `minecraft` with your actual username):
+```
+minecraft ALL=NOPASSWD: /bin/systemctl start vaulthunters_web_manager.service, \
+                        /bin/systemctl stop vaulthunters_web_manager.service, \
+                        /bin/systemctl restart vaulthunters_web_manager.service, \
+                        /bin/systemctl status vaulthunters_web_manager.service
+minecraft ALL=NOPASSWD: /bin/journalctl -u vaulthunters_web_manager.service -n * --no-pager
+```
+
+**What this does**: Allows your user to start/stop/restart the web service and view its logs without entering a password, while keeping all other system operations secure.
+
+6. **Enable and start the service** (requires sudo):
 ```bash
 sudo systemctl enable vaulthunters_web_manager.service
 sudo systemctl start vaulthunters_web_manager.service
+```
+
+After this setup, you can manage the service as your regular user:
+```bash
+# These commands now work without sudo prompts
+sudo systemctl status vaulthunters_web_manager.service
+sudo systemctl restart vaulthunters_web_manager.service
 ```
 
 ## Configuration
@@ -128,8 +188,9 @@ The RCON password is entered via a secure modal in the web interface.
 ```
 vaulthunters_web_manager/
 ├── app.py                    # Main Flask application
-├── config.py.example        # Configuration template
-├── config.py                # Configuration settings
+├── config.toml.example      # Configuration template (TOML format)
+├── config.toml              # Configuration settings (TOML format)
+├── config.py                # Configuration loader
 ├── routes.py                # Web routes and API endpoints
 ├── requirements.txt         # Python dependencies
 ├── services/                # Backend service modules
@@ -172,9 +233,9 @@ sudo journalctl -u vaulthunters_web_manager.service -f
 ```
 
 ### Server Control Not Working
-- Verify `JAVA_EXECUTABLE` path in `config.py`
-- Check `SERVER_JAR` filename matches your server jar
-- Ensure `MINECRAFT_SERVER_PATH` is correct
+- Verify `java_executable` path in `config.toml`
+- Check `server_jar` filename matches your server jar
+- Ensure `minecraft_server_path` is correct
 - Verify Java version compatibility (Java 8+ required)
 
 ### RCON Console Not Working
