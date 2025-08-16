@@ -29,16 +29,33 @@
                         
                         <hr>
                         
-                        <div class="btn-group" role="group">
+                        <div class="btn-group mb-2" role="group">
                             <button type="button" class="btn btn-success" onclick="serverControl('start')" disabled>
-                                Start Server
+                                <i class="fas fa-play"></i> Start Server
                             </button>
                             <button type="button" class="btn btn-danger" onclick="serverControl('stop')" disabled>
-                                Stop Server
+                                <i class="fas fa-stop"></i> Stop Server (RCON)
                             </button>
                             <button type="button" class="btn btn-warning" onclick="serverControl('restart')" disabled>
-                                Restart Server
+                                <i class="fas fa-redo"></i> Restart Server (RCON)
                             </button>
+                        </div>
+                        
+                        <div class="btn-group mb-2" role="group">
+                            <button type="button" class="btn btn-info" onclick="serverControl('save')" disabled>
+                                <i class="fas fa-save"></i> Save World
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" onclick="serverControl('kill')" disabled>
+                                <i class="fas fa-skull"></i> Force Kill
+                            </button>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>RCON</strong> = Graceful via game commands | 
+                                <strong>Force Kill</strong> = Emergency process termination
+                            </small>
                         </div>
                     </div>
                 </div>

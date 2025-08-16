@@ -33,10 +33,20 @@ function showConfirm(title, message, callback) {
 function serverControl(action) {
     if (action === 'start') {
         executeServerControl(action);
+    } else if (action === 'save') {
+        executeServerControl(action);
+    } else if (action === 'kill') {
+        showConfirm(
+            'Emergency Server Kill', 
+            `⚠️ WARNING: This will force-kill the server process!\n\nThis should only be used when RCON is unresponsive.\nUse "Stop Server (RCON)" for normal shutdown.\n\nAre you sure you want to force-kill the server?`,
+            function() {
+                executeServerControl(action);
+            }
+        );
     } else {
         showConfirm(
             'Confirm Server Action', 
-            `Are you sure you want to ${action} the server?`,
+            `Are you sure you want to ${action} the server?\n\nThis will use RCON commands for graceful shutdown.`,
             function() {
                 executeServerControl(action);
             }
@@ -215,10 +225,14 @@ function updateButtonStates(isRunning) {
     const startBtn = document.querySelector('button[onclick="serverControl(\'start\')"]');
     const restartBtn = document.querySelector('button[onclick="serverControl(\'restart\')"]');
     const stopBtn = document.querySelector('button[onclick="serverControl(\'stop\')"]');
+    const saveBtn = document.querySelector('button[onclick="serverControl(\'save\')"]');
+    const killBtn = document.querySelector('button[onclick="serverControl(\'kill\')"]');
     
     if (startBtn) startBtn.disabled = isRunning;
     if (restartBtn) restartBtn.disabled = !isRunning;
     if (stopBtn) stopBtn.disabled = !isRunning;
+    if (saveBtn) saveBtn.disabled = !isRunning;
+    if (killBtn) killBtn.disabled = !isRunning;
 }
 
 

@@ -87,6 +87,22 @@ def _execute_rcon_server_control(action):
                     'success': False,
                     'error': f'RCON stop command failed during restart: {response}'
                 }
+                
+        elif action == 'save':
+            # Execute save-all command via RCON
+            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-all')
+            if success:
+                return {
+                    'success': True,
+                    'message': 'World save command sent via RCON',
+                    'rcon_command': 'save-all',
+                    'rcon_response': response
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'RCON save command failed: {response}'
+                }
         
         return {'success': False, 'error': 'Unknown action'}
         
@@ -168,7 +184,7 @@ def server_control():
         if not action:
             return jsonify({'success': False, 'error': 'Action parameter required'}), 400
         
-        if action not in ['start', 'stop', 'restart']:
+        if action not in ['start', 'stop', 'restart', 'kill', 'save']:
             return jsonify({'success': False, 'error': 'Invalid action'}), 400
         
         current_app.logger.info(f'Executing server {action} action')
@@ -185,6 +201,12 @@ def server_control():
         elif action == 'restart':
             # Use RCON stop followed by system start
             result = _execute_rcon_server_control('restart')
+        elif action == 'kill':
+            # Force kill server process (emergency use)
+            result = system_control.stop_server()
+        elif action == 'save':
+            # Save world via RCON
+            result = _execute_rcon_server_control('save')
         
         current_app.logger.info(f'Server control result: {result}')
         
