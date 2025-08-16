@@ -53,7 +53,7 @@ class SystemControlService:
             ]
     
     def get_server_status(self):
-        """Get detailed server status with caching"""
+        """Get detailed server status with startup detection and caching"""
         # Check cache first
         cache_key = f"status_{self.server_name}"
         now = time.time()
@@ -67,13 +67,15 @@ class SystemControlService:
         try:
             status_info = {
                 'running': False,
+                'status': 'stopped',  # stopped, starting, running
                 'uptime': '0 minutes',
                 'players': 0,
                 'max_players': 20,
                 'last_update': datetime.now().isoformat(),
                 'memory_usage': 0,
                 'cpu_usage': 0.0,
-                'pid': None
+                'pid': None,
+                'server_ready': False
             }
             
             # Check if Minecraft process is running
@@ -103,30 +105,42 @@ class SystemControlService:
                         
                 except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
                     self.logger.warning(f"Error getting process info: {e}")
-            
-            # Get player count using mcstatus if available
-            try:
-                from mcstatus import JavaServer
-                server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-                server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
                 
-                server = JavaServer(server_host, server_port)
-                query_status = server.status(timeout=3)
-                
-                if query_status:
-                    status_info['players'] = query_status.players.online
-                    status_info['max_players'] = query_status.players.max
-                    
-            except Exception as e:
-                self.logger.debug(f"Player count query failed: {e}")
-                # Try to get from server.properties as fallback
+                # Check if server is ready for connections using mcstatus
+                server_ready = False
                 try:
-                    server_props = ServerPropertiesParser()
-                    if server_props.load_properties():
-                        max_players = server_props.get_property('max-players', '20')
-                        status_info['max_players'] = int(max_players) if max_players.isdigit() else 20
-                except Exception:
-                    pass
+                    from mcstatus import JavaServer
+                    server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+                    server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
+                    
+                    server = JavaServer(server_host, server_port)
+                    query_status = server.status(timeout=3)
+                    
+                    if query_status:
+                        server_ready = True
+                        status_info['players'] = query_status.players.online
+                        status_info['max_players'] = query_status.players.max
+                        status_info['server_ready'] = True
+                        status_info['status'] = 'running'
+                        self.logger.debug("Server is ready and accepting connections")
+                        
+                except Exception as e:
+                    self.logger.debug(f"Server not ready for connections: {e}")
+                    # Server process exists but can't connect - it's starting up
+                    status_info['server_ready'] = False
+                    status_info['status'] = 'starting'
+                    
+                    # Try to get max_players from server.properties as fallback
+                    try:
+                        server_props = ServerPropertiesParser()
+                        if server_props.load_properties():
+                            max_players = server_props.get_property('max-players', '20')
+                            status_info['max_players'] = int(max_players) if max_players.isdigit() else 20
+                    except Exception:
+                        pass
+            else:
+                # No process running
+                status_info['status'] = 'stopped'
             
             # Cache the result
             _status_cache[cache_key] = (status_info, now)
@@ -136,6 +150,7 @@ class SystemControlService:
             self.logger.error(f"Error getting server status: {e}")
             return {
                 'running': False,
+                'status': 'stopped',
                 'uptime': 'Unknown',
                 'players': 0,
                 'max_players': 20,
@@ -143,6 +158,7 @@ class SystemControlService:
                 'memory_usage': 0,
                 'cpu_usage': 0.0,
                 'pid': None,
+                'server_ready': False,
                 'error': str(e)
             }
     
@@ -196,6 +212,15 @@ class SystemControlService:
             # Check if server is already running
             if self._get_minecraft_process():
                 return {'success': False, 'error': 'Server is already running'}
+            
+            # Start the startup monitor
+            try:
+                from .startup_monitor import get_startup_monitor
+                startup_monitor = get_startup_monitor()
+                startup_monitor.start_monitoring()
+                self.logger.info("Started startup monitoring")
+            except Exception as e:
+                self.logger.warning(f"Could not start startup monitor: {e}")
             
             # Verify required files exist
             user_jvm_args_path = os.path.join(self.server_path, 'user_jvm_args.txt')
@@ -346,6 +371,15 @@ class SystemControlService:
             global _minecraft_process
             with _process_lock:
                 _minecraft_process = None
+            
+            # Stop startup monitoring
+            try:
+                from .startup_monitor import get_startup_monitor
+                startup_monitor = get_startup_monitor()
+                startup_monitor.stop_monitoring()
+                self.logger.info("Stopped startup monitoring")
+            except Exception as e:
+                self.logger.warning(f"Could not stop startup monitor: {e}")
             
             # Clear status cache
             _status_cache.clear()

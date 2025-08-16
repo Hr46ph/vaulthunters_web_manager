@@ -177,10 +177,32 @@ function updateStatusDisplay(status) {
     const statusElement = document.getElementById('server-status');
     if (!statusElement) return;
     
+    // Determine status text and badge color based on server state
+    let statusText, badgeColor, statusIcon;
+    
+    switch (status.status) {
+        case 'starting':
+            statusText = 'Starting Up';
+            badgeColor = 'warning';
+            statusIcon = '<i class="fas fa-spinner fa-spin"></i> ';
+            break;
+        case 'running':
+            statusText = 'Running';
+            badgeColor = 'success';
+            statusIcon = '<i class="fas fa-check-circle"></i> ';
+            break;
+        case 'stopped':
+        default:
+            statusText = 'Stopped';
+            badgeColor = 'danger';
+            statusIcon = '<i class="fas fa-stop-circle"></i> ';
+            break;
+    }
+    
     const badge = statusElement.querySelector('.badge');
     if (badge) {
-        badge.className = `badge bg-${status.running ? 'success' : 'danger'}`;
-        badge.textContent = status.running ? 'Running' : 'Stopped';
+        badge.className = `badge bg-${badgeColor}`;
+        badge.innerHTML = statusIcon + statusText;
     }
     
     // Update the entire status section with new data
@@ -190,49 +212,73 @@ function updateStatusDisplay(status) {
     if (leftCol) {
         let html = `
             <h6>Status: 
-                <span class="badge bg-${status.running ? 'success' : 'danger'}">
-                    ${status.running ? 'Running' : 'Stopped'}
+                <span class="badge bg-${badgeColor}">
+                    ${statusIcon}${statusText}
                 </span>
             </h6>
             <p>Uptime: ${status.uptime}</p>
         `;
+        
         if (status.running && status.pid) {
             html += `<p>PID: ${status.pid}</p>`;
         }
+        
         if (status.memory_usage > 0) {
             const memoryDisplay = status.memory_usage >= 1024 
                 ? `${(status.memory_usage / 1024).toFixed(1)} GB`
                 : `${status.memory_usage} MB`;
             html += `<p>Memory: ${memoryDisplay}</p>`;
         }
+        
+        // Show additional info for starting status
+        if (status.status === 'starting') {
+            html += `<p class="text-warning"><i class="fas fa-info-circle"></i> Server is loading, please wait...</p>`;
+        }
+        
         leftCol.innerHTML = html;
     }
     
     if (rightCol) {
-        let html = `<p>Players: ${status.players}/${status.max_players}</p>`;
+        let html = '';
+        
+        if (status.status === 'running' && status.server_ready) {
+            html += `<p>Players: ${status.players}/${status.max_players}</p>`;
+        } else if (status.status === 'starting') {
+            html += `<p class="text-muted">Players: Waiting for server...</p>`;
+        } else {
+            html += `<p>Players: ${status.players}/${status.max_players}</p>`;
+        }
+        
         if (status.cpu_usage > 0) {
             html += `<p>CPU: ${status.cpu_usage.toFixed(1)}%</p>`;
         }
+        
         rightCol.innerHTML = html;
     }
     
-    // Update button states
-    updateButtonStates(status.running);
+    // Update button states - disable controls during startup
+    updateButtonStates(status.running, status.status);
 }
 
 // Update button states based on server status
-function updateButtonStates(isRunning) {
+function updateButtonStates(isRunning, serverStatus = 'stopped') {
     const startBtn = document.querySelector('button[onclick="serverControl(\'start\')"]');
     const restartBtn = document.querySelector('button[onclick="serverControl(\'restart\')"]');
     const stopBtn = document.querySelector('button[onclick="serverControl(\'stop\')"]');
     const saveBtn = document.querySelector('button[onclick="serverControl(\'save\')"]');
     const killBtn = document.querySelector('button[onclick="serverControl(\'kill\')"]');
     
-    if (startBtn) startBtn.disabled = isRunning;
-    if (restartBtn) restartBtn.disabled = !isRunning;
-    if (stopBtn) stopBtn.disabled = !isRunning;
-    if (saveBtn) saveBtn.disabled = !isRunning;
-    if (killBtn) killBtn.disabled = !isRunning;
+    const isStarting = serverStatus === 'starting';
+    const isFullyRunning = serverStatus === 'running';
+    
+    // Start button: disabled if running or starting
+    if (startBtn) startBtn.disabled = isRunning || isStarting;
+    
+    // Restart/Stop/Save buttons: disabled if stopped, or limited during startup
+    if (restartBtn) restartBtn.disabled = !isRunning || isStarting;
+    if (stopBtn) stopBtn.disabled = !isRunning;  // Allow stop during startup
+    if (saveBtn) saveBtn.disabled = !isFullyRunning;  // Only allow save when fully running
+    if (killBtn) killBtn.disabled = !isRunning;  // Allow kill during startup as emergency option
 }
 
 
