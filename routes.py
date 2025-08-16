@@ -15,6 +15,7 @@ import os
 import logging
 import subprocess
 import json
+import time
 from datetime import datetime
 
 def _execute_rcon_server_control(action):
@@ -330,6 +331,7 @@ def log_stream(log_type):
     current_app.logger.info(f'SSE request for {log_type} log at {log_path}')
     
     def generate():
+        tail_process = None
         try:
             # Check if log file exists
             if not os.path.exists(log_path):
@@ -348,39 +350,95 @@ def log_stream(log_type):
                 return
             
             # Start tail -F process for real-time following (follows log rotation)
-            tail_process = None
             try:
+                import select
+                import fcntl
+                import os as os_module
+                
                 # Use -F flag to follow log rotation (when file is recreated)
                 tail_process = subprocess.Popen(
                     ['tail', '-F', log_path],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     universal_newlines=True,
-                    bufsize=1
+                    bufsize=0  # Unbuffered
                 )
+                
+                # Make stdout non-blocking
+                fd = tail_process.stdout.fileno()
+                fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+                fcntl.fcntl(fd, fcntl.F_SETFL, fl | os_module.O_NONBLOCK)
                 
                 yield f"data: {json.dumps({'type': 'connected', 'log_type': log_type})}\n\n"
                 
-                # Stream new lines as they arrive
-                for line in iter(tail_process.stdout.readline, ''):
-                    line = line.rstrip()
-                    if line:
-                        # Check for log rotation messages from tail -F
-                        if line.startswith('==> ') and ' <==' in line:
-                            # Log rotation detected
-                            yield f"data: {json.dumps({'type': 'rotation', 'message': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
-                        else:
-                            # Regular log line
-                            yield f"data: {json.dumps({'type': 'line', 'line': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
+                # Stream new lines as they arrive with timeout
+                last_activity = time.time()
+                while True:
+                    # Check if process is still running
+                    if tail_process.poll() is not None:
+                        current_app.logger.warning(f"Tail process for {log_type} terminated unexpectedly")
+                        break
                     
+                    # Use select to check for data availability with timeout
+                    ready, _, _ = select.select([tail_process.stdout], [], [], 1.0)  # 1 second timeout
+                    
+                    if ready:
+                        try:
+                            line = tail_process.stdout.readline()
+                            if line:
+                                line = line.rstrip()
+                                if line:
+                                    # Check for log rotation messages from tail -F
+                                    if line.startswith('==> ') and ' <==' in line:
+                                        # Log rotation detected
+                                        yield f"data: {json.dumps({'type': 'rotation', 'message': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
+                                    else:
+                                        # Regular log line
+                                        yield f"data: {json.dumps({'type': 'line', 'line': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
+                                last_activity = time.time()
+                        except IOError:
+                            # No data available, continue
+                            pass
+                    else:
+                        # Send keepalive every 30 seconds
+                        current_time = time.time()
+                        if current_time - last_activity > 30:
+                            yield f"data: {json.dumps({'type': 'keepalive', 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
+                            last_activity = current_time
+                    
+                    # Exit if client disconnected (this is a simple check)
+                    try:
+                        # Force flush to detect client disconnect
+                        yield ""
+                    except GeneratorExit:
+                        current_app.logger.info(f"Client disconnected from {log_type} stream")
+                        break
+                    
+            except GeneratorExit:
+                current_app.logger.info(f"SSE generator exit for {log_type}")
             except Exception as e:
+                current_app.logger.error(f"Tail process error for {log_type}: {e}")
                 yield f"data: {json.dumps({'type': 'error', 'error': f'Tail process error: {str(e)}'})}\n\n"
-            finally:
-                if tail_process:
-                    tail_process.terminate()
-                    
+                
+        except GeneratorExit:
+            current_app.logger.info(f"SSE outer generator exit for {log_type}")
         except Exception as e:
+            current_app.logger.error(f"SSE setup error for {log_type}: {e}")
             yield f"data: {json.dumps({'type': 'error', 'error': f'SSE setup error: {str(e)}'})}\n\n"
+        finally:
+            # Always clean up the tail process
+            if tail_process:
+                try:
+                    tail_process.terminate()
+                    # Give it a moment to terminate gracefully
+                    try:
+                        tail_process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        tail_process.kill()
+                        tail_process.wait()
+                    current_app.logger.info(f"Cleaned up tail process for {log_type}")
+                except Exception as e:
+                    current_app.logger.error(f"Error cleaning up tail process for {log_type}: {e}")
     
     from flask import Response
     response = Response(
