@@ -17,6 +17,86 @@ import subprocess
 import json
 from datetime import datetime
 
+def _execute_rcon_server_control(action):
+    """Execute server control via RCON commands"""
+    try:
+        # Get server connection details from server.properties
+        server_props = ServerPropertiesParser()
+        
+        if not server_props.load_properties():
+            return {
+                'success': False,
+                'error': 'Could not load server.properties file'
+            }
+        
+        if not server_props.is_rcon_enabled():
+            return {
+                'success': False,
+                'error': 'RCON is not enabled in server.properties (enable-rcon=true required)'
+            }
+        
+        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+        rcon_port = server_props.get_rcon_port()
+        rcon_password = server_props.get_rcon_password()
+        
+        if not rcon_password:
+            return {
+                'success': False,
+                'error': 'RCON password not set in server.properties'
+            }
+        
+        from services.rcon_client import execute_rcon_command
+        
+        if action == 'stop':
+            # Execute stop command via RCON
+            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'stop')
+            if success:
+                return {
+                    'success': True,
+                    'message': 'Server stop command sent via RCON',
+                    'rcon_command': 'stop',
+                    'rcon_response': response
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'RCON stop command failed: {response}'
+                }
+                
+        elif action == 'restart':
+            # First stop via RCON
+            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'stop')
+            if success:
+                # Wait a moment for server to shut down
+                import time
+                time.sleep(3)
+                
+                # Then start using system control
+                system_control = SystemControlService()
+                start_result = system_control.start_server()
+                
+                return {
+                    'success': start_result['success'],
+                    'message': f"Server restart: RCON stop successful, start {'successful' if start_result['success'] else 'failed'}",
+                    'rcon_command': 'stop',
+                    'rcon_response': response,
+                    'start_result': start_result
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'RCON stop command failed during restart: {response}'
+                }
+        
+        return {'success': False, 'error': 'Unknown action'}
+        
+    except Exception as e:
+        current_app.logger.error(f'RCON server control failed: {e}')
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 # Create blueprint
 main_bp = Blueprint('main', __name__)
 
@@ -100,9 +180,11 @@ def server_control():
         if action == 'start':
             result = system_control.start_server()
         elif action == 'stop':
-            result = system_control.stop_server()
+            # Use RCON stop command for graceful shutdown
+            result = _execute_rcon_server_control('stop')
         elif action == 'restart':
-            result = system_control.restart_server()
+            # Use RCON stop followed by system start
+            result = _execute_rcon_server_control('restart')
         
         current_app.logger.info(f'Server control result: {result}')
         

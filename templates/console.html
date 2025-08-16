@@ -137,9 +137,21 @@
                 
                 <!-- Quick Commands -->
                 <div class="mb-3">
-                    <small class="text-muted">Quick Commands:</small>
+                    <small class="text-muted">Server Commands:</small>
+                    <div class="btn-group flex-wrap mb-2" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmRconCommand('stop', 'stop the server')">
+                            <i class="fas fa-stop"></i> Stop Server
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeCommand('save-all')">
+                            <i class="fas fa-save"></i> Save World
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeCommand('list')">
+                            <i class="fas fa-users"></i> List Players
+                        </button>
+                    </div>
+                    
+                    <small class="text-muted">Game Commands:</small>
                     <div class="btn-group flex-wrap" role="group">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeCommand('list')">List Players</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeCommand('tps')">TPS</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeCommand('help')">Help</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeCommand('whitelist list')">Whitelist</button>
@@ -242,12 +254,14 @@ function setupCommandHistory() {
 }
 
 
-// Append text to console
-function appendToConsole(text) {
+// Append text to console (globally available)
+window.appendToConsole = function(text) {
     const output = document.getElementById('console-output');
+    if (!output) return;  // Console not available on this page
+    
     output.innerHTML += text + '\n';
     
-    if (autoScroll) {
+    if (typeof autoScroll !== 'undefined' && autoScroll) {
         output.scrollTop = output.scrollHeight;
     }
 }
@@ -274,27 +288,56 @@ function toggleAutoScroll() {
     }
 }
 
-// Check RCON status
+// RCON status tracking
+let lastRconStatus = null;
+let reconnectAttempts = 0;
+let maxReconnectAttempts = 5;
+
+// Check RCON status with auto-reconnection
 function checkRconStatus() {
     fetch('/console/status')
         .then(response => response.json())
         .then(data => {
             const statusElement = document.getElementById('rcon-status');
+            const currentStatus = data.connected;
+            
             if (data.connected) {
                 statusElement.className = 'badge bg-success';
                 statusElement.textContent = 'Connected';
                 statusElement.title = `Connected to ${data.host}:${data.port}`;
+                
+                // Reset reconnect attempts on successful connection
+                reconnectAttempts = 0;
+                
+                // If we just reconnected, show success message
+                if (lastRconStatus === false) {
+                    appendToConsole(`<span class="console-response">✓ RCON automatically reconnected</span>`);
+                }
             } else {
                 statusElement.className = 'badge bg-danger';
                 statusElement.textContent = 'Disconnected';
                 statusElement.title = data.error || 'Connection failed';
                 
-                // Also show error in console
-                console.error('RCON Connection Failed:', data.error);
+                // Try to auto-reconnect if server might be available
+                if (lastRconStatus === true || lastRconStatus === null) {
+                    // First time disconnection or we were previously connected
+                    appendToConsole(`<span class="console-error">RCON Connection Lost: ${escapeHtml(data.error || 'Unknown error')}</span>`);
+                    appendToConsole(`<span class="console-response">⏳ Will attempt automatic reconnection...</span>`);
+                }
                 
-                // Add error message to console output
-                appendToConsole(`<span class="console-error">RCON Connection Error: ${escapeHtml(data.error || 'Unknown error')}</span>`);
+                // Attempt auto-reconnection if we haven't exceeded max attempts
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    setTimeout(attemptAutoReconnect, 5000); // Try reconnecting after 5 seconds
+                    reconnectAttempts++;
+                }
             }
+            
+            // Update server status to check if server is running
+            if (typeof updateServerStatus === 'function') {
+                updateServerStatus();
+            }
+            
+            lastRconStatus = currentStatus;
         })
         .catch(error => {
             const statusElement = document.getElementById('rcon-status');
@@ -303,7 +346,49 @@ function checkRconStatus() {
             statusElement.title = error.message;
             
             console.error('RCON Status Check Error:', error);
-            appendToConsole(`<span class="console-error">RCON Status Check Failed: ${escapeHtml(error.message)}</span>`);
+            lastRconStatus = false;
+        });
+}
+
+// Attempt automatic reconnection
+function attemptAutoReconnect() {
+    // First check if server is online by checking server status
+    fetch('/server/status')
+        .then(response => response.json())
+        .then(serverData => {
+            // Only try RCON reconnection if server is online
+            if (serverData.online) {
+                appendToConsole(`<span class="console-response">🔄 Server detected online, attempting RCON reconnection (attempt ${reconnectAttempts}/${maxReconnectAttempts})...</span>`);
+                
+                // Try to reconnect
+                fetch('/console/connect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        appendToConsole(`<span class="console-response">✓ RCON automatically reconnected after server restart</span>`);
+                        reconnectAttempts = 0; // Reset counter on success
+                        checkRconStatus(); // Update status immediately
+                    } else {
+                        appendToConsole(`<span class="console-error">✗ Auto-reconnection failed: ${escapeHtml(data.error)}</span>`);
+                    }
+                })
+                .catch(error => {
+                    appendToConsole(`<span class="console-error">✗ Auto-reconnection request failed: ${escapeHtml(error.message)}</span>`);
+                });
+            } else {
+                // Server still not online, don't spam reconnection attempts
+                appendToConsole(`<span class="console-response">⏳ Server still starting up, will retry when online...</span>`);
+            }
+        })
+        .catch(error => {
+            // Server status check failed, assume server not ready
+            console.log('Server status check failed during auto-reconnect, will retry later');
         });
 }
 
@@ -424,6 +509,13 @@ function executeCommand(command) {
         appendToConsole(`<span class="console-error">Connection error: ${escapeHtml(error.message)}</span>`);
         appendToConsole(`<span class="console-response">💡 Try using the Connect button to reestablish connection</span>`);
     });
+}
+
+// Confirm dangerous RCON commands
+function confirmRconCommand(command, description) {
+    if (confirm(`Are you sure you want to ${description}?\n\nThis will execute: /${command}`)) {
+        executeCommand(command);
+    }
 }
 
 // Check RCON status periodically  

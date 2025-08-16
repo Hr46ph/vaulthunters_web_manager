@@ -85,6 +85,19 @@ function executeServerControl(action) {
     .then(data => {
         console.log('Server control response:', data);
         if (data.success) {
+            // Show RCON command and response in console if available
+            if (data.rcon_command && window.appendToConsole) {
+                const timestamp = new Date().toLocaleTimeString();
+                window.appendToConsole(`<span class="console-timestamp">[${timestamp}]</span> <span class="console-command">/${data.rcon_command}</span>`);
+                
+                if (data.rcon_response) {
+                    window.appendToConsole(`<span class="console-response">${escapeHtml(data.rcon_response)}</span>`);
+                }
+                
+                // Show system message for server control
+                window.appendToConsole(`<span class="console-response">💡 Server ${action} initiated via RCON</span>`);
+            }
+            
             // For all actions, just refresh status without modal
             setTimeout(updateServerStatus, 2000);
         } else {
