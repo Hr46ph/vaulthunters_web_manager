@@ -23,34 +23,66 @@ A Flask-based web interface for managing VaultHunters Minecraft servers. Provide
 
 ## Installation
 
-**Important Security Note**: This application should be run as the same user running the VaultHunters Minecraft server. This user should not have sudo privileges. This user only needs sudo for managing the Web Manager systemd service. For this I will provide a special sudoers file. Do not install or run this as the root user.
+### Quick Install (Recommended)
 
-### Prerequisites
+**Automated Installation Script:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/install.sh | sudo bash
+```
 
+This script will:
+- Test system requirements and sudo permissions
+- Prompt for the Minecraft server user (creates if needed)
+- Detect existing VaultHunters server or prompt for location
+- Clone the project and set up the virtual environment
+- Create systemd service and limited sudoers permissions
+- Generate secure configuration with random secret key
+- Test port availability and start the service
+
+**Quick Uninstall:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/uninstall.sh | sudo bash
+```
+
+The uninstall script provides safe removal options with backup creation and multiple confirmation prompts for destructive actions.
+
+**Security Note**: Always review scripts before running with `curl | bash`:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/install.sh | less
+```
+
+### Manual Installation (Advanced Users)
+
+For advanced users who prefer manual installation or need custom configuration:
+
+**Important Security Note**: This application should be run as the same user running the VaultHunters Minecraft server. This user should not have full sudo privileges. This user only needs sudo for managing the Web Manager systemd service. For this I will provide a special sudoers file. Do not install or run this as the root user.
+
+**Prerequisites:**
 - A regular user account that will own and run both the Minecraft server and web manager. Common usernames are `minecraft` or your personal username.
-- A second user account with sudo privileges to create systemd unit file for the web manager application and to place the restricted sudo permissions file for the other account.
+- A second user account with full sudo privileges to create the systemd unit file for the web manager application and to place the restricted sudo permissions file for the other account, running the web manager and minecraft server.
 
-Technically, you can do everything with a default user account that has unlimited sudo with 'nopasswd', or even as root itself. You shouldn't. For any Java application, especially Minecraft servers exposed to the internet this is a HUGE security risk. There have been major security vulnerabilities in Java and in Minecraft servers in general, which have been actively used in the past. You take a massive risk by running all this as root, or with an unrestricted user account.
+**Important Security Note**: Technically, you can do everything with a default user account that has unlimited sudo with 'nopasswd', or even as root itself. You shouldn't. For any Java application, especially Minecraft servers exposed to the internet this is a HUGE security risk. There have been major security vulnerabilities in Java and in Minecraft servers in general, which have been actively used in the past. You take a massive risk by running all this as root, or with an unrestricted user account.
 
-### Installation Steps
+**Manual Installation Steps:**
 
 1. **Log in as the user running Minecraft server** and clone the project:
 ```bash
-# Replace 'minecraft' with the username running the server
-cd /home/minecraft/
+cd
 git clone https://github.com/Hr46ph/vaulthunters_web_manager.git
 cd vaulthunters_web_manager
 ```
 If the git command is not available, use your distributions' package manager to install it.
 
-2. **Set up Python virtual environment** (as regular user):
+2. **Set up Python virtual environment** (as the minecraft user):
 ```bash
+# Inside the vaulthunters_web_manager directory
 python3 -m venv venv
 source venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-3. **Configure the application** (as regular user):
+3. **Configure the application** (as minecraft user):
 ```bash
 cp config.toml.example config.toml
 ```
@@ -81,12 +113,12 @@ debug = false
 
 **Important**: The JVM optimization flags are pre-configured with Aikar's flags, which are specifically optimized for Minecraft servers and reduce lag spikes caused by garbage collection.
 
-4. **Create systemd service** (requires sudo):
+4. **Create systemd service** (as your regular user, requires sudo):
 ```bash
 sudo systemctl edit --force --full vaulthunters_web_manager.service
 ```
 
-Add the following content (replace `minecraft` with your username):
+Add the following content (replace `minecraft` with the username running the minecraft server):
 ```ini
 [Unit]
 Description=VaultHunters Web Manager
@@ -110,9 +142,9 @@ StandardError=journal
 WantedBy=multi-user.target
 ```
 
-5. **Create limited sudo permissions** for service management (requires sudo):
+5. **Create limited sudo permissions** for service management (as your regular user, requires sudo):
 
-This step allows your regular user to manage the web service without full root access:
+This step allows your minecraft user to manage the web service without full root access:
 
 ```bash
 # Replace 'minecraft' with your username
@@ -130,15 +162,17 @@ minecraft ALL=NOPASSWD: /bin/journalctl -u vaulthunters_web_manager.service -n *
 
 **What this does**: Allows your user to start/stop/restart the web service and view its logs without entering a password, while keeping all other system operations secure.
 
-6. **Enable and start the service** (requires sudo):
+If you want the web manager to automatically start, run the enable command. If you want to start it manually now, and in the future after system reboots, only run the start command.
+
+6. **Enable and start the service** (as your regular user, requires sudo):
 ```bash
 sudo systemctl enable vaulthunters_web_manager.service
 sudo systemctl start vaulthunters_web_manager.service
 ```
 
-After this setup, you can manage the service as your regular user:
+After this setup, you can manage the service with your minecraft user:
 ```bash
-# These commands now work without sudo prompts
+# These commands now work without password prompts
 sudo systemctl status vaulthunters_web_manager.service
 sudo systemctl restart vaulthunters_web_manager.service
 ```
@@ -147,15 +181,7 @@ sudo systemctl restart vaulthunters_web_manager.service
 
 ### Server Setup
 
-Ensure your VaultHunters server directory contains:
-- `server.properties` with RCON enabled:
-  ```properties
-  enable-rcon=true
-  rcon.port=25575
-  rcon.password=your-secure-password
-  ```
-- Forge launcher files (user_jvm_args.txt and libraries directory)
-- Java 8+ installed and accessible
+After setting up the web manager, you can review and edit your VaultHunters minecraft configuration files with via the webUI.
 
 ### RCON Setup
 
@@ -166,11 +192,11 @@ rcon.port=25575
 rcon.password=your-secure-password
 ```
 
-The RCON password is entered via a secure modal in the web interface.
+The RCON password is read from the configuration files and used transparently for the Web RCON feature.
 
 ## Usage
 
-1. Navigate to `http://your-server-ip:8080`
+1. Navigate to `http://your-server-ip:8080`. Change the port if you changed it to something else
 
 2. **Server Control Panel**: Start, stop, and restart server with real-time status monitoring
 
@@ -178,50 +204,21 @@ The RCON password is entered via a secure modal in the web interface.
 
 4. **Log Viewer**: Real-time log streaming with latest + debug/crash toggle
 
-5. **Configuration Editor**: Multi-category editor for server properties, bans & whitelist, and config files
+5. **Configuration Editor**: Multi-category editor for server properties, bans & whitelist, and config files. Quick button to add Aikar's Flags to optimize for VaultHunters. Review the memory requirements.
 
-6. **Backup Manager**: View, download, and manage server backups
-
-## File Structure
-
-```
-vaulthunters_web_manager/
-├── app.py                    # Main Flask application
-├── config.toml.example      # Configuration template (TOML format)
-├── config.toml              # Configuration settings (TOML format)
-├── config.py                # Configuration loader
-├── routes.py                # Web routes and API endpoints
-├── requirements.txt         # Python dependencies
-├── services/                # Backend service modules
-│   ├── system_control.py   # Server control with mcstatus integration
-│   ├── log_service.py      # Log management with journal access
-│   ├── config_manager.py   # Configuration handling with validation
-│   ├── backup_manager.py   # Backup operations
-│   ├── rcon_client.py      # Custom RCON client
-│   └── server_properties.py # Server properties parser
-├── static/
-│   ├── css/style.css       # Styles with dark mode support
-│   └── js/app.js          # Frontend JavaScript with CSRF
-├── templates/
-│   ├── base.html          # Base template with dark mode
-│   ├── index.html         # Dashboard with real-time status
-│   ├── console.html       # RCON console interface
-│   ├── logs.html          # Log viewer with auto-refresh
-│   ├── config.html        # Multi-category config editor
-│   ├── backups.html       # Backup manager
-│   └── errors/            # Error page templates
-└── venv/                   # Python virtual environment
-```
+6. **Backup Manager**: Create, view, download, restore and manage server backups (partly implemented)
 
 ## Security
 
 - Web interface runs under the same user as your Minecraft server
-- No root privileges required
+- No root privileges required apart from harmless commands to start the web manager and view journal logs
 - CSRF protection with Flask-WTF
 - Path validation using `os.path.realpath()`
 - Input validation with file size limits
 - File access restrictions within configured directories
 - Secure session management
+
+**Important**: This web application has no authentication and opens RCON console to your server transparently. This web application is NOT secure and should never be exposed to the internet. If run locally, consider setting it to 127.0.0.1 to prevent access via LAN or WiFi.
 
 ## Troubleshooting
 
