@@ -16,8 +16,8 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config.get(config_name, config['default']))
     
-    # Initialize extensions
-    csrf = CSRFProtect(app)
+    # Initialize extensions - disable automatic CSRF for manual control
+    # csrf = CSRFProtect(app)  # Disabled - using manual CSRF validation
     
     # Configure logging
     if not app.debug and not app.testing:

@@ -41,10 +41,15 @@ function serverControl(action) {
 }
 
 function executeServerControl(action) {
+    const csrfToken = getCSRFToken();
+    console.log('Executing server control:', action);
+    console.log('CSRF token:', csrfToken ? csrfToken.substring(0, 20) + '...' : 'NULL');
     
     const formData = new FormData();
     formData.append('action', action);
-    formData.append('csrf_token', getCSRFToken());
+    formData.append('csrf_token', csrfToken);
+    
+    console.log('FormData contents:', Array.from(formData.entries()));
     
     // Disable buttons during request
     const buttons = document.querySelectorAll('.btn-group .btn');
@@ -55,9 +60,24 @@ function executeServerControl(action) {
     
     fetch('/server/control', {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'same-origin'  // Include session cookies for CSRF
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Server control response status:', response.status);
+        console.log('Server control response headers:', response.headers);
+        
+        // Always try to parse JSON first to get detailed error info
+        return response.json().then(data => {
+            console.log('Server control response data:', data);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${data.error || response.statusText}`);
+            }
+            
+            return data;
+        });
+    })
     .then(data => {
         if (data.success) {
             showAlert('Success', data.message);
@@ -69,7 +89,12 @@ function executeServerControl(action) {
     })
     .catch(error => {
         console.error('Server control error:', error);
-        showAlert('Error', 'Network error occurred');
+        console.error('Error details:', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack
+        });
+        showAlert('Error', `Network error: ${error.message}`);
     })
     .finally(() => {
         // Re-enable buttons

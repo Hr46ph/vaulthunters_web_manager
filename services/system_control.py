@@ -34,39 +34,23 @@ class SystemControlService:
         try:
             self.server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunter')
             self.java_executable = current_app.config.get('JAVA_EXECUTABLE', 'java')
-            self.server_jar = current_app.config.get('SERVER_JAR', 'forge-1.18.2-40.2.21-universal.jar')
-            self.java_args = current_app.config.get('JAVA_ARGS', [
-                '-Xmx8G', '-Xms4G',
-                '-XX:+UseG1GC',
-                '-XX:+ParallelRefProcEnabled',
-                '-XX:MaxGCPauseMillis=200',
-                '-XX:+UnlockExperimentalVMOptions',
-                '-XX:+DisableExplicitGC',
-                '-XX:+AlwaysPreTouch',
-                '-XX:G1NewSizePercent=30',
-                '-XX:G1MaxNewSizePercent=40',
-                '-XX:G1HeapRegionSize=8M',
-                '-XX:G1ReservePercent=20',
-                '-XX:G1HeapWastePercent=5',
-                '-XX:G1MixedGCCountTarget=4',
-                '-XX:InitiatingHeapOccupancyPercent=15',
-                '-XX:G1MixedGCLiveThresholdPercent=90',
-                '-XX:G1RSetUpdatingPauseTimePercent=5',
-                '-XX:SurvivorRatio=32',
-                '-XX:+PerfDisableSharedMem',
-                '-XX:MaxTenuringThreshold=1',
-                '-Dusing.aikars.flags=https://mcflags.emc.gs',
-                '-Daikars.new.flags=true'
+            self.forge_startup_command = current_app.config.get('FORGE_STARTUP_COMMAND', [
+                '@user_jvm_args.txt',
+                '@libraries/net/minecraftforge/forge/1.18.2-40.2.9/unix_args.txt'
             ])
             
-            self.logger.info(f"Server config - Path: {self.server_path}, Jar: {self.server_jar}")
+            self.logger.info(f"Server config - Path: {self.server_path}")
+            self.logger.info(f"Forge startup command: {self.java_executable} {' '.join(self.forge_startup_command)}")
             
         except Exception as e:
             self.logger.error(f"Error initializing server config: {e}")
             # Fallback defaults
             self.server_path = '/home/minecraft/vaulthunter'
             self.java_executable = 'java'
-            self.server_jar = 'forge-1.18.2-40.2.21-universal.jar'
+            self.forge_startup_command = [
+                '@user_jvm_args.txt',
+                '@libraries/net/minecraftforge/forge/1.18.2-40.2.9/unix_args.txt'
+            ]
     
     def get_server_status(self):
         """Get detailed server status with caching"""
@@ -178,9 +162,11 @@ class SystemControlService:
                     if not cmdline:
                         continue
                     
-                    # Look for Java process with Minecraft server jar
+                    # Look for Java process with Forge arguments
                     if (any('java' in arg.lower() for arg in cmdline) and
-                        any(self.server_jar in arg for arg in cmdline)):
+                        (any('user_jvm_args.txt' in arg for arg in cmdline) or
+                         any('unix_args.txt' in arg for arg in cmdline) or
+                         any('forge' in arg.lower() for arg in cmdline))):
                         _minecraft_process = proc
                         self.logger.info(f"Found Minecraft process: PID {proc.pid}")
                         return _minecraft_process
@@ -198,16 +184,21 @@ class SystemControlService:
             if self._get_minecraft_process():
                 return {'success': False, 'error': 'Server is already running'}
             
-            # Verify server files exist
-            server_jar_path = os.path.join(self.server_path, self.server_jar)
-            if not os.path.exists(server_jar_path):
-                return {'success': False, 'error': f'Server jar not found: {server_jar_path}'}
+            # Verify required files exist
+            user_jvm_args_path = os.path.join(self.server_path, 'user_jvm_args.txt')
+            unix_args_path = os.path.join(self.server_path, 'libraries/net/minecraftforge/forge/1.18.2-40.2.9/unix_args.txt')
             
-            # Prepare the command
-            cmd = [self.java_executable] + self.java_args + ['-jar', self.server_jar, 'nogui']
+            if not os.path.exists(user_jvm_args_path):
+                return {'success': False, 'error': f'user_jvm_args.txt not found: {user_jvm_args_path}'}
+            
+            if not os.path.exists(unix_args_path):
+                return {'success': False, 'error': f'unix_args.txt not found: {unix_args_path}'}
+            
+            # Prepare the command using Forge launcher format
+            cmd = [self.java_executable] + self.forge_startup_command
             
             self.logger.info(f"Starting Minecraft server in {self.server_path}")
-            self.logger.info(f"Command: {' '.join(cmd[:3])} ... [java args] ... {' '.join(cmd[-3:])}")
+            self.logger.info(f"Command: {' '.join(cmd)}")
             
             # Start the process
             process = subprocess.Popen(

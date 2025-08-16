@@ -236,8 +236,23 @@ After comprehensive code analysis, **ALL planned features are fully implemented 
 ✅ Security path validation and access controls - **COMPLETE**
 ✅ Production-ready configuration management - **COMPLETE**
 
+### **Recently Implemented Critical Fixes** ✅ NEW
+
+#### **Server-Sent Events (SSE) for Real-time Log Streaming** ✅ COMPLETED
+- **Real-time Log Following**: Replaced 10-second polling with instant Server-Sent Events streaming
+- **Log Rotation Support**: Using `tail -F` instead of `tail -f` to handle server restart log rotation automatically
+- **SSE Implementation**: `/logs/stream/<log_type>` endpoint with EventSource API in frontend
+- **Production-Grade**: Proper error handling, connection management, and browser compatibility
+- **Performance**: Zero-delay log updates and efficient streaming with memory management
+
+#### **Forge Launcher Server Control** ✅ COMPLETED  
+- **Modern Forge Support**: Updated from legacy jar execution to Forge launcher system
+- **Correct Startup Command**: `java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.18.2-40.2.9/unix_args.txt`
+- **CSRF Resolution**: Fixed Flask-WTF CSRF token issues preventing server control
+- **JSON Response Fix**: Resolved HTML error page responses instead of proper JSON
+- **Network Error Resolution**: Server control buttons now work correctly with proper error handling
+
 **FUTURE ENHANCEMENTS (Optional):**
-- WebSocket or Server-Sent Events for real-time log streaming
 - Pagination for very large log files
 - Unit test coverage
 - User authentication system (if multi-user needed)

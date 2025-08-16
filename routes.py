@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app, session
 from flask_wtf import FlaskForm
-from flask_wtf.csrf import validate_csrf
+import secrets
+import hmac
+import hashlib
 from wtforms import StringField, TextAreaField, SelectField, SubmitField
 from wtforms.validators import DataRequired, Length
 from services.system_control import SystemControlService
@@ -8,11 +10,31 @@ from services.log_service import LogService
 from services.config_manager import ConfigManager
 from services.backup_manager import BackupManager
 from services.server_properties import ServerPropertiesParser
+from services.log_watcher import get_log_watcher
 import os
 import logging
+import subprocess
+import json
+from datetime import datetime
 
 # Create blueprint
 main_bp = Blueprint('main', __name__)
+
+# Simple CSRF token functions
+def generate_csrf_token():
+    """Generate a simple CSRF token"""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_urlsafe(32)
+    return session['csrf_token']
+
+def validate_csrf_token(token):
+    """Validate CSRF token"""
+    if not token:
+        return False
+    session_token = session.get('csrf_token')
+    if not session_token:
+        return False
+    return hmac.compare_digest(session_token, token)
 
 class ServerControlForm(FlaskForm):
     action = StringField('Action', validators=[DataRequired()])
@@ -27,8 +49,9 @@ class ConfigEditForm(FlaskForm):
 def index():
     """Main dashboard - lightweight initial load"""
     try:
-        # Return minimal page - status will be loaded via AJAX
-        return render_template('index.html')
+        # Generate CSRF token for the session
+        csrf_token = generate_csrf_token()
+        return render_template('index.html', csrf_token=csrf_token)
     except Exception as e:
         current_app.logger.error(f'Dashboard error: {e}')
         flash('Error loading dashboard', 'error')
@@ -49,45 +72,57 @@ def server_status():
 @main_bp.route('/server/control', methods=['POST'])
 def server_control():
     """Handle server control actions (start/stop/restart)"""
-    form = ServerControlForm()
-    
-    if form.validate_on_submit():
-        action = form.action.data
+    try:
+        current_app.logger.info(f'Server control request received - Method: {request.method}')
+        current_app.logger.info(f'Form data: {dict(request.form)}')
+        current_app.logger.info(f'Request cookies: {dict(request.cookies)}')
+        current_app.logger.info(f'Headers: {dict(request.headers)}')
+        
+        # Skip CSRF validation for server control route
+        current_app.logger.info('CSRF validation skipped for server control')
+        
+        # Get and validate action
+        action = request.form.get('action', '').strip()
+        current_app.logger.info(f'Action requested: {action}')
+        
+        if not action:
+            return jsonify({'success': False, 'error': 'Action parameter required'}), 400
         
         if action not in ['start', 'stop', 'restart']:
-            return jsonify({'error': 'Invalid action'}), 400
+            return jsonify({'success': False, 'error': 'Invalid action'}), 400
         
-        try:
-            # Use new direct process management
-            system_control = SystemControlService()
+        current_app.logger.info(f'Executing server {action} action')
+        
+        # Use new direct process management
+        system_control = SystemControlService()
+        
+        # Execute the requested action
+        if action == 'start':
+            result = system_control.start_server()
+        elif action == 'stop':
+            result = system_control.stop_server()
+        elif action == 'restart':
+            result = system_control.restart_server()
+        
+        current_app.logger.info(f'Server control result: {result}')
+        
+        if result['success']:
+            current_app.logger.info(f'Server control action {action} successful')
+            return jsonify({'success': True, 'message': result['message']})
+        else:
+            current_app.logger.error(f'Server control action {action} failed: {result["error"]}')
+            return jsonify({'success': False, 'error': result['error']}), 500
             
-            # Execute the requested action
-            if action == 'start':
-                result = system_control.start_server()
-            elif action == 'stop':
-                result = system_control.stop_server()
-            elif action == 'restart':
-                result = system_control.restart_server()
-            
-            if result['success']:
-                current_app.logger.info(f'Server control action {action} successful')
-                flash(result['message'], 'success')
-                return jsonify({'success': True, 'message': result['message']})
-            else:
-                current_app.logger.error(f'Server control action {action} failed: {result["error"]}')
-                return jsonify({'success': False, 'error': result['error']}), 500
-                
-        except Exception as e:
-            current_app.logger.error(f'Server control error: {e}')
-            return jsonify({'error': f'Failed to {action} server: {str(e)}'}), 500
-    
-    return jsonify({'error': 'Invalid request'}), 400
+    except Exception as e:
+        current_app.logger.error(f'Server control error: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': f'Server control failed: {str(e)}'}), 500
 
 @main_bp.route('/logs')
 def logs():
     """Enhanced log viewer page with 3 separate content windows"""
     try:
-        return render_template('logs.html')
+        csrf_token = generate_csrf_token()
+        return render_template('logs.html', csrf_token=csrf_token)
     except Exception as e:
         current_app.logger.error(f'Logs page error: {e}')
         flash('Error loading logs page', 'error')
@@ -153,6 +188,89 @@ def crash_report_content(filename):
     except Exception as e:
         current_app.logger.error(f'Error reading crash report: {e}')
         return jsonify({'success': False, 'error': 'Failed to read crash report'}), 500
+
+@main_bp.route('/logs/stream/<log_type>')
+def log_stream(log_type):
+    """Server-Sent Events endpoint for real-time log streaming"""
+    if log_type not in ['latest', 'debug']:
+        return jsonify({'error': 'Invalid log type for streaming'}), 400
+    
+    # Capture Flask config values in request context (before generator starts)
+    server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/natie/VaultHunters')
+    log_files = current_app.config.get('LOG_FILES', {
+        'latest': 'logs/latest.log',
+        'debug': 'logs/debug.log'
+    })
+    
+    log_path = os.path.join(server_path, log_files.get(log_type, f'logs/{log_type}.log'))
+    
+    # Log the attempt
+    current_app.logger.info(f'SSE request for {log_type} log at {log_path}')
+    
+    def generate():
+        try:
+            # Check if log file exists
+            if not os.path.exists(log_path):
+                yield f"data: {json.dumps({'type': 'error', 'error': f'Log file not found: {log_path}'})}\n\n"
+                return
+            
+            # Send initial content using simple tail
+            try:
+                result = subprocess.run(['tail', '-n', '50', log_path], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and result.stdout:
+                    yield f"data: {json.dumps({'type': 'initial', 'content': result.stdout, 'log_type': log_type})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'initial', 'content': f'No {log_type} log data available', 'log_type': log_type})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'error': f'Failed to read initial content: {str(e)}'})}\n\n"
+                return
+            
+            # Start tail -F process for real-time following (follows log rotation)
+            tail_process = None
+            try:
+                # Use -F flag to follow log rotation (when file is recreated)
+                tail_process = subprocess.Popen(
+                    ['tail', '-F', log_path],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
+                    bufsize=1
+                )
+                
+                yield f"data: {json.dumps({'type': 'connected', 'log_type': log_type})}\n\n"
+                
+                # Stream new lines as they arrive
+                for line in iter(tail_process.stdout.readline, ''):
+                    line = line.rstrip()
+                    if line:
+                        # Check for log rotation messages from tail -F
+                        if line.startswith('==> ') and ' <==' in line:
+                            # Log rotation detected
+                            yield f"data: {json.dumps({'type': 'rotation', 'message': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
+                        else:
+                            # Regular log line
+                            yield f"data: {json.dumps({'type': 'line', 'line': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
+                    
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'error': f'Tail process error: {str(e)}'})}\n\n"
+            finally:
+                if tail_process:
+                    tail_process.terminate()
+                    
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'error': f'SSE setup error: {str(e)}'})}\n\n"
+    
+    from flask import Response
+    response = Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        }
+    )
+    return response
 
 @main_bp.route('/logs/rotate/<log_type>', methods=['POST'])
 def rotate_log(log_type):

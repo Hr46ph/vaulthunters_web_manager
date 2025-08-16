@@ -256,8 +256,8 @@
 
 {% block extra_js %}
 <script>
-    // Global variables for follow intervals
-    const followIntervals = {
+    // Global variables for SSE connections
+    const sseConnections = {
         latest: null,
         debug: null
     };
@@ -477,7 +477,7 @@
         });
     }
     
-    // Start following a log
+    // Start following a log using SSE
     function startFollow(logType) {
         const followCheckbox = document.getElementById(`follow-${logType}`);
         if (!followCheckbox) {
@@ -485,36 +485,101 @@
             return;
         }
         
-        console.log(`Starting follow for ${logType}`);
+        console.log(`Starting real-time follow for ${logType}`);
         
-        // Stop existing follow if any
+        // Stop existing connection if any
         stopFollow(logType);
         
         if (followCheckbox.checked) {
-            // Refresh immediately
-            refreshLog(logType);
+            // Create SSE connection
+            const eventSource = new EventSource(`/logs/stream/${logType}`);
+            sseConnections[logType] = eventSource;
             
-            // Set up interval for continuous following (every 10 seconds)
-            followIntervals[logType] = setInterval(() => {
-                const checkbox = document.getElementById(`follow-${logType}`);
-                if (checkbox && checkbox.checked) {
-                    console.log(`Auto-refreshing ${logType} log`);
-                    refreshLog(logType);
-                } else {
-                    console.log(`Stopping follow for ${logType} - checkbox unchecked`);
-                    stopFollow(logType);
+            const logElement = document.getElementById(`${logType}-log`);
+            const statusElement = document.getElementById(`${logType}-status`);
+            
+            eventSource.onopen = function(event) {
+                console.log(`SSE connection opened for ${logType}`);
+                statusElement.className = 'badge bg-success badge-status';
+                statusElement.title = 'Real-time streaming active';
+            };
+            
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    switch(data.type) {
+                        case 'initial':
+                            // Load initial content
+                            logElement.textContent = data.content || `No ${logType} log data available`;
+                            logElement.scrollTop = logElement.scrollHeight;
+                            break;
+                            
+                        case 'connected':
+                            console.log(`SSE connected to ${logType} stream (client: ${data.client_id})`);
+                            break;
+                            
+                        case 'line':
+                            // Append new line
+                            if (data.line.trim()) {
+                                logElement.textContent += '\n' + data.line;
+                                logElement.scrollTop = logElement.scrollHeight;
+                            }
+                            break;
+                            
+                        case 'rotation':
+                            // Log rotation detected
+                            logElement.textContent += '\n[LOG ROTATED] ' + data.message;
+                            logElement.scrollTop = logElement.scrollHeight;
+                            console.log(`Log rotation detected for ${logType}: ${data.message}`);
+                            break;
+                            
+                        case 'keepalive':
+                            // Just keep connection alive
+                            console.log(`Keepalive received for ${logType}`);
+                            break;
+                            
+                        case 'error':
+                            console.error(`SSE error for ${logType}:`, data.error);
+                            logElement.textContent += '\n[ERROR] ' + data.error;
+                            statusElement.className = 'badge bg-danger badge-status';
+                            statusElement.title = 'Streaming error occurred';
+                            break;
+                    }
+                } catch (e) {
+                    console.error(`Error parsing SSE data for ${logType}:`, e);
                 }
-            }, 10000);
+            };
             
-            console.log(`Follow interval set for ${logType}`);
+            eventSource.onerror = function(event) {
+                console.error(`SSE error for ${logType}:`, event);
+                statusElement.className = 'badge bg-danger badge-status';
+                statusElement.title = 'Connection error';
+                
+                // Auto-reconnect after 5 seconds if checkbox is still checked
+                setTimeout(() => {
+                    const checkbox = document.getElementById(`follow-${logType}`);
+                    if (checkbox && checkbox.checked) {
+                        console.log(`Attempting to reconnect ${logType} stream`);
+                        startFollow(logType);
+                    }
+                }, 5000);
+            };
+            
+            console.log(`SSE connection established for ${logType}`);
         }
     }
     
     // Stop following a log
     function stopFollow(logType) {
-        if (followIntervals[logType]) {
-            clearInterval(followIntervals[logType]);
-            followIntervals[logType] = null;
+        if (sseConnections[logType]) {
+            console.log(`Closing SSE connection for ${logType}`);
+            sseConnections[logType].close();
+            sseConnections[logType] = null;
+            
+            const statusElement = document.getElementById(`${logType}-status`);
+            statusElement.className = 'badge bg-secondary badge-status';
+            statusElement.title = 'Streaming stopped';
         }
     }
     
@@ -609,9 +674,9 @@
         });
     }
     
-    // Cleanup intervals when page is unloaded
+    // Cleanup SSE connections when page is unloaded
     window.addEventListener('beforeunload', function() {
-        Object.keys(followIntervals).forEach(stopFollow);
+        Object.keys(sseConnections).forEach(stopFollow);
     });
 </script>
 {% endblock %}

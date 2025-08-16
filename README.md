@@ -10,7 +10,7 @@ A comprehensive, production-ready web interface for managing your VaultHunter Mi
 
 - **Server Control**: Direct Java process management for start/stop/restart with real-time status monitoring and accurate player counts
 - **RCON Console**: Full server console access with mcrcon integration, automatic server.properties parsing, secure modal authentication, and threading compatibility
-- **Enhanced Log Monitoring**: 3-window log interface (latest/debug/crash) with individual controls, crash report dropdown selector, and dark mode support
+- **Enhanced Log Monitoring**: 3-window log interface (latest/debug/crash) with individual controls, crash report dropdown selector, **real-time Server-Sent Events streaming**, and dark mode support
 - **Comprehensive Configuration Management**: 
   - Multi-category config editor with three organized sections:
     - Server Properties: Dedicated editor for `server.properties` with validation
@@ -134,7 +134,7 @@ Ensure your VaultHunter server directory contains:
   rcon.port=25575
   rcon.password=your-secure-password
   ```
-- Server jar file (e.g., `forge-1.18.2-40.2.21-universal.jar`)
+- Forge launcher files (user_jvm_args.txt and libraries directory with unix_args.txt)
 - Java 8+ installed and accessible via `java` command
 
 ### Web Manager Configuration
@@ -207,6 +207,8 @@ server {
 
 4. **Enhanced Log Viewer**:
    - **3 separate content windows**: Latest, Debug, and Crash logs displayed simultaneously
+   - **Real-time Streaming**: Server-Sent Events (SSE) for instant log updates (no more 10-second delays)
+   - **Log Rotation Support**: Automatically handles server restarts and log file rotation using `tail -F`
    - **Individual controls**: Each window has its own follow, refresh, and clear buttons
    - **Crash report dropdown**: Select and view individual crash reports by timestamp
    - Auto-refresh with independent toggles for each log type
