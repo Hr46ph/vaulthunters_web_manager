@@ -89,13 +89,13 @@ def _execute_rcon_server_control(action):
                 }
                 
         elif action == 'save':
-            # Execute save-all command via RCON
-            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-all')
+            # Execute save-all flush command via RCON
+            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-all flush')
             if success:
                 return {
                     'success': True,
                     'message': 'World save command sent via RCON',
-                    'rcon_command': 'save-all',
+                    'rcon_command': 'save-all flush',
                     'rcon_response': response
                 }
             else:
