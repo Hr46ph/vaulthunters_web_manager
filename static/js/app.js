@@ -223,13 +223,6 @@ function updateStatusDisplay(status) {
             html += `<p>PID: ${status.pid}</p>`;
         }
         
-        if (status.memory_usage > 0) {
-            const memoryDisplay = status.memory_usage >= 1024 
-                ? `${(status.memory_usage / 1024).toFixed(1)} GB`
-                : `${status.memory_usage} MB`;
-            html += `<p>Memory: ${memoryDisplay}</p>`;
-        }
-        
         // Show additional info for starting status
         if (status.status === 'starting') {
             html += `<p class="text-warning"><i class="fas fa-info-circle"></i> Server is loading, please wait...</p>`;
@@ -251,6 +244,13 @@ function updateStatusDisplay(status) {
         
         if (status.cpu_usage > 0) {
             html += `<p>CPU: ${status.cpu_usage.toFixed(1)}%</p>`;
+        }
+        
+        if (status.memory_usage > 0) {
+            const memoryDisplay = status.memory_usage >= 1024 
+                ? `${(status.memory_usage / 1024).toFixed(1)} GB`
+                : `${status.memory_usage} MB`;
+            html += `<p>Memory: ${memoryDisplay}</p>`;
         }
         
         rightCol.innerHTML = html;
