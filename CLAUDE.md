@@ -13,9 +13,9 @@ VaultHunter Web Manager is a Flask-based web application for managing VaultHunte
 - ✅ Complete Flask application with direct process management system
 - ✅ Dashboard with accurate real-time player counts and process monitoring
 - ✅ Full RCON console with secure modal authentication (threading issues resolved)
-- ✅ Enhanced log monitoring with 3 separate content windows and crash report dropdown
+- ✅ **Streamlined log monitoring** with 2-window interface (latest + debug/crash toggle)
 - ✅ **Real-time log streaming** with Server-Sent Events (SSE) replacing 10-second polling
-- ✅ **Log rotation support** using `tail -F` for seamless following through server restarts
+- ✅ **Process independence** - Server survives web application restarts
 - ✅ Multi-category configuration editor with atomic file operations
 - ✅ Backup management system with download and inspection
 - ✅ Dark mode support and responsive Bootstrap design
@@ -27,17 +27,17 @@ Direct process management architecture with enhanced features:
 
 - **Flask Application** (`app.py`): Main web server with routes for server control, log viewing, config editing, backup management, and RCON console
 - **Configuration** (`config.py.example`): Configuration template with Java/JVM settings, server paths, web interface settings, and Minecraft connection details
-- **Process Management** (`services/system_control.py`): Direct Java process launching, monitoring, and control with psutil integration
+- **Process Management** (`services/system_control.py`): Direct Java process launching with detached execution, monitoring, and control with psutil integration
 - **Templates** (`templates/`): Jinja2 templates with enhanced logs page (3 content windows) and crash report dropdown selector
 - **Static Files** (`static/`): CSS and JavaScript for Bootstrap-based responsive UI with RCON functionality
 - **Requirements** (`requirements.txt`): Python dependencies including Flask, mcstatus, mcrcon, and psutil
 
 ## Key Implementation Requirements
 
-- **Server Control**: Direct Java process management with **proper Forge launcher support** (`java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.18.2-40.2.9/unix_args.txt`)
+- **Server Control**: **Process-independent** Java management with Forge launcher support - server survives web app restarts
 - **RCON Console**: Full server console access with secure modal authentication and threading compatibility
 - **Real-time Log Monitoring**: **Server-Sent Events (SSE)** for instant log updates with `tail -F` log rotation support
-- **Enhanced Log Interface**: 3-window log viewer (latest/debug/crash) with individual controls and crash report dropdown
+- **Streamlined Log Interface**: 2-window log viewer (latest + debug/crash toggle) with simplified controls
 - **Configuration Management**: Multi-category config editor with atomic file operations and automatic backups
 - **Backup Management**: List, download, and inspect backups from configured backup directory
 - **Real-time Monitoring**: Accurate server status and player counts using mcstatus and process statistics

@@ -200,37 +200,55 @@ class SystemControlService:
             self.logger.info(f"Starting Minecraft server in {self.server_path}")
             self.logger.info(f"Command: {' '.join(cmd)}")
             
-            # Start the process
+            # Prepare log file paths
+            log_file = os.path.join(self.server_path, 'logs', 'latest.log')
+            os.makedirs(os.path.dirname(log_file), exist_ok=True)
+            
+            # Build the command string for shell execution
+            cmd_str = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in ([self.java_executable] + self.forge_startup_command)])
+            
+            # Use bash to execute a completely detached process
+            detach_cmd = f'bash -c "cd \\"{self.server_path}\\" && setsid nohup {cmd_str} >>logs/latest.log 2>&1 </dev/null & disown"'
+            
+            self.logger.info(f"Starting detached server: {detach_cmd}")
+            
+            # Execute with minimal connection to parent
             process = subprocess.Popen(
-                cmd,
-                cwd=self.server_path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE,
-                universal_newlines=True,
-                bufsize=1
+                detach_cmd,
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+                cwd='/'  # Change to root to avoid any path dependencies
             )
             
-            # Wait a moment to see if the process starts successfully
-            time.sleep(2)
+            # Don't wait for the subprocess - it should exit immediately after forking
             
-            if process.poll() is None:  # Process is still running
-                global _minecraft_process
-                with _process_lock:
-                    _minecraft_process = psutil.Process(process.pid)
-                
-                self.logger.info(f"Minecraft server started successfully with PID {process.pid}")
+            # Wait for the actual minecraft server to start
+            time.sleep(5)
+            
+            # Find the newly started Minecraft process
+            minecraft_proc = self._get_minecraft_process()
+            
+            if minecraft_proc:
+                self.logger.info(f"Minecraft server started successfully with PID {minecraft_proc.pid}")
                 
                 # Clear the status cache
                 _status_cache.clear()
                 
-                return {'success': True, 'message': f'Server started with PID {process.pid}'}
+                return {'success': True, 'message': f'Server started with PID {minecraft_proc.pid}'}
             else:
-                # Process exited immediately
-                stdout, stderr = process.communicate()
-                error_msg = f"Server failed to start. Exit code: {process.returncode}"
-                if stdout:
-                    error_msg += f". Output: {stdout[:500]}"
+                # Check if there were any startup errors in the log
+                try:
+                    with open(log_file, 'r') as f:
+                        recent_logs = f.read()[-1000:]  # Last 1000 chars
+                        if 'Error' in recent_logs or 'Exception' in recent_logs:
+                            error_msg = f"Server failed to start. Check logs: {recent_logs[-200:]}"
+                        else:
+                            error_msg = "Server process not found after startup attempt"
+                except:
+                    error_msg = "Server failed to start - unable to read startup logs"
                 
                 self.logger.error(error_msg)
                 return {'success': False, 'error': error_msg}

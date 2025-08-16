@@ -8,9 +8,9 @@ A comprehensive, production-ready web interface for managing your VaultHunter Mi
 
 ### ✅ **VERIFIED IMPLEMENTED FEATURES**
 
-- **Server Control**: Direct Java process management for start/stop/restart with real-time status monitoring and accurate player counts
+- **Server Control**: **Process-independent** Java management - server survives web app restarts with real-time status monitoring and accurate player counts
 - **RCON Console**: Full server console access with mcrcon integration, automatic server.properties parsing, secure modal authentication, and threading compatibility
-- **Enhanced Log Monitoring**: 3-window log interface (latest/debug/crash) with individual controls, crash report dropdown selector, **real-time Server-Sent Events streaming**, and dark mode support
+- **Streamlined Log Monitoring**: 2-window log interface (latest + debug/crash toggle) with simplified controls, **real-time Server-Sent Events streaming**, and dark mode support
 - **Comprehensive Configuration Management**: 
   - Multi-category config editor with three organized sections:
     - Server Properties: Dedicated editor for `server.properties` with validation
@@ -125,7 +125,7 @@ sudo systemctl start vaulthunter_web_manager.service
 
 ### Server Setup
 
-**Direct Process Management** - No separate systemd service needed for the Minecraft server! The web manager handles process launching directly.
+**Process-Independent Management** - No separate systemd service needed for the Minecraft server! The web manager launches the server with complete independence - server survives web app restarts.
 
 Ensure your VaultHunter server directory contains:
 - `server.properties` with RCON enabled:
@@ -205,14 +205,13 @@ server {
    - Terminal-style interface with auto-scroll
    - Real-time connection status with network testing
 
-4. **Enhanced Log Viewer**:
-   - **3 separate content windows**: Latest, Debug, and Crash logs displayed simultaneously
+4. **Streamlined Log Viewer**:
+   - **2-window interface**: Latest log + debug/crash toggle window
    - **Real-time Streaming**: Server-Sent Events (SSE) for instant log updates (no more 10-second delays)
+   - **Process-Safe**: Removed log rotation features that interfered with server management
+   - **Debug/Crash Toggle**: Radio buttons to switch between debug and latest crash report
+   - **Auto-follow**: Latest log following enabled by default
    - **Log Rotation Support**: Automatically handles server restarts and log file rotation using `tail -F`
-   - **Individual controls**: Each window has its own follow, refresh, and clear buttons
-   - **Crash report dropdown**: Select and view individual crash reports by timestamp
-   - Auto-refresh with independent toggles for each log type
-   - Bootstrap modals replace JavaScript confirm dialogs
 
 5. **Configuration Editor**:
    - **Server Properties**: Direct editor for `server.properties` with reload and save buttons

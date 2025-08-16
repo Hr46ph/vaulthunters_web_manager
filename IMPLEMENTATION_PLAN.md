@@ -176,12 +176,12 @@ After comprehensive code analysis, **ALL planned features are fully implemented 
   - Config Directory: File browser with selection and editing panes
 - **Improved UX**: Category buttons, file browser, and dedicated save/cancel actions
 
-### **Enhanced Log Monitoring** ✅ NEW
-- **3-Window Interface**: Separate content windows for latest, debug, and crash logs
-- **Individual Controls**: Each log window has its own follow, refresh, and clear buttons
-- **Crash Report Dropdown**: Browse and select individual crash reports (removed archival)
-- **Bootstrap Modals**: Replaced JavaScript confirm dialogs with professional modals
-- **Real-time Updates**: Independent auto-refresh for each log type
+### **Streamlined Log Monitoring** ✅ ENHANCED
+- **2-Window Interface**: Latest log + debug/crash toggle in single window
+- **Simplified Controls**: Removed server-interfering log rotation features
+- **Debug/Crash Toggle**: Radio buttons to switch between debug and latest crash report
+- **Bootstrap Modals**: Replaced JavaScript confirm dialogs with professional modals  
+- **Real-time Updates**: Auto-follow enabled by default on latest log
 
 ### **Dark Mode Implementation** 
 - **Universal Support**: All pages, templates, and components support dark/light themes
@@ -224,10 +224,10 @@ After comprehensive code analysis, **ALL planned features are fully implemented 
 ## Implementation Verification Summary
 
 **VERIFIED IMPLEMENTED:**
-✅ **Direct Java process management** (replaced systemd) - **COMPLETE**
+✅ **Process-independent Java management** - Server survives web app restarts - **COMPLETE**
 ✅ File locking for config edits via atomic writes - **COMPLETE** 
 ✅ Real-time status updates via AJAX with process monitoring - **COMPLETE**
-✅ Enhanced 3-window log interface with crash report dropdown - **COMPLETE**
+✅ Streamlined 2-window log interface with debug/crash toggle - **COMPLETE**
 ✅ RCON threading compatibility resolved - **COMPLETE**
 ✅ Proper MIME types for backup downloads - **COMPLETE**
 ✅ Flask-WTF for form handling and CSRF protection - **COMPLETE**
@@ -245,9 +245,10 @@ After comprehensive code analysis, **ALL planned features are fully implemented 
 - **Production-Grade**: Proper error handling, connection management, and browser compatibility
 - **Performance**: Zero-delay log updates and efficient streaming with memory management
 
-#### **Forge Launcher Server Control** ✅ COMPLETED  
+#### **Process-Independent Server Control** ✅ COMPLETED  
 - **Modern Forge Support**: Updated from legacy jar execution to Forge launcher system
-- **Correct Startup Command**: `java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.18.2-40.2.9/unix_args.txt`
+- **Process Independence**: Server survives web application restarts using detached execution
+- **Detached Launch**: Uses `setsid nohup ... & disown` with `start_new_session=True` for complete isolation
 - **CSRF Resolution**: Fixed Flask-WTF CSRF token issues preventing server control
 - **JSON Response Fix**: Resolved HTML error page responses instead of proper JSON
 - **Network Error Resolution**: Server control buttons now work correctly with proper error handling

@@ -81,14 +81,11 @@
                         </h6>
                         <div class="log-controls">
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="follow-latest">
+                                <input class="form-check-input" type="checkbox" id="follow-latest" checked>
                                 <label class="form-check-label" for="follow-latest">Follow</label>
                             </div>
                             <button class="btn btn-outline-primary btn-sm" onclick="refreshLog('latest')">
                                 <i class="fas fa-sync"></i> Refresh
-                            </button>
-                            <button class="btn btn-outline-warning btn-sm" onclick="clearLog('latest')" title="Rotate log file - moves current log to backup and creates new empty log">
-                                <i class="fas fa-sync-alt"></i> Rotate
                             </button>
                         </div>
                     </div>
@@ -99,8 +96,8 @@
             </div>
         </div>
         
-        <!-- Debug and Crash Logs Row -->
-        <div class="col-md-6 mb-4">
+        <!-- Debug Log -->
+        <div class="col-12 mb-4">
             <div class="card">
                 <div class="card-header">
                     <div class="log-header">
@@ -109,45 +106,25 @@
                             <span class="badge bg-info badge-status" id="debug-status">●</span>
                         </h6>
                         <div class="log-controls">
+                            <div class="btn-group" role="group">
+                                <input type="radio" class="btn-check" name="debug-mode" id="debug-mode-debug" autocomplete="off" checked>
+                                <label class="btn btn-outline-secondary btn-sm" for="debug-mode-debug">Debug</label>
+                                
+                                <input type="radio" class="btn-check" name="debug-mode" id="debug-mode-crash" autocomplete="off">
+                                <label class="btn btn-outline-secondary btn-sm" for="debug-mode-crash">Latest Crash</label>
+                            </div>
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="follow-debug">
                                 <label class="form-check-label" for="follow-debug">Follow</label>
                             </div>
-                            <button class="btn btn-outline-primary btn-sm" onclick="refreshLog('debug')">
+                            <button class="btn btn-outline-primary btn-sm" onclick="refreshDebugOrCrash()">
                                 <i class="fas fa-sync"></i> Refresh
-                            </button>
-                            <button class="btn btn-outline-warning btn-sm" onclick="clearLog('debug')" title="Rotate log file - moves current log to backup and creates new empty log">
-                                <i class="fas fa-sync-alt"></i> Rotate
                             </button>
                         </div>
                     </div>
                 </div>
                 <div class="card-body">
                     <div id="debug-log" class="log-window">Loading debug log...</div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <div class="log-header">
-                        <h6 class="log-title">
-                            Crash Reports
-                            <span class="badge bg-info badge-status" id="crash-status">●</span>
-                        </h6>
-                        <div class="log-controls">
-                            <select class="form-select form-select-sm" id="crash-selector" style="width: auto; min-width: 200px;">
-                                <option value="">Loading crash reports...</option>
-                            </select>
-                            <button class="btn btn-outline-primary btn-sm" onclick="refreshCrashList()">
-                                <i class="fas fa-sync"></i> Refresh List
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div id="crash-log" class="log-window">Select a crash report from the dropdown above</div>
                 </div>
             </div>
         </div>
@@ -173,9 +150,6 @@
                             <button class="btn btn-primary btn-sm" onclick="refreshServerLogs()">
                                 <i class="fas fa-sync"></i> Refresh Server Logs
                             </button>
-                            <button class="btn btn-warning btn-sm" onclick="rotateServerLogs()" title="Rotate server log files (Latest & Debug)">
-                                <i class="fas fa-sync-alt"></i> Rotate Server Logs
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -185,73 +159,6 @@
 {% endblock %}
 
 {% block modals %}
-<!-- Log Rotation Confirmation Modal -->
-<div class="modal fade" id="rotateLogModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-sync-alt"></i> Rotate Log
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>Confirm Log Rotation</strong>
-                </div>
-                <p id="rotate-message">Are you sure you want to rotate this log?</p>
-                <p class="text-muted small">
-                    <strong>What this does:</strong><br>
-                    • Moves the current log file to a timestamped backup<br>
-                    • Creates a new empty log file<br>
-                    • Preserves all existing log data in the backup
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-warning" id="confirmRotateBtn">
-                    <i class="fas fa-sync-alt"></i> Rotate Log
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<!-- Rotate Server Logs Confirmation Modal -->
-<div class="modal fade" id="rotateServerLogsModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-sync-alt"></i> Rotate Server Logs
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>Confirm Server Log Rotation</strong>
-                </div>
-                <p>Are you sure you want to rotate the server log files?</p>
-                <p class="text-muted small">
-                    <strong>This will:</strong><br>
-                    • Rotate the Latest server log<br>
-                    • Rotate the Debug log<br>
-                    • Create new empty log files<br>
-                    • Preserve all data in timestamped backups
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-warning" id="confirmRotateServerLogsBtn">
-                    <i class="fas fa-sync-alt"></i> Rotate Server Logs
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -262,9 +169,8 @@
         debug: null
     };
     
-    // Global variable for crash reports
-    let crashReports = [];
-    let selectedCrashReport = '';
+    // Global variable for current debug mode
+    let debugMode = 'debug';
     
     // Get CSRF token
     function getCSRFToken() {
@@ -282,82 +188,43 @@
         return token;
     }
     
-    // Crash report functions
-    function refreshCrashList() {
-        const statusElement = document.getElementById('crash-status');
-        const selector = document.getElementById('crash-selector');
+    // Debug/Crash toggle function
+    function refreshDebugOrCrash() {
+        const debugRadio = document.getElementById('debug-mode-debug');
+        const crashRadio = document.getElementById('debug-mode-crash');
         
+        if (debugRadio.checked) {
+            debugMode = 'debug';
+            refreshLog('debug');
+        } else if (crashRadio.checked) {
+            debugMode = 'crash';
+            loadLatestCrashReport();
+        }
+    }
+    
+    function loadLatestCrashReport() {
+        const logElement = document.getElementById('debug-log');
+        const statusElement = document.getElementById('debug-status');
+        
+        logElement.textContent = 'Loading latest crash report...';
         statusElement.className = 'badge bg-warning badge-status';
-        selector.innerHTML = '<option value="">Loading...</option>';
         
         fetch('/logs/crash/list')
             .then(response => response.json())
             .then(data => {
-                if (data.success && data.crash_reports) {
-                    crashReports = data.crash_reports;
-                    updateCrashSelector();
-                    statusElement.className = 'badge bg-success badge-status';
-                    statusElement.title = `${crashReports.length} crash reports found`;
+                if (data.success && data.crash_reports && data.crash_reports.length > 0) {
+                    const latestCrash = data.crash_reports[0].filename;
+                    return fetch(`/logs/crash/content/${encodeURIComponent(latestCrash)}`);
                 } else {
-                    selector.innerHTML = '<option value="">No crash reports found</option>';
-                    statusElement.className = 'badge bg-secondary badge-status';
-                    statusElement.title = 'No crash reports';
-                    document.getElementById('crash-log').textContent = 'No crash reports found';
+                    throw new Error('No crash reports found');
                 }
             })
-            .catch(error => {
-                console.error('Error loading crash reports:', error);
-                selector.innerHTML = '<option value="">Error loading crash reports</option>';
-                statusElement.className = 'badge bg-danger badge-status';
-                statusElement.title = 'Error loading crash reports';
-                document.getElementById('crash-log').textContent = 'Error loading crash reports: ' + error.message;
-            });
-    }
-    
-    function updateCrashSelector() {
-        const selector = document.getElementById('crash-selector');
-        
-        if (crashReports.length === 0) {
-            selector.innerHTML = '<option value="">No crash reports found</option>';
-            return;
-        }
-        
-        let options = '<option value="">Select a crash report...</option>';
-        crashReports.forEach(report => {
-            options += `<option value="${report.filename}" title="${report.size_human} - ${report.modified_human}">${report.filename} (${report.size_human})</option>`;
-        });
-        
-        selector.innerHTML = options;
-        
-        // Auto-select the latest crash report
-        if (crashReports.length > 0 && !selectedCrashReport) {
-            selectedCrashReport = crashReports[0].filename;
-            selector.value = selectedCrashReport;
-            loadCrashReport(selectedCrashReport);
-        }
-    }
-    
-    function loadCrashReport(filename) {
-        if (!filename) {
-            document.getElementById('crash-log').textContent = 'Select a crash report from the dropdown above';
-            return;
-        }
-        
-        const logElement = document.getElementById('crash-log');
-        const statusElement = document.getElementById('crash-status');
-        
-        logElement.textContent = `Loading crash report: ${filename}...`;
-        statusElement.className = 'badge bg-warning badge-status';
-        
-        fetch(`/logs/crash/content/${encodeURIComponent(filename)}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     logElement.textContent = data.content;
                     statusElement.className = 'badge bg-success badge-status';
-                    statusElement.title = `${filename} - ${data.size} bytes`;
-                    
-                    // Auto-scroll to bottom
+                    statusElement.title = 'Latest crash report loaded';
                     logElement.scrollTop = logElement.scrollHeight;
                 } else {
                     logElement.textContent = `Error loading crash report: ${data.error}`;
@@ -365,9 +232,10 @@
                 }
             })
             .catch(error => {
-                console.error('Error loading crash report:', error);
-                logElement.textContent = `Network error loading crash report: ${error.message}`;
-                statusElement.className = 'badge bg-danger badge-status';
+                console.error('Error loading latest crash report:', error);
+                logElement.textContent = 'No crash reports found or error loading latest crash report';
+                statusElement.className = 'badge bg-secondary badge-status';
+                statusElement.title = 'No crash reports available';
             });
     }
     
@@ -403,79 +271,6 @@
             });
     }
     
-    // Global variable to store the log type being rotated
-    let pendingRotateLogType = null;
-    
-    // Clear/rotate log file - show modal for confirmation (server logs only)
-    function clearLog(logType) {
-        if (logType === 'crash') {
-            console.error('Crash reports cannot be rotated - use the dropdown to select reports');
-            return;
-        }
-        
-        pendingRotateLogType = logType;
-        
-        // Update modal message and show rotate modal
-        const messageElement = document.getElementById('rotate-message');
-        messageElement.textContent = `Are you sure you want to rotate the ${logType} log?`;
-        const rotateModal = new bootstrap.Modal(document.getElementById('rotateLogModal'));
-        rotateModal.show();
-    }
-    
-    // Execute log rotation after modal confirmation
-    function executeLogRotation(logType) {
-        const logElement = document.getElementById(`${logType}-log`);
-        const statusElement = document.getElementById(`${logType}-status`);
-        
-        if (!logElement) return;
-        
-        // Update status to processing
-        statusElement.className = 'badge bg-warning badge-status';
-        logElement.textContent = `${logType === 'crash' ? 'Archiving' : 'Rotating'} ${logType} log...`;
-        
-        const csrfToken = getCSRFToken();
-        console.log(`Preparing to rotate ${logType} log`);
-        console.log(`CSRF token: ${csrfToken ? csrfToken.substring(0, 10) + '...' : 'NULL'}`);
-        
-        const formData = new FormData();
-        formData.append('csrf_token', csrfToken);
-        
-        console.log('FormData contents:', Array.from(formData.entries()));
-        
-        fetch(`/logs/rotate/${logType}`, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                if (logType === 'crash') {
-                    logElement.textContent = `Crash reports archived successfully.\nBackup directory: ${data.rotated_file}\n\nCrash reports directory is now clear.`;
-                } else {
-                    logElement.textContent = `${logType.charAt(0).toUpperCase() + logType.slice(1)} log rotated successfully.\nBackup created: ${data.rotated_file}\n\nNew log file is now active and empty.`;
-                }
-                statusElement.className = 'badge bg-success badge-status';
-                
-                // Auto-refresh after 3 seconds to show new content
-                setTimeout(() => {
-                    refreshLog(logType);
-                }, 3000);
-            } else {
-                logElement.textContent = `Error ${logType === 'crash' ? 'archiving' : 'rotating'} ${logType} log: ${data.error || 'Unknown error'}`;
-                statusElement.className = 'badge bg-danger badge-status';
-            }
-        })
-        .catch(error => {
-            console.error(`${logType} log rotation error:`, error);
-            logElement.textContent = `Network error ${logType === 'crash' ? 'archiving' : 'rotating'} ${logType} log: ${error.message}\n\nPlease check the browser console for more details.`;
-            statusElement.className = 'badge bg-danger badge-status';
-        });
-    }
     
     // Start following a log using SSE
     function startFollow(logType) {
@@ -605,19 +400,8 @@
     }
     
     function refreshServerLogs() {
-        ['latest', 'debug'].forEach(refreshLog);
-    }
-    
-    function rotateServerLogs() {
-        // Show rotate server logs modal
-        const rotateModal = new bootstrap.Modal(document.getElementById('rotateServerLogsModal'));
-        rotateModal.show();
-    }
-    
-    function executeRotateServerLogs() {
-        ['latest', 'debug'].forEach(logType => {
-            setTimeout(() => executeLogRotation(logType), Math.random() * 1000); // Stagger the requests
-        });
+        refreshLog('latest');
+        refreshDebugOrCrash();
     }
     
     // Event listeners
@@ -637,42 +421,31 @@
             }
         });
         
-        // Set up crash report selector
-        const crashSelector = document.getElementById('crash-selector');
-        crashSelector.addEventListener('change', function() {
-            selectedCrashReport = this.value;
-            loadCrashReport(selectedCrashReport);
-        });
+        // Set up debug/crash mode toggle
+        const debugRadio = document.getElementById('debug-mode-debug');
+        const crashRadio = document.getElementById('debug-mode-crash');
         
-        // Initial load of server logs and crash reports
-        setTimeout(() => {
-            refreshServerLogs();
-            refreshCrashList();
-        }, 100);
-        
-        console.log('Enhanced logs page initialized');
-        
-        // Set up modal event handlers
-        setupModalHandlers();
-    });
-    
-    // Setup modal event handlers
-    function setupModalHandlers() {
-        // Rotate log modal confirm button
-        document.getElementById('confirmRotateBtn').addEventListener('click', function() {
-            if (pendingRotateLogType) {
-                executeLogRotation(pendingRotateLogType);
-                pendingRotateLogType = null;
-                bootstrap.Modal.getInstance(document.getElementById('rotateLogModal')).hide();
+        debugRadio.addEventListener('change', function() {
+            if (this.checked) {
+                debugMode = 'debug';
+                refreshLog('debug');
             }
         });
         
-        // Rotate server logs modal confirm button
-        document.getElementById('confirmRotateServerLogsBtn').addEventListener('click', function() {
-            executeRotateServerLogs();
-            bootstrap.Modal.getInstance(document.getElementById('rotateServerLogsModal')).hide();
+        crashRadio.addEventListener('change', function() {
+            if (this.checked) {
+                debugMode = 'crash';
+                loadLatestCrashReport();
+            }
         });
-    }
+        
+        // Initial load of server logs
+        setTimeout(() => {
+            refreshServerLogs();
+        }, 100);
+        
+        console.log('Enhanced logs page initialized');
+    });
     
     // Cleanup SSE connections when page is unloaded
     window.addEventListener('beforeunload', function() {
