@@ -114,7 +114,7 @@ class SystemControlService:
                     server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
                     
                     server = JavaServer(server_host, server_port)
-                    query_status = server.status(timeout=3)
+                    query_status = server.status(timeout=5)  # Increased timeout
                     
                     if query_status:
                         server_ready = True
@@ -125,10 +125,22 @@ class SystemControlService:
                         self.logger.debug("Server is ready and accepting connections")
                         
                 except Exception as e:
-                    self.logger.debug(f"Server not ready for connections: {e}")
-                    # Server process exists but can't connect - it's starting up
-                    status_info['server_ready'] = False
-                    status_info['status'] = 'starting'
+                    self.logger.info(f"Server connection check failed: {type(e).__name__}: {e}")
+                    
+                    # Check process uptime to distinguish between starting vs connection issues
+                    proc_info = minecraft_proc.as_dict(attrs=['create_time'])
+                    create_time = datetime.fromtimestamp(proc_info['create_time'])
+                    uptime_seconds = (datetime.now() - create_time).total_seconds()
+                    
+                    # If server has been running for more than 5 minutes, it's likely a connection issue, not startup
+                    if uptime_seconds > 300:  # 5 minutes
+                        self.logger.warning(f"Server process running for {uptime_seconds:.1f}s but mcstatus failed - assuming running with connection issues")
+                        status_info['server_ready'] = False
+                        status_info['status'] = 'running'  # Assume running but with connection problems
+                    else:
+                        # Server process exists but can't connect and hasn't been running long - it's starting up
+                        status_info['server_ready'] = False
+                        status_info['status'] = 'starting'
                     
                     # Try to get max_players from server.properties as fallback
                     try:
