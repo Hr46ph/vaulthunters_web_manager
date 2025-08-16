@@ -707,7 +707,6 @@ def save_config():
         
         if result['success']:
             current_app.logger.info(f'Config save successful for: {config_file}')
-            flash(f'Configuration {config_file} saved successfully', 'success')
             return jsonify({
                 'success': True, 
                 'message': result['message'],
@@ -758,7 +757,6 @@ def save_jvm_config():
         
         if result['success']:
             current_app.logger.info(f'JVM config save successful for: {file_type}')
-            flash(f'JVM configuration {file_type}.txt saved successfully', 'success')
             return jsonify({
                 'success': True,
                 'message': result['message'],
@@ -781,7 +779,6 @@ def apply_aikars_flags():
         
         if result['success']:
             current_app.logger.info('Aikar\'s flags applied successfully')
-            flash('Aikar\'s flags applied successfully', 'success')
             return jsonify({
                 'success': True,
                 'message': result['message'],
