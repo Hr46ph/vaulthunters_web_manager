@@ -21,6 +21,9 @@
                         <button class="btn btn-outline-info" id="btn-config-files" onclick="showCategory('config-files')">
                             Config Directory
                         </button>
+                        <button class="btn btn-outline-success" id="btn-jvm-config" onclick="showCategory('jvm-config')">
+                            JVM Configuration
+                        </button>
                     </div>
                 </div>
             </div>
@@ -135,6 +138,63 @@
                     </div>
                 </div>
             </div>
+
+            <!-- JVM Configuration Tab -->
+            <div id="jvm-config-content" class="config-category" style="display: none;">
+                <div class="row">
+                    <!-- user_jvm_args.txt -->
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6>user_jvm_args.txt</h6>
+                                <div>
+                                    <button class="btn btn-sm btn-success" onclick="applyAikarsFlags()" title="Apply Aikar's performance flags">
+                                        <i class="fas fa-magic"></i> Apply Aikar's Flags
+                                    </button>
+                                    <button class="btn btn-sm btn-secondary" onclick="reloadJvmArgs()">
+                                        <i class="fas fa-sync"></i> Reload
+                                    </button>
+                                    <button class="btn btn-sm btn-primary" onclick="saveJvmArgs()">
+                                        <i class="fas fa-save"></i> Save
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <textarea id="jvm-args-editor" class="form-control" rows="20" style="font-family: monospace;" placeholder="JVM arguments (one per line)...">Loading user_jvm_args.txt...</textarea>
+                                <small class="text-muted mt-2 d-block">
+                                    <i class="fas fa-info-circle"></i> 
+                                    JVM arguments for memory allocation and performance tuning. 
+                                    Use Aikar's flags for optimal Minecraft performance.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- unix_args.txt -->
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6>unix_args.txt</h6>
+                                <div>
+                                    <button class="btn btn-sm btn-secondary" onclick="reloadUnixArgs()">
+                                        <i class="fas fa-sync"></i> Reload
+                                    </button>
+                                    <button class="btn btn-sm btn-primary" onclick="saveUnixArgs()">
+                                        <i class="fas fa-save"></i> Save
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <textarea id="unix-args-editor" class="form-control" rows="20" style="font-family: monospace;" placeholder="Forge launcher arguments..." readonly>Loading unix_args.txt...</textarea>
+                                <small class="text-muted mt-2 d-block">
+                                    <i class="fas fa-exclamation-triangle"></i> 
+                                    Forge launcher arguments - typically read-only. 
+                                    Modify only if you understand the implications.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 {% endblock %}
@@ -198,6 +258,9 @@
             } else if (category === 'config-files') {
                 activeBtn.classList.remove('btn-outline-info');
                 activeBtn.classList.add('btn-info');
+            } else if (category === 'jvm-config') {
+                activeBtn.classList.remove('btn-outline-success');
+                activeBtn.classList.add('btn-success');
             }
             
             // Hide all categories
@@ -215,6 +278,8 @@
                 loadBanWhitelist();
             } else if (category === 'config-files') {
                 loadConfigFilesList();
+            } else if (category === 'jvm-config') {
+                loadJvmConfig();
             }
         }
         
@@ -371,6 +436,119 @@
             saveConfigContent(fileName, content, `${fileName} saved successfully!`);
         }
         
+        // JVM Configuration Functions
+        function loadJvmConfig() {
+            loadJvmArgs();
+            loadUnixArgs();
+        }
+        
+        function loadJvmArgs() {
+            const editor = document.getElementById('jvm-args-editor');
+            editor.value = 'Loading user_jvm_args.txt...';
+            
+            fetch('/config/jvm/user_jvm_args')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        editor.value = `Error: ${data.error}`;
+                    } else {
+                        editor.value = data.content;
+                    }
+                })
+                .catch(error => {
+                    editor.value = `Network error: ${error}`;
+                });
+        }
+        
+        function loadUnixArgs() {
+            const editor = document.getElementById('unix-args-editor');
+            editor.value = 'Loading unix_args.txt...';
+            
+            fetch('/config/jvm/unix_args')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        editor.value = `Error: ${data.error}`;
+                    } else {
+                        editor.value = data.content;
+                        // Remove readonly if content loaded successfully
+                        editor.removeAttribute('readonly');
+                    }
+                })
+                .catch(error => {
+                    editor.value = `Network error: ${error}`;
+                });
+        }
+        
+        function reloadJvmArgs() {
+            loadJvmArgs();
+        }
+        
+        function reloadUnixArgs() {
+            loadUnixArgs();
+        }
+        
+        function saveJvmArgs() {
+            const content = document.getElementById('jvm-args-editor').value;
+            saveJvmContent('user_jvm_args', content, 'user_jvm_args.txt saved successfully!');
+        }
+        
+        function saveUnixArgs() {
+            const content = document.getElementById('unix-args-editor').value;
+            saveJvmContent('unix_args', content, 'unix_args.txt saved successfully!');
+        }
+        
+        function applyAikarsFlags() {
+            if (!confirm('This will replace the current JVM arguments with Aikar\'s optimized flags. Continue?')) {
+                return;
+            }
+            
+            fetch('/config/jvm/apply_aikars_flags', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    csrf_token: document.querySelector('meta[name=csrf-token]').content
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', 'Aikar\'s flags applied successfully!');
+                    loadJvmArgs(); // Reload to show the new content
+                } else {
+                    showAlert('error', 'Error: ' + (data.error || 'Failed to apply Aikar\'s flags'));
+                }
+            })
+            .catch(error => {
+                showAlert('error', 'Network error: ' + error);
+            });
+        }
+        
+        function saveJvmContent(file_type, content, successMessage) {
+            const formData = new FormData();
+            formData.append('file_type', file_type);
+            formData.append('content', content);
+            formData.append('csrf_token', document.querySelector('meta[name=csrf-token]').content);
+            
+            fetch('/config/jvm/save', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', successMessage);
+                } else {
+                    showAlert('error', 'Error: ' + (data.error || 'Save failed'));
+                }
+            })
+            .catch(error => {
+                showAlert('error', 'Network error: ' + error);
+            });
+        }
+
         // Utility Functions
         function saveConfigContent(filename, content, successMessage) {
             const formData = new FormData();

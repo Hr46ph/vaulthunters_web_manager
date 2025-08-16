@@ -721,6 +721,80 @@ def save_config():
         current_app.logger.error(f'Config save error: {e}')
         return jsonify({'error': 'Failed to save configuration'}), 500
 
+@main_bp.route('/config/jvm/<file_type>')
+def get_jvm_config(file_type):
+    """Get JVM configuration file content"""
+    try:
+        if file_type not in ['user_jvm_args', 'unix_args']:
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        config_manager = ConfigManager()
+        result = config_manager.read_jvm_args_file(file_type)
+        
+        if result['success']:
+            return jsonify({'content': result['content']})
+        else:
+            return jsonify({'error': result['error']}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f'JVM config read error: {e}')
+        return jsonify({'error': 'Failed to read JVM configuration'}), 500
+
+@main_bp.route('/config/jvm/save', methods=['POST'])
+def save_jvm_config():
+    """Save JVM configuration file"""
+    try:
+        file_type = request.form.get('file_type')
+        content = request.form.get('content')
+        
+        if not file_type or content is None:
+            return jsonify({'error': 'Missing file_type or content'}), 400
+        
+        if file_type not in ['user_jvm_args', 'unix_args']:
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        config_manager = ConfigManager()
+        result = config_manager.write_jvm_args_file(file_type, content)
+        
+        if result['success']:
+            current_app.logger.info(f'JVM config save successful for: {file_type}')
+            flash(f'JVM configuration {file_type}.txt saved successfully', 'success')
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'backup_created': result.get('backup_created', False)
+            })
+        else:
+            current_app.logger.error(f'JVM config save failed for {file_type}: {result["error"]}')
+            return jsonify({'error': result['error']}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f'JVM config save error: {e}')
+        return jsonify({'error': 'Failed to save JVM configuration'}), 500
+
+@main_bp.route('/config/jvm/apply_aikars_flags', methods=['POST'])
+def apply_aikars_flags():
+    """Apply Aikar's flags to user_jvm_args.txt"""
+    try:
+        config_manager = ConfigManager()
+        result = config_manager.apply_aikars_flags()
+        
+        if result['success']:
+            current_app.logger.info('Aikar\'s flags applied successfully')
+            flash('Aikar\'s flags applied successfully', 'success')
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'backup_created': result.get('backup_created', False)
+            })
+        else:
+            current_app.logger.error(f'Failed to apply Aikar\'s flags: {result["error"]}')
+            return jsonify({'error': result['error']}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f'Apply Aikar\'s flags error: {e}')
+        return jsonify({'error': 'Failed to apply Aikar\'s flags'}), 500
+
 @main_bp.route('/backups')
 def backups():
     """Backup manager page"""

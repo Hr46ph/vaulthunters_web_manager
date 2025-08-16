@@ -27,9 +27,8 @@ A Flask-based web interface for managing VaultHunters Minecraft servers. Provide
 
 ### Prerequisites
 
-A regular user account that will own and run both the Minecraft server and web manager. Common usernames are `minecraft` or your personal username.
-
-A second user account with sudo privileges to create systemd unit file for the web manager application and to place the restricted sudo permissions file for the other account.
+- A regular user account that will own and run both the Minecraft server and web manager. Common usernames are `minecraft` or your personal username.
+- A second user account with sudo privileges to create systemd unit file for the web manager application and to place the restricted sudo permissions file for the other account.
 
 Technically, you can do everything with a default user account that has unlimited sudo with 'nopasswd', or even as root itself. You shouldn't. For any Java application, especially Minecraft servers exposed to the internet this is a HUGE security risk. There have been major security vulnerabilities in Java and in Minecraft servers in general, which have been actively used in the past. You take a massive risk by running all this as root, or with an unrestricted user account.
 
@@ -39,7 +38,7 @@ Technically, you can do everything with a default user account that has unlimite
 ```bash
 # Replace 'minecraft' with the username running the server
 cd /home/minecraft/
-git clone <repository-url> vaulthunters_web_manager
+git clone https://github.com/Hr46ph/vaulthunters_web_manager.git
 cd vaulthunters_web_manager
 ```
 If the git command is not available, use your distributions' package manager to install it.
