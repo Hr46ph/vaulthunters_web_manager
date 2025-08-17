@@ -1,5 +1,98 @@
 // VaultHunters Web Manager JavaScript
 
+// Performance monitoring data
+const performanceData = {
+    lagSpikes: [], // Array of timestamps
+    maxHistoryMinutes: 10 // Keep 10 minutes of history
+};
+
+// Performance monitoring functions
+function addLagSpike(msDelay, ticksDelay) {
+    const now = Date.now();
+    performanceData.lagSpikes.push({
+        timestamp: now,
+        msDelay: msDelay,
+        ticksDelay: ticksDelay
+    });
+    
+    // Clean old data (older than maxHistoryMinutes)
+    const cutoff = now - (performanceData.maxHistoryMinutes * 60 * 1000);
+    performanceData.lagSpikes = performanceData.lagSpikes.filter(spike => spike.timestamp > cutoff);
+    
+    updatePerformanceIndicators();
+}
+
+function getRecentLagSpikes(seconds = 5) {
+    const now = Date.now();
+    const cutoff = now - (seconds * 1000);
+    return performanceData.lagSpikes.filter(spike => spike.timestamp > cutoff);
+}
+
+function getAverageSpikesPerMinute() {
+    if (performanceData.lagSpikes.length === 0) return 0;
+    
+    const now = Date.now();
+    const oneMinuteAgo = now - (60 * 1000);
+    const recentSpikes = performanceData.lagSpikes.filter(spike => spike.timestamp > oneMinuteAgo);
+    
+    return recentSpikes.length;
+}
+
+function updatePerformanceIndicators() {
+    // Recent lag spikes (5 second window)
+    const recentSpikes = getRecentLagSpikes(5);
+    const spikeCount = recentSpikes.length;
+    
+    let spikeStatus = 'success'; // green
+    if (spikeCount === 3) spikeStatus = 'warning'; // yellow
+    else if (spikeCount >= 4) spikeStatus = 'danger'; // red
+    
+    // Frequency (per minute)
+    const frequency = getAverageSpikesPerMinute();
+    
+    // Severity based on frequency
+    let severityStatus = 'success'; // green
+    if (frequency >= 37 && frequency <= 48) severityStatus = 'warning'; // yellow
+    else if (frequency >= 49) severityStatus = 'danger'; // red
+    
+    // Update UI elements
+    const spikeElement = document.getElementById('lag-spikes-indicator');
+    const frequencyElement = document.getElementById('frequency-indicator');
+    const severityElement = document.getElementById('severity-indicator');
+    
+    if (spikeElement) {
+        spikeElement.className = `badge bg-${spikeStatus}`;
+        spikeElement.textContent = spikeCount;
+        spikeElement.title = `${spikeCount} lag spikes in last 5 seconds`;
+    }
+    
+    if (frequencyElement) {
+        frequencyElement.textContent = `${frequency}/min`;
+        frequencyElement.title = `${frequency} lag spikes per minute (average)`;
+    }
+    
+    if (severityElement) {
+        severityElement.className = `badge bg-${severityStatus} rounded-circle`;
+        severityElement.innerHTML = '●';
+        severityElement.title = `Severity: ${frequency} spikes/min`;
+    }
+}
+
+// Parse lag spike from log line
+function parseLagSpike(logLine) {
+    // Pattern: "Can't keep up! Is the server overloaded? Running 2325ms or 46 ticks behind"
+    const lagPattern = /Can't keep up.*?Running (\d+)ms or (\d+) ticks behind/i;
+    const match = logLine.match(lagPattern);
+    
+    if (match) {
+        const msDelay = parseInt(match[1]);
+        const ticksDelay = parseInt(match[2]);
+        addLagSpike(msDelay, ticksDelay);
+        return true;
+    }
+    return false;
+}
+
 // Get CSRF token
 function getCSRFToken() {
     return document.querySelector('meta[name=csrf-token]').getAttribute('content');
@@ -387,6 +480,10 @@ window.appendToConsole = function(text) {
     
     output.innerHTML += text + '\n';
     
+    // Check for lag spikes in the console text
+    const textContent = text.replace(/<[^>]*>/g, ''); // Strip HTML tags
+    parseLagSpike(textContent);
+    
     if (autoScroll) {
         output.scrollTop = output.scrollHeight;
     }
@@ -548,6 +645,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up periodic status updates (every 10 seconds)
     setInterval(updateServerStatus, 10000);
+    
+    // Set up periodic performance indicator updates (every 2 seconds)
+    setInterval(updatePerformanceIndicators, 2000);
     
     // Setup console if present on page
     setupConsole();

@@ -25,6 +25,25 @@
                                     <p>CPU: <span class="text-muted">Loading...</span></p>
                                 </div>
                             </div>
+                            
+                            <!-- Performance Indicators -->
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <h6 class="mb-2">Performance</h6>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Recent Lag Spikes (5s):</small><br>
+                                    <span id="lag-spikes-indicator" class="badge bg-success" title="0 lag spikes in last 5 seconds">0</span>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Frequency:</small><br>
+                                    <span id="frequency-indicator" title="0 lag spikes per minute (average)">0/min</span>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Severity:</small><br>
+                                    <span id="severity-indicator" class="badge bg-success rounded-circle" title="Severity: 0 spikes/min">●</span>
+                                </div>
+                            </div>
                         </div>
                         
                         <hr>

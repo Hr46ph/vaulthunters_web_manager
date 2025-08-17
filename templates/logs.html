@@ -289,6 +289,13 @@
     // Update log content and store original for searching
     function updateLogContent(logType, content) {
         originalLogContent[logType] = content;
+        
+        // Check for lag spikes in the content (for initial loads)
+        if (typeof parseLagSpike === 'function') {
+            const lines = content.split('\n');
+            lines.forEach(line => parseLagSpike(line));
+        }
+        
         const logElement = document.getElementById(`${logType}-log`);
         if (logElement) {
             logElement.textContent = content;
@@ -299,6 +306,12 @@
     // Append to log content and store original for searching
     function appendLogContent(logType, newContent) {
         originalLogContent[logType] += '\n' + newContent;
+        
+        // Check for lag spikes in new log content
+        if (typeof parseLagSpike === 'function') {
+            parseLagSpike(newContent);
+        }
+        
         searchLogs(logType); // Reapply search to include new content
     }
     
