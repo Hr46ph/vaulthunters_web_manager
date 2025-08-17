@@ -114,8 +114,7 @@
     </div>
 </div>
 
-<!-- Charts Row 2 - CPU Chart (temporarily hidden) -->
-<!--
+<!-- Charts Row 2 - CPU Chart -->
 <div class="row mb-4">
     <div class="col-md-8">
         <div class="card">
@@ -151,7 +150,6 @@
         </div>
     </div>
 </div>
--->
 
 <!-- Server Health Status -->
 <div class="row mb-4">
@@ -375,8 +373,7 @@ function initializeCharts() {
         }
     });
 
-    // CPU Per-Core Chart (temporarily disabled)
-    /*
+    // CPU Per-Core Chart
     const cpuCtx = document.getElementById('cpu-chart').getContext('2d');
     cpuChart = new Chart(cpuCtx, {
         type: 'line',
@@ -425,7 +422,6 @@ function initializeCharts() {
             }
         }
     });
-    */
 }
 
 // Update monitoring data
@@ -448,6 +444,13 @@ function updateMonitoringData() {
         
         updateMetricCards(metrics, status);
         updateCharts(metrics);
+        
+        // Update CPU chart and summary if we have CPU data
+        if (metrics.cpu_per_core && metrics.cpu_per_core.length > 0) {
+            updateCpuChart(metrics);
+        }
+        updateCpuSummary(metrics);
+        
         updateHealthStatus(status, metrics);
         updatePerformanceEvents(metrics.events || []);
     })

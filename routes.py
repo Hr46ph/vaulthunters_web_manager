@@ -357,11 +357,21 @@ def monitoring_metrics():
     # Simple test to verify the route works
     current_app.logger.info('=== MONITORING METRICS API CALLED ===')
     
-    # Return test data with basic CPU info
+    # Get real memory data but keep other data as mock for now
+    memory_mb = 1024  # Default
+    try:
+        system_control = SystemControlService()
+        status = system_control.get_server_status()
+        memory_mb = status.get('memory_usage', 1024)
+        current_app.logger.info(f'Real memory usage: {memory_mb}MB')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get real memory: {e}')
+    
+    # Return test data with real memory and mock CPU info
     test_metrics = {
         'current_tps': 20.0,
         'lag_spikes_5min': 0,
-        'memory_mb': 1024,
+        'memory_mb': memory_mb,  # Real memory data
         'recent_lag_spikes': [],
         'events': [
             {
