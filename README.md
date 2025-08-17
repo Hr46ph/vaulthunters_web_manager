@@ -20,10 +20,10 @@ A Flask-based web interface for managing VaultHunters Minecraft servers. Provide
 
 ## Requirements
 
-- Python 3.7+
-- VaultHunters Minecraft server installation
-- Linux/Unix system with Java 8+
-- Dependencies automatically installed via `requirements.txt`
+- Recent Linux system with kenel 6.x
+- java 17 (jdk17-openjdk 17.x)
+- Python 3.12+
+- VaultHunters Minecraft server 3.19.5 (Game Version 1.18.2)
 
 ## Screenshots
 Dashboard with clean overview:
