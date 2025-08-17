@@ -37,7 +37,17 @@ A Flask-based web interface for managing VaultHunters Minecraft servers. Provide
 
 **Automated Installation Script:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/install.sh | sudo bash
+# Download the script first
+curl -fsSL https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/install.sh -o install.sh
+```
+```bash
+# Then run it like this
+sudo bash ./install.sh
+```
+
+Once installed, you can delete the script.
+```bash
+rm install.sh
 ```
 
 This script will:
@@ -51,14 +61,17 @@ This script will:
 
 **Quick Uninstall:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/uninstall.sh | sudo bash
+# Download the script first
+curl -fsSL https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/uninstall.sh -o uninstall.sh
+```
+```bash
+# Then run it like this
+sudo bash ./uninstall.sh
 ```
 
-The uninstall script provides safe removal options with backup creation and multiple confirmation prompts for destructive actions.
-
-**Security Note**: Always review scripts before running with `curl | bash`:
+Once uninstalled, you can delete the script.
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/install.sh | less
+rm uninstall.sh
 ```
 
 ### Manual Installation (Advanced Users)
