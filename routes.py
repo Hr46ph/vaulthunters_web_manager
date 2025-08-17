@@ -354,28 +354,72 @@ def monitoring():
 @main_bp.route('/api/monitoring/metrics')
 def monitoring_metrics():
     """API endpoint for monitoring metrics"""
-    # Simple test to verify the route works
-    current_app.logger.info('=== MONITORING METRICS API CALLED ===')
+    current_app.logger.info('Monitoring metrics endpoint called')
     
-    # Return minimal test data to verify JSON response
-    test_metrics = {
-        'current_tps': 20.0,
+    # Initialize with working defaults
+    metrics = {
+        'current_tps': None,
         'lag_spikes_5min': 0,
-        'memory_mb': 1024,
+        'memory_mb': 0,
         'recent_lag_spikes': [],
-        'events': [
-            {
-                'type': 'Test Event',
-                'message': 'API endpoint is working',
-                'timestamp': datetime.now().isoformat(),
-                'severity': 'info'
-            }
-        ],
-        'rcon_status': 'connected'
+        'events': [],
+        'rcon_status': 'unknown',
+        'cpu_per_core': [],
+        'cpu_system_avg': 0,
+        'cpu_count': 0
     }
     
-    current_app.logger.info(f'Returning test metrics: {test_metrics}')
-    return jsonify(test_metrics)
+    # Get TPS data via RCON (with error handling)
+    try:
+        tps_data = get_tps_data()
+        metrics['current_tps'] = tps_data.get('tps', None)
+        if metrics['current_tps'] is not None:
+            metrics['rcon_status'] = 'connected'
+        elif 'error' in tps_data:
+            metrics['rcon_status'] = 'disconnected'
+        current_app.logger.info(f'TPS data: {tps_data}')
+    except Exception as e:
+        current_app.logger.warning(f'TPS data failed: {e}')
+        metrics['rcon_status'] = 'error'
+    
+    # Get server status for memory info
+    try:
+        system_control = SystemControlService()
+        status = system_control.get_server_status()
+        metrics['memory_mb'] = status.get('memory_usage', 0)
+        current_app.logger.info(f'Server status: memory={status.get("memory_usage", 0)}MB')
+    except Exception as e:
+        current_app.logger.warning(f'Server status failed: {e}')
+    
+    # Get CPU data (carefully)
+    try:
+        import psutil
+        per_core_cpu = psutil.cpu_percent(percpu=True, interval=0.1)  # Short interval for responsiveness
+        system_cpu_avg = psutil.cpu_percent(interval=0.1)
+        cpu_count = psutil.cpu_count()
+        
+        # Validate data before adding to metrics
+        if isinstance(per_core_cpu, list) and len(per_core_cpu) > 0:
+            metrics['cpu_per_core'] = per_core_cpu
+        if isinstance(system_cpu_avg, (int, float)):
+            metrics['cpu_system_avg'] = system_cpu_avg
+        if isinstance(cpu_count, int) and cpu_count > 0:
+            metrics['cpu_count'] = cpu_count
+            
+        current_app.logger.info(f'CPU: {cpu_count} cores, per-core: {per_core_cpu}, avg: {system_cpu_avg}%')
+    except Exception as e:
+        current_app.logger.warning(f'CPU monitoring failed: {e}')
+        # Keep defaults (empty lists, 0 values)
+    
+    # Get performance events
+    try:
+        events = get_recent_performance_events()
+        metrics['events'] = events
+    except Exception as e:
+        current_app.logger.warning(f'Performance events failed: {e}')
+    
+    current_app.logger.info(f'Returning metrics with CPU data: cores={metrics["cpu_count"]}, avg={metrics["cpu_system_avg"]}')
+    return jsonify(metrics)
 
 @main_bp.route('/server/control', methods=['POST'])
 def server_control():
