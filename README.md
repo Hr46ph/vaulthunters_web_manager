@@ -24,14 +24,29 @@ A Flask-based web interface for managing VaultHunters Minecraft servers. Provide
 - Dependencies automatically installed via `requirements.txt`
 
 ## Screenshots
+Dashboard with clean overview:
+<img width="1271" height="1200" alt="image" src="https://github.com/user-attachments/assets/75ae2299-9b15-477c-aa42-97e91adc4eb3" />
 
-<img width="1429" height="1032" alt="image" src="https://github.com/user-attachments/assets/a9006b12-8a2c-4ddf-ad90-c7073708be2d" />
+Dedicated Monitoring & performance statistics with lag spike graphs:
+<img width="1271" height="1705" alt="image" src="https://github.com/user-attachments/assets/64afd64c-8f3f-4f44-b203-14b84ad80fd5" />
 
-<img width="1429" height="1214" alt="image" src="https://github.com/user-attachments/assets/7e9da505-662a-4f45-803f-fb7e9bf1fbba" />
+Dedicated Logging page with keyword highlighting and filtering:
+<img width="1271" height="1086" alt="image" src="https://github.com/user-attachments/assets/bc208cf4-420a-480b-b1df-1a6ade04c63f" />
 
-<img width="1429" height="841" alt="image" src="https://github.com/user-attachments/assets/e226a838-6b5a-49da-817a-864eea18f7fd" />
+Config viewing and editing:
+<img width="1271" height="753" alt="image" src="https://github.com/user-attachments/assets/42c5944a-a434-4719-8330-55c2272657d7" />
 
-<img width="1429" height="876" alt="image" src="https://github.com/user-attachments/assets/92712c7c-c4a0-440e-ac64-795a291bd9c1" />
+Bans and whitelist editing:
+<img width="1271" height="581" alt="image" src="https://github.com/user-attachments/assets/8bd90232-cd32-404a-a731-f287b59ba82b" />
+
+Mod Config viewing and editing:
+<img width="1271" height="744" alt="image" src="https://github.com/user-attachments/assets/390ff493-830c-4dd0-86a0-7cb68bd18500" />
+
+Reviewing and editing of user_jvm_args.txt with single-button optimization with Aikar's Flags:
+<img width="1271" height="779" alt="image" src="https://github.com/user-attachments/assets/dfa1e62a-7fa3-44ad-85e3-38796ea8d3f3" />
+
+Reviewing and editing of unix_args.txt:
+<img width="1271" height="779" alt="image" src="https://github.com/user-attachments/assets/d20541fc-c74f-4190-8bff-9a61beebc940" />
 
 ## Installation
 
