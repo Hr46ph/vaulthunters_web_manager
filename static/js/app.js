@@ -371,15 +371,21 @@ function updateStatusDisplay(status) {
             html += `<p>Players: ${status.players}/${status.max_players}</p>`;
         }
         
+        // Always show CPU field
         if (status.cpu_usage > 0) {
             html += `<p>Java CPU: ${status.cpu_usage.toFixed(1)}%</p>`;
+        } else {
+            html += `<p>Java CPU: <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span></p>`;
         }
         
+        // Always show Memory field
         if (status.memory_usage > 0) {
             const memoryDisplay = status.memory_usage >= 1024 
                 ? `${(status.memory_usage / 1024).toFixed(1)} GB`
                 : `${status.memory_usage} MB`;
             html += `<p>Java Memory: ${memoryDisplay}</p>`;
+        } else {
+            html += `<p>Java Memory: <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span></p>`;
         }
         
         rightCol.innerHTML = html;
