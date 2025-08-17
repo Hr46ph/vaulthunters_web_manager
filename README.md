@@ -1,5 +1,7 @@
 # VaultHunters Web Manager
 
+**Important Note**: Linux only. No Windows support.
+
 A Flask-based web interface for managing VaultHunters Minecraft servers. Provides server control, log monitoring, configuration management, and backup downloads through a responsive Bootstrap interface.
 
 ## Features
