@@ -391,11 +391,13 @@ def monitoring_metrics():
     except Exception as e:
         current_app.logger.warning(f'Server status failed: {e}')
     
-    # Get CPU data (carefully)
+    # Get CPU data (non-blocking)
     try:
         import psutil
-        per_core_cpu = psutil.cpu_percent(percpu=True, interval=0.1)  # Short interval for responsiveness
-        system_cpu_avg = psutil.cpu_percent(interval=0.1)
+        
+        # Use non-blocking CPU percentage calls (returns 0.0 on first call, useful data on subsequent calls)
+        per_core_cpu = psutil.cpu_percent(percpu=True, interval=None)  # Non-blocking
+        system_cpu_avg = psutil.cpu_percent(interval=None)  # Non-blocking
         cpu_count = psutil.cpu_count()
         
         # Validate data before adding to metrics
