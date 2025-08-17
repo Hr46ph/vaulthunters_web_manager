@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %}Monitoring - VaultHunters Web Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+.metric-card {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    height: 100%;
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--bs-primary);
+}
+
+.metric-label {
+    font-size: 0.875rem;
+    color: var(--bs-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.status-good { background-color: #198754; }
+.status-warning { background-color: #ffc107; }
+.status-danger { background-color: #dc3545; }
+.status-unknown { background-color: #6c757d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-chart-line"></i> Server Monitoring</h2>
+        <p class="text-muted">Real-time performance monitoring and analytics</p>
+    </div>
+</div>
+
+<!-- Performance Overview Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="metric-card text-center">
+            <div class="metric-label">Server TPS</div>
+            <div class="metric-value" id="current-tps">--</div>
+            <small class="text-muted">Target: 20.0</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card text-center">
+            <div class="metric-label">Lag Spikes (5min)</div>
+            <div class="metric-value" id="lag-spikes-5min">--</div>
+            <small class="text-muted">Last 5 minutes</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card text-center">
+            <div class="metric-label">Memory Usage</div>
+            <div class="metric-value" id="memory-usage">--</div>
+            <small class="text-muted">of allocated</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card text-center">
+            <div class="metric-label">CPU Usage</div>
+            <div class="metric-value" id="cpu-usage">--</div>
+            <small class="text-muted">system average</small>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-tachometer-alt"></i> TPS History</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="tps-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-memory"></i> Memory Usage</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="memory-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Server Health Status -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-heartbeat"></i> Server Health Status</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="status-indicator status-unknown" id="server-status-indicator"></span>
+                            <span>Server Process</span>
+                            <span class="badge bg-secondary ms-auto" id="server-status-badge">Unknown</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="status-indicator status-unknown" id="rcon-status-indicator"></span>
+                            <span>RCON Connection</span>
+                            <span class="badge bg-secondary ms-auto" id="rcon-status-badge">Unknown</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="status-indicator status-unknown" id="performance-status-indicator"></span>
+                            <span>Performance</span>
+                            <span class="badge bg-secondary ms-auto" id="performance-status-badge">Unknown</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="status-indicator status-unknown" id="disk-status-indicator"></span>
+                            <span>Disk Space</span>
+                            <span class="badge bg-secondary ms-auto" id="disk-status-badge">Unknown</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lag Spike Analysis -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-exclamation-triangle"></i> Lag Spike History</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="lag-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-list"></i> Recent Performance Events</h6>
+            </div>
+            <div class="card-body">
+                <div id="performance-events" style="max-height: 300px; overflow-y: auto;">
+                    <div class="text-muted text-center">
+                        <i class="fas fa-spinner fa-spin"></i> Loading events...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Monitoring page specific JavaScript
+let tpsChart, memoryChart, lagChart;
+let monitoringData = {
+    tps: [],
+    memory: [],
+    lagSpikes: [],
+    events: []
+};
+
+// Initialize charts
+function initializeCharts() {
+    // TPS Chart
+    const tpsCtx = document.getElementById('tps-chart').getContext('2d');
+    tpsChart = new Chart(tpsCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'TPS',
+                data: [],
+                borderColor: '#198754',
+                backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 20,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+
+    // Memory Chart
+    const memoryCtx = document.getElementById('memory-chart').getContext('2d');
+    memoryChart = new Chart(memoryCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Memory (MB)',
+                data: [],
+                borderColor: '#0d6efd',
+                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+
+    // Lag Spikes Chart
+    const lagCtx = document.getElementById('lag-chart').getContext('2d');
+    lagChart = new Chart(lagCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Lag Duration (ms)',
+                data: [],
+                backgroundColor: function(context) {
+                    const value = context.parsed.y;
+                    if (value < 1000) return 'rgba(255, 193, 7, 0.8)';
+                    if (value < 3000) return 'rgba(255, 108, 47, 0.8)';
+                    return 'rgba(220, 53, 69, 0.8)';
+                },
+                borderColor: function(context) {
+                    const value = context.parsed.y;
+                    if (value < 1000) return '#ffc107';
+                    if (value < 3000) return '#ff6c2f';
+                    return '#dc3545';
+                },
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+// Update monitoring data
+function updateMonitoringData() {
+    Promise.all([
+        fetch('/api/monitoring/metrics').then(r => r.json()),
+        fetch('/server/status').then(r => r.json())
+    ])
+    .then(([metrics, status]) => {
+        updateMetricCards(metrics, status);
+        updateCharts(metrics);
+        updateHealthStatus(status, metrics);
+        updatePerformanceEvents(metrics.events || []);
+    })
+    .catch(error => {
+        console.error('Error updating monitoring data:', error);
+    });
+}
+
+// Update metric cards
+function updateMetricCards(metrics, status) {
+    document.getElementById('current-tps').textContent = metrics.current_tps || '--';
+    document.getElementById('lag-spikes-5min').textContent = metrics.lag_spikes_5min || '--';
+    document.getElementById('memory-usage').textContent = status.memory_usage ? 
+        (status.memory_usage >= 1024 ? `${(status.memory_usage / 1024).toFixed(1)}GB` : `${status.memory_usage}MB`) : '--';
+    document.getElementById('cpu-usage').textContent = status.cpu_usage ? `${status.cpu_usage.toFixed(1)}%` : '--';
+}
+
+// Update charts
+function updateCharts(metrics) {
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString();
+
+    // Update TPS chart
+    if (metrics.current_tps !== undefined) {
+        tpsChart.data.labels.push(timeLabel);
+        tpsChart.data.datasets[0].data.push(metrics.current_tps);
+        
+        // Keep last 20 data points
+        if (tpsChart.data.labels.length > 20) {
+            tpsChart.data.labels.shift();
+            tpsChart.data.datasets[0].data.shift();
+        }
+        tpsChart.update('none');
+    }
+
+    // Update memory chart
+    if (metrics.memory_mb !== undefined) {
+        memoryChart.data.labels.push(timeLabel);
+        memoryChart.data.datasets[0].data.push(metrics.memory_mb);
+        
+        if (memoryChart.data.labels.length > 20) {
+            memoryChart.data.labels.shift();
+            memoryChart.data.datasets[0].data.shift();
+        }
+        memoryChart.update('none');
+    }
+
+    // Update lag chart with recent spikes
+    if (metrics.recent_lag_spikes) {
+        lagChart.data.labels = metrics.recent_lag_spikes.map(spike => 
+            new Date(spike.timestamp).toLocaleTimeString()
+        );
+        lagChart.data.datasets[0].data = metrics.recent_lag_spikes.map(spike => spike.duration);
+        lagChart.update('none');
+    }
+}
+
+// Update health status indicators
+function updateHealthStatus(status, metrics) {
+    // Server status
+    updateStatusIndicator('server-status', status.running ? 'good' : 'danger', 
+        status.running ? 'Running' : 'Stopped');
+
+    // RCON status (placeholder)
+    updateStatusIndicator('rcon-status', 'unknown', 'Unknown');
+
+    // Performance status based on TPS
+    let perfStatus = 'unknown';
+    let perfText = 'Unknown';
+    if (metrics.current_tps !== undefined) {
+        if (metrics.current_tps >= 19) {
+            perfStatus = 'good';
+            perfText = 'Excellent';
+        } else if (metrics.current_tps >= 17) {
+            perfStatus = 'warning';
+            perfText = 'Good';
+        } else {
+            perfStatus = 'danger';
+            perfText = 'Poor';
+        }
+    }
+    updateStatusIndicator('performance-status', perfStatus, perfText);
+
+    // Disk status (placeholder)
+    updateStatusIndicator('disk-status', 'good', 'OK');
+}
+
+// Helper function to update status indicators
+function updateStatusIndicator(prefix, status, text) {
+    const indicator = document.getElementById(prefix + '-indicator');
+    const badge = document.getElementById(prefix + '-badge');
+    
+    if (indicator) {
+        indicator.className = `status-indicator status-${status}`;
+    }
+    
+    if (badge) {
+        badge.className = `badge ms-auto ${status === 'good' ? 'bg-success' : 
+            status === 'warning' ? 'bg-warning' : 
+            status === 'danger' ? 'bg-danger' : 'bg-secondary'}`;
+        badge.textContent = text;
+    }
+}
+
+// Update performance events
+function updatePerformanceEvents(events) {
+    const container = document.getElementById('performance-events');
+    
+    if (events.length === 0) {
+        container.innerHTML = '<div class="text-muted text-center">No recent events</div>';
+        return;
+    }
+
+    const eventsHtml = events.slice(0, 10).map(event => `
+        <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
+            <div>
+                <div class="fw-bold">${event.type}</div>
+                <small class="text-muted">${event.message}</small>
+            </div>
+            <small class="text-muted">${new Date(event.timestamp).toLocaleTimeString()}</small>
+        </div>
+    `).join('');
+
+    container.innerHTML = eventsHtml;
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    updateMonitoringData();
+    
+    // Update every 5 seconds
+    setInterval(updateMonitoringData, 5000);
+});
+</script>
+{% endblock %}

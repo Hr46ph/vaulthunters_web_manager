@@ -183,6 +183,66 @@ class ConfigEditForm(FlaskForm):
     content = TextAreaField('Content', validators=[DataRequired()])
     submit = SubmitField('Save Configuration')
 
+# Monitoring helper functions
+def get_tps_data():
+    """Get TPS data via RCON command"""
+    try:
+        from services.rcon_client import execute_rcon_command
+        from services.server_properties import ServerPropertiesParser
+        
+        # Get RCON configuration
+        server_props = ServerPropertiesParser()
+        if not server_props.load_properties() or not server_props.is_rcon_enabled():
+            return {'tps': None, 'error': 'RCON not available'}
+        
+        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+        rcon_port = server_props.get_rcon_port()
+        rcon_password = server_props.get_rcon_password()
+        
+        if not rcon_password:
+            return {'tps': None, 'error': 'RCON password not set'}
+        
+        # Execute forge tps command
+        success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'forge tps')
+        
+        if success and response:
+            # Parse TPS from response like "Overall: Mean tick time: 45.123 ms. Mean TPS: 20.0"
+            import re
+            tps_match = re.search(r'Mean TPS:\s*([0-9.]+)', response)
+            if tps_match:
+                tps = float(tps_match.group(1))
+                return {'tps': tps, 'response': response}
+        
+        return {'tps': None, 'error': f'Failed to parse TPS: {response}'}
+        
+    except Exception as e:
+        current_app.logger.error(f'TPS monitoring error: {e}')
+        return {'tps': None, 'error': str(e)}
+
+def get_recent_performance_events():
+    """Get recent performance events (placeholder for now)"""
+    try:
+        # For Phase 1, return mock events
+        # In Phase 2, this would read from stored events
+        mock_events = [
+            {
+                'type': 'Lag Spike',
+                'message': 'Server behind by 2.3s (46 ticks)',
+                'timestamp': datetime.now().isoformat(),
+                'severity': 'warning'
+            },
+            {
+                'type': 'TPS Drop',
+                'message': 'TPS dropped to 15.2',
+                'timestamp': (datetime.now()).isoformat(),
+                'severity': 'warning'
+            }
+        ]
+        return mock_events[:5]  # Return last 5 events
+    except Exception as e:
+        current_app.logger.error(f'Performance events error: {e}')
+        return []
+
 @main_bp.route('/')
 def index():
     """Main dashboard - lightweight initial load"""
@@ -279,6 +339,48 @@ def system_info():
     except Exception as e:
         current_app.logger.error(f'System info error: {e}')
         return jsonify({'error': 'Failed to get system info'}), 500
+
+@main_bp.route('/monitoring')
+def monitoring():
+    """Monitoring page with charts and metrics"""
+    try:
+        csrf_token = generate_csrf_token()
+        return render_template('monitoring.html', csrf_token=csrf_token)
+    except Exception as e:
+        current_app.logger.error(f'Monitoring page error: {e}')
+        flash('Error loading monitoring page', 'error')
+        return redirect(url_for('main.index'))
+
+@main_bp.route('/api/monitoring/metrics')
+def monitoring_metrics():
+    """API endpoint for monitoring metrics"""
+    try:
+        # Get TPS data via RCON
+        tps_data = get_tps_data()
+        
+        # Get server status for memory info
+        system_control = SystemControlService()
+        status = system_control.get_server_status()
+        
+        # Get recent lag spikes from performance data (from JavaScript global)
+        # For now, return mock data - will be enhanced with real data storage
+        recent_lag_spikes = []
+        
+        # Get performance events
+        events = get_recent_performance_events()
+        
+        metrics = {
+            'current_tps': tps_data.get('tps', None),
+            'lag_spikes_5min': len([s for s in recent_lag_spikes if (time.time() - s.get('timestamp', 0)/1000) < 300]),
+            'memory_mb': status.get('memory_usage', 0),
+            'recent_lag_spikes': recent_lag_spikes[-10:],  # Last 10 spikes
+            'events': events
+        }
+        
+        return jsonify(metrics)
+    except Exception as e:
+        current_app.logger.error(f'Monitoring metrics error: {e}')
+        return jsonify({'error': 'Failed to get monitoring metrics'}), 500
 
 @main_bp.route('/server/control', methods=['POST'])
 def server_control():
