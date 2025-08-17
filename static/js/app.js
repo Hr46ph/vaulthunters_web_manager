@@ -285,7 +285,7 @@ function showStatusError(message) {
     const statusElement = document.getElementById('server-status');
     if (!statusElement) return;
     
-    const leftCol = statusElement.querySelector('.col-md-6:first-child');
+    const leftCol = statusElement.querySelector('.col-md-4:first-child');
     if (leftCol) {
         leftCol.innerHTML = `
             <h6>Status: 
@@ -334,55 +334,105 @@ function updateStatusDisplay(status) {
         badge.innerHTML = statusIcon + statusText;
     }
     
-    // Update the entire status section with new data
-    const leftCol = statusElement.querySelector('.col-md-6:first-child');
-    const rightCol = statusElement.querySelector('.col-md-6:last-child');
+    // Update the entire status section with new data - now using 3 columns
+    const cols = statusElement.querySelectorAll('.col-md-4');
+    const leftCol = cols[0];   // Status, Uptime, PID
+    const middleCol = cols[1]; // Players, Java CPU, Java Memory  
+    const rightCol = cols[2];  // Performance stats (handled separately)
     
     if (leftCol) {
         let html = `
-            <h6>Status: 
+            <div class="d-flex justify-content-between align-items-center">
+                <span>Status:</span>
                 <span class="badge bg-${badgeColor}">
                     ${statusIcon}${statusText}
                 </span>
-            </h6>
-            <p>Uptime: ${status.uptime}</p>
+            </div>
+            <div class="d-flex justify-content-between mt-2">
+                <span>Uptime:</span>
+                <span class="ms-3">${status.uptime}</span>
+            </div>
         `;
         
         if (status.running && status.pid) {
-            html += `<p>PID: ${status.pid}</p>`;
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>PID:</span>
+                <span class="ms-3">${status.pid}</span>
+            </div>`;
+        } else {
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>PID:</span>
+                <span class="text-muted ms-3">N/A</span>
+            </div>`;
         }
         
         // Show additional info for starting status
         if (status.status === 'starting') {
-            html += `<p class="text-warning"><i class="fas fa-info-circle"></i> Server is loading, please wait...</p>`;
+            html += `<p class="text-warning mt-2"><i class="fas fa-info-circle"></i> Server is loading, please wait...</p>`;
         }
         
         leftCol.innerHTML = html;
     }
     
-    if (rightCol) {
+    if (middleCol) {
         let html = '';
         
         if (status.status === 'running' && status.server_ready) {
-            html += `<p>Players: ${status.players}/${status.max_players}</p>`;
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>Players:</span>
+                <span class="ms-3">${status.players}/${status.max_players}</span>
+            </div>`;
         } else if (status.status === 'starting') {
-            html += `<p class="text-muted">Players: Waiting for server...</p>`;
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>Players:</span>
+                <span class="text-muted ms-3">Waiting for server...</span>
+            </div>`;
         } else {
-            html += `<p>Players: ${status.players}/${status.max_players}</p>`;
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>Players:</span>
+                <span class="ms-3">${status.players}/${status.max_players}</span>
+            </div>`;
         }
         
+        // Always show CPU field
         if (status.cpu_usage > 0) {
-            html += `<p>CPU: ${status.cpu_usage.toFixed(1)}%</p>`;
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>Java CPU:</span>
+                <span class="ms-3">${status.cpu_usage.toFixed(1)}%</span>
+            </div>`;
+        } else {
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>Java CPU:</span>
+                <span class="text-muted loading-indicator ms-3"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+            </div>`;
         }
         
+        // Always show Memory field
         if (status.memory_usage > 0) {
             const memoryDisplay = status.memory_usage >= 1024 
                 ? `${(status.memory_usage / 1024).toFixed(1)} GB`
                 : `${status.memory_usage} MB`;
-            html += `<p>Memory: ${memoryDisplay}</p>`;
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>Java Memory:</span>
+                <span class="ms-3">${memoryDisplay}</span>
+            </div>`;
+        } else {
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>Java Memory:</span>
+                <span class="text-muted loading-indicator ms-3"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+            </div>`;
         }
         
-        rightCol.innerHTML = html;
+        middleCol.innerHTML = html;
     }
     
     // Update button states - disable controls during startup

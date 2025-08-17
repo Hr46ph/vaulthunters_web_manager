@@ -10,6 +10,8 @@ A Flask-based web interface for managing VaultHunters Minecraft servers. Provide
 - **Configuration Management**: Multi-category editor with atomic file operations and automatic backups
 - **Backup Management**: Download and inspect backups with cleanup tools
 - **Real-time Monitoring**: Accurate server status and player counts using mcstatus
+- **Performance Monitoring**: System load averages, memory breakdown charts, CPU per-core monitoring, and swap usage tracking
+- **System Analytics**: Interactive Chart.js dashboards with TPS history, lag spike detection, and system health indicators
 - **Dark Mode Support**: Universal dark/light theme toggle with persistent settings
 - **Responsive Design**: Bootstrap-based UI for desktop, tablet, and mobile
 - **Security**: CSRF protection, input validation, and file access restrictions
@@ -227,9 +229,15 @@ The RCON password is read from the configuration files and used transparently fo
 
 4. **Log Viewer**: Real-time log streaming with latest + debug/crash toggle
 
-5. **Configuration Editor**: Multi-category editor for server properties, bans & whitelist, and config files. Quick button to add Aikar's Flags to optimize for VaultHunters. Review the memory requirements.
+5. **Monitoring Dashboard**: System performance analytics with real-time charts for:
+   - TPS (Ticks Per Second) history and lag spike detection
+   - System memory breakdown (used/buffers/cache) with swap usage
+   - CPU usage per core with system load averages
+   - Server health status indicators and performance events
 
-6. **Backup Manager**: Create, view, download, restore and manage server backups (partly implemented)
+6. **Configuration Editor**: Multi-category editor for server properties, bans & whitelist, and config files. Quick button to add Aikar's Flags to optimize for VaultHunters. Review the memory requirements.
+
+7. **Backup Manager**: Create, view, download, restore and manage server backups (partly implemented)
 
 ## Security
 

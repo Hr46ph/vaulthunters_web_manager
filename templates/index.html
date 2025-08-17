@@ -10,19 +10,50 @@
                     </div>
                     <div class="card-body">
                         <div id="server-status">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6>Status: 
+                            <div class="row g-4">
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>Status:</span>
                                         <span class="badge bg-secondary">
                                             <i class="fas fa-spinner fa-spin"></i> Loading...
                                         </span>
-                                    </h6>
-                                    <p>Uptime: <span class="text-muted">Loading...</span></p>
-                                    <p>Memory: <span class="text-muted">Loading...</span></p>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>Uptime:</span>
+                                        <span class="text-muted ms-3">Loading...</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>PID:</span>
+                                        <span class="text-muted ms-3">Loading...</span>
+                                    </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <p>Players: <span class="text-muted">Loading...</span></p>
-                                    <p>CPU: <span class="text-muted">Loading...</span></p>
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>Players:</span>
+                                        <span class="text-muted ms-3">Loading...</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>Java CPU:</span>
+                                        <span class="text-muted ms-3">Loading...</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>Java Memory:</span>
+                                        <span class="text-muted ms-3">Loading...</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>Lag Spikes (5s):</span>
+                                        <span id="lag-spikes-indicator" class="badge bg-success ms-3">0</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>Frequency:</span>
+                                        <span id="frequency-indicator" class="text-muted ms-3">0/min</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>Severity:</span>
+                                        <span id="severity-indicator" class="badge bg-success ms-3">●</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -56,49 +87,6 @@
                                 <strong>RCON</strong> = Graceful via game commands | 
                                 <strong>Force Kill</strong> = Emergency process termination
                             </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Performance Monitoring -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h6><i class="fas fa-tachometer-alt"></i> Performance Monitoring</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-muted d-block">Recent Lag Spikes (5s)</small>
-                                    <span id="lag-spikes-indicator" class="badge bg-success fs-6 px-3 py-2" title="0 lag spikes in last 5 seconds">0</span>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-muted d-block">Frequency</small>
-                                    <span id="frequency-indicator" class="fs-5 fw-bold" title="0 lag spikes per minute (average)">0/min</span>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-muted d-block">Severity</small>
-                                    <span id="severity-indicator" class="badge bg-success rounded-circle fs-4 p-2" title="Severity: 0 spikes/min">●</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row mt-3">
-                            <div class="col-12">
-                                <small class="text-muted">
-                                    <strong>Legend:</strong> 
-                                    <span class="badge bg-success">Green</span> = Good performance • 
-                                    <span class="badge bg-warning">Yellow</span> = Minor lag • 
-                                    <span class="badge bg-danger">Red</span> = Performance issues
-                                </small>
-                            </div>
                         </div>
                     </div>
                 </div>

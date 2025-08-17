@@ -10,10 +10,10 @@ VaultHunters Web Manager is a Flask-based web application for managing VaultHunt
 
 Direct process management architecture:
 
-- **Flask Application** (`app.py`): Main web server with routes for server control, log viewing, config editing, backup management, and RCON console
+- **Flask Application** (`app.py`): Main web server with routes for server control, log viewing, config editing, backup management, RCON console, and system monitoring
 - **Configuration** (`config.py.example`): Configuration template with Java/JVM settings, server paths, web interface settings, and Minecraft connection details
 - **Process Management** (`services/system_control.py`): Direct Java process launching with detached execution, monitoring, and control with psutil integration
-- **Templates** (`templates/`): Jinja2 templates with logs page and crash report dropdown selector
+- **Templates** (`templates/`): Jinja2 templates with logs page, crash report dropdown selector, and monitoring dashboard with Chart.js integration
 - **Static Files** (`static/`): CSS and JavaScript for Bootstrap-based responsive UI with RCON functionality
 - **Requirements** (`requirements.txt`): Python dependencies including Flask, mcstatus, mcrcon, and psutil
 
@@ -27,6 +27,8 @@ Direct process management architecture:
 - **Configuration Management**: Multi-category config editor with atomic file operations and automatic backups
 - **Backup Management**: List, download, and inspect backups from configured backup directory
 - **Real-time Monitoring**: Accurate server status and player counts using mcstatus and process statistics
+- **Performance Monitoring**: System load averages, detailed memory breakdown (used/buffers/cache), swap usage, per-core CPU monitoring with real-time charts
+- **Dashboard Metrics**: Live Java CPU and memory usage with loading indicators, system health status indicators, and performance analytics
 - **Security**: Custom CSRF protection, input validation, file access restrictions
 - **User Context**: Run as minecraft user with direct process control (no systemd or root required)
 
@@ -78,4 +80,7 @@ pip install -r requirements.txt
 - AJAX for real-time server status updates in `static/js/app.js`
 - Log viewing with real-time streaming in `services/log_service.py`
 - RCON custom socket client avoiding signal issues
+- System monitoring with Chart.js charts in `templates/monitoring.html`
+- Performance analytics API endpoint `/api/monitoring/metrics` with psutil system data
+- Dashboard indicators with loading states and real-time updates every 5-10 seconds
 - Production-ready security and error handling throughout all services
