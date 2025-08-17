@@ -342,34 +342,35 @@ function updateStatusDisplay(status) {
     
     if (leftCol) {
         let html = `
-            <h6>Status: 
+            <div class="d-flex justify-content-between align-items-center">
+                <span>Status:</span>
                 <span class="badge bg-${badgeColor}">
                     ${statusIcon}${statusText}
                 </span>
-            </h6>
-            <div class="d-flex justify-content-between">
+            </div>
+            <div class="d-flex justify-content-between mt-2">
                 <span>Uptime:</span>
-                <span>${status.uptime}</span>
+                <span class="ms-3">${status.uptime}</span>
             </div>
         `;
         
         if (status.running && status.pid) {
             html += `
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between mt-2">
                 <span>PID:</span>
-                <span>${status.pid}</span>
+                <span class="ms-3">${status.pid}</span>
             </div>`;
         } else {
             html += `
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between mt-2">
                 <span>PID:</span>
-                <span class="text-muted">N/A</span>
+                <span class="text-muted ms-3">N/A</span>
             </div>`;
         }
         
         // Show additional info for starting status
         if (status.status === 'starting') {
-            html += `<p class="text-warning"><i class="fas fa-info-circle"></i> Server is loading, please wait...</p>`;
+            html += `<p class="text-warning mt-2"><i class="fas fa-info-circle"></i> Server is loading, please wait...</p>`;
         }
         
         leftCol.innerHTML = html;
@@ -380,36 +381,36 @@ function updateStatusDisplay(status) {
         
         if (status.status === 'running' && status.server_ready) {
             html += `
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between mt-2">
                 <span>Players:</span>
-                <span>${status.players}/${status.max_players}</span>
+                <span class="ms-3">${status.players}/${status.max_players}</span>
             </div>`;
         } else if (status.status === 'starting') {
             html += `
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between mt-2">
                 <span>Players:</span>
-                <span class="text-muted">Waiting for server...</span>
+                <span class="text-muted ms-3">Waiting for server...</span>
             </div>`;
         } else {
             html += `
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between mt-2">
                 <span>Players:</span>
-                <span>${status.players}/${status.max_players}</span>
+                <span class="ms-3">${status.players}/${status.max_players}</span>
             </div>`;
         }
         
         // Always show CPU field
         if (status.cpu_usage > 0) {
             html += `
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between mt-2">
                 <span>Java CPU:</span>
-                <span>${status.cpu_usage.toFixed(1)}%</span>
+                <span class="ms-3">${status.cpu_usage.toFixed(1)}%</span>
             </div>`;
         } else {
             html += `
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between mt-2">
                 <span>Java CPU:</span>
-                <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+                <span class="text-muted loading-indicator ms-3"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
             </div>`;
         }
         
@@ -419,15 +420,15 @@ function updateStatusDisplay(status) {
                 ? `${(status.memory_usage / 1024).toFixed(1)} GB`
                 : `${status.memory_usage} MB`;
             html += `
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between mt-2">
                 <span>Java Memory:</span>
-                <span>${memoryDisplay}</span>
+                <span class="ms-3">${memoryDisplay}</span>
             </div>`;
         } else {
             html += `
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between mt-2">
                 <span>Java Memory:</span>
-                <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+                <span class="text-muted loading-indicator ms-3"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
             </div>`;
         }
         
