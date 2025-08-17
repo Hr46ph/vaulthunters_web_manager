@@ -347,13 +347,24 @@ function updateStatusDisplay(status) {
                     ${statusIcon}${statusText}
                 </span>
             </h6>
-            <p>Uptime: ${status.uptime}</p>
+            <div class="d-flex justify-content-between">
+                <span>Uptime:</span>
+                <span>${status.uptime}</span>
+            </div>
         `;
         
         if (status.running && status.pid) {
-            html += `<p>PID: ${status.pid}</p>`;
+            html += `
+            <div class="d-flex justify-content-between">
+                <span>PID:</span>
+                <span>${status.pid}</span>
+            </div>`;
         } else {
-            html += `<p>PID: <span class="text-muted">N/A</span></p>`;
+            html += `
+            <div class="d-flex justify-content-between">
+                <span>PID:</span>
+                <span class="text-muted">N/A</span>
+            </div>`;
         }
         
         // Show additional info for starting status
@@ -368,18 +379,38 @@ function updateStatusDisplay(status) {
         let html = '';
         
         if (status.status === 'running' && status.server_ready) {
-            html += `<p>Players: ${status.players}/${status.max_players}</p>`;
+            html += `
+            <div class="d-flex justify-content-between">
+                <span>Players:</span>
+                <span>${status.players}/${status.max_players}</span>
+            </div>`;
         } else if (status.status === 'starting') {
-            html += `<p class="text-muted">Players: Waiting for server...</p>`;
+            html += `
+            <div class="d-flex justify-content-between">
+                <span>Players:</span>
+                <span class="text-muted">Waiting for server...</span>
+            </div>`;
         } else {
-            html += `<p>Players: ${status.players}/${status.max_players}</p>`;
+            html += `
+            <div class="d-flex justify-content-between">
+                <span>Players:</span>
+                <span>${status.players}/${status.max_players}</span>
+            </div>`;
         }
         
         // Always show CPU field
         if (status.cpu_usage > 0) {
-            html += `<p>Java CPU: ${status.cpu_usage.toFixed(1)}%</p>`;
+            html += `
+            <div class="d-flex justify-content-between">
+                <span>Java CPU:</span>
+                <span>${status.cpu_usage.toFixed(1)}%</span>
+            </div>`;
         } else {
-            html += `<p>Java CPU: <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span></p>`;
+            html += `
+            <div class="d-flex justify-content-between">
+                <span>Java CPU:</span>
+                <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+            </div>`;
         }
         
         // Always show Memory field
@@ -387,9 +418,17 @@ function updateStatusDisplay(status) {
             const memoryDisplay = status.memory_usage >= 1024 
                 ? `${(status.memory_usage / 1024).toFixed(1)} GB`
                 : `${status.memory_usage} MB`;
-            html += `<p>Java Memory: ${memoryDisplay}</p>`;
+            html += `
+            <div class="d-flex justify-content-between">
+                <span>Java Memory:</span>
+                <span>${memoryDisplay}</span>
+            </div>`;
         } else {
-            html += `<p>Java Memory: <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span></p>`;
+            html += `
+            <div class="d-flex justify-content-between">
+                <span>Java Memory:</span>
+                <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+            </div>`;
         }
         
         middleCol.innerHTML = html;
