@@ -444,8 +444,13 @@ function updateMonitoringData() {
         
         updateMetricCards(metrics, status);
         updateCharts(metrics);
-        updateCpuChart(metrics);
+        
+        // Only update CPU chart if we have CPU data
+        if (metrics.cpu_per_core && metrics.cpu_per_core.length > 0) {
+            updateCpuChart(metrics);
+        }
         updateCpuSummary(metrics);
+        
         updateHealthStatus(status, metrics);
         updatePerformanceEvents(metrics.events || []);
     })
@@ -462,14 +467,27 @@ function updateMonitoringData() {
 
 // Update metric cards
 function updateMetricCards(metrics, status) {
-    document.getElementById('current-tps').textContent = metrics.current_tps || '--';
-    document.getElementById('lag-spikes-5min').textContent = metrics.lag_spikes_5min || '--';
-    document.getElementById('memory-usage').textContent = status.memory_usage ? 
-        (status.memory_usage >= 1024 ? `${(status.memory_usage / 1024).toFixed(1)}GB` : `${status.memory_usage}MB`) : '--';
+    const tpsElement = document.getElementById('current-tps');
+    if (tpsElement) {
+        tpsElement.textContent = metrics.current_tps || '--';
+    }
     
-    // Use system CPU average from new metrics instead of process CPU
-    document.getElementById('cpu-usage').textContent = metrics.cpu_system_avg !== undefined ? 
-        `${metrics.cpu_system_avg.toFixed(1)}%` : '--';
+    const lagElement = document.getElementById('lag-spikes-5min');
+    if (lagElement) {
+        lagElement.textContent = metrics.lag_spikes_5min || '--';
+    }
+    
+    const memoryElement = document.getElementById('memory-usage');
+    if (memoryElement) {
+        memoryElement.textContent = status.memory_usage ? 
+            (status.memory_usage >= 1024 ? `${(status.memory_usage / 1024).toFixed(1)}GB` : `${status.memory_usage}MB`) : '--';
+    }
+    
+    const cpuElement = document.getElementById('cpu-usage');
+    if (cpuElement) {
+        cpuElement.textContent = metrics.cpu_system_avg !== undefined ? 
+            `${metrics.cpu_system_avg.toFixed(1)}%` : '--';
+    }
 }
 
 // Update charts
@@ -567,21 +585,33 @@ function updateCpuChart(metrics) {
 function updateCpuSummary(metrics) {
     // System average
     const avgElement = document.getElementById('cpu-avg');
-    if (avgElement && metrics.cpu_system_avg !== undefined) {
-        avgElement.textContent = `${metrics.cpu_system_avg.toFixed(1)}%`;
+    if (avgElement) {
+        if (metrics.cpu_system_avg !== undefined) {
+            avgElement.textContent = `${metrics.cpu_system_avg.toFixed(1)}%`;
+        } else {
+            avgElement.textContent = '--';
+        }
     }
 
     // CPU cores count
     const coresElement = document.getElementById('cpu-cores');
-    if (coresElement && metrics.cpu_count !== undefined) {
-        coresElement.textContent = metrics.cpu_count;
+    if (coresElement) {
+        if (metrics.cpu_count !== undefined) {
+            coresElement.textContent = metrics.cpu_count;
+        } else {
+            coresElement.textContent = '--';
+        }
     }
 
     // Highest core usage
     const maxElement = document.getElementById('cpu-max');
-    if (maxElement && metrics.cpu_per_core && metrics.cpu_per_core.length > 0) {
-        const maxUsage = Math.max(...metrics.cpu_per_core);
-        maxElement.textContent = `${maxUsage.toFixed(1)}%`;
+    if (maxElement) {
+        if (metrics.cpu_per_core && metrics.cpu_per_core.length > 0) {
+            const maxUsage = Math.max(...metrics.cpu_per_core);
+            maxElement.textContent = `${maxUsage.toFixed(1)}%`;
+        } else {
+            maxElement.textContent = '--';
+        }
     }
 }
 
