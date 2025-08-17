@@ -305,7 +305,7 @@ def _filter_rcon_response(command: str, response: str) -> str:
         return response
     
     # Commands that commonly work but return error-like messages
-    working_commands_with_errors = ['list', 'help', 'forge tps', 'tps']
+    working_commands_with_errors = ['list', 'help', 'forge tps', 'tps', 'whitelist', 'whitelist list']
     
     # Check if this is a command that commonly has false-positive errors
     cmd_lower = command.lower().strip()
@@ -335,6 +335,21 @@ def _filter_rcon_response(command: str, response: str) -> str:
             help_lines = [line for line in lines if not line.startswith('Unknown or incomplete')]
             if help_lines:
                 return '\n'.join(help_lines)
+        
+        # For 'whitelist list' command, look for whitelist information
+        elif 'whitelist' in cmd_lower and ('whitelisted players' in response.lower() or 'whitelist' in response.lower()):
+            # Extract whitelist information, ignore the error
+            lines = response.split('\n')
+            whitelist_lines = []
+            for line in lines:
+                if ('whitelisted players' in line.lower() or 
+                    'There are no whitelisted players' in line or
+                    'There are' in line and 'whitelisted' in line.lower() or
+                    line.strip() and not line.startswith('Unknown or incomplete')):
+                    whitelist_lines.append(line.strip())
+            if whitelist_lines:
+                return '\n'.join(whitelist_lines)
+            return "Whitelist command executed successfully"
         
         # For other commands, if the response has actual content beyond the error, extract it
         error_line = "Unknown or incomplete command, see below for error"

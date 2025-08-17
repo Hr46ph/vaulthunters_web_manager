@@ -373,7 +373,7 @@ def log_content(log_type):
             return jsonify({'error': 'Invalid log type'}), 400
         
         log_service = LogService()
-        result = log_service.get_minecraft_server_logs(log_type, lines=200)
+        result = log_service.get_minecraft_server_logs(log_type, lines=500)
         
         if result['success']:
             return jsonify({
@@ -454,7 +454,7 @@ def log_stream(log_type):
             
             # Send initial content using simple tail
             try:
-                result = subprocess.run(['tail', '-n', '50', log_path], capture_output=True, text=True, timeout=5)
+                result = subprocess.run(['tail', '-n', '500', log_path], capture_output=True, text=True, timeout=5)
                 if result.returncode == 0 and result.stdout:
                     yield f"data: {json.dumps({'type': 'initial', 'content': result.stdout, 'log_type': log_type})}\n\n"
                 else:

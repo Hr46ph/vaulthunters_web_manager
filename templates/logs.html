@@ -61,10 +61,6 @@
         margin: 0;
     }
     
-    .badge-status {
-        font-size: 0.75em;
-        margin-left: 8px;
-    }
 </style>
 {% endblock %}
 
@@ -75,10 +71,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="log-header">
-                        <h6 class="log-title">
-                            Latest Server Log
-                            <span class="badge bg-success badge-status" id="latest-status">●</span>
-                        </h6>
+                        <h6 class="log-title">Latest Server Log</h6>
                         <div class="log-controls">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="follow-latest" checked>
@@ -101,10 +94,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="log-header">
-                        <h6 class="log-title">
-                            Debug Log
-                            <span class="badge bg-info badge-status" id="debug-status">●</span>
-                        </h6>
+                        <h6 class="log-title">Debug Log</h6>
                         <div class="log-controls">
                             <div class="btn-group" role="group">
                                 <input type="radio" class="btn-check" name="debug-mode" id="debug-mode-debug" autocomplete="off" checked>
@@ -172,6 +162,25 @@
     // Global variable for current debug mode
     let debugMode = 'debug';
     
+    // Track auto-scroll state for each log window
+    const autoScrollState = {
+        latest: true,
+        debug: true
+    };
+    
+    // Helper function to check if user is at bottom of log window
+    function isAtBottom(element) {
+        const threshold = 5; // pixels from bottom
+        return (element.scrollTop + element.clientHeight >= element.scrollHeight - threshold);
+    }
+    
+    // Helper function to scroll to bottom only if auto-scroll is enabled
+    function smartScroll(logType, element) {
+        if (autoScrollState[logType]) {
+            element.scrollTop = element.scrollHeight;
+        }
+    }
+    
     // Get CSRF token
     function getCSRFToken() {
         const tokenMeta = document.querySelector('meta[name=csrf-token]');
@@ -204,10 +213,8 @@
     
     function loadLatestCrashReport() {
         const logElement = document.getElementById('debug-log');
-        const statusElement = document.getElementById('debug-status');
         
         logElement.textContent = 'Loading latest crash report...';
-        statusElement.className = 'badge bg-warning badge-status';
         
         fetch('/logs/crash/list')
             .then(response => response.json())
@@ -223,50 +230,35 @@
             .then(data => {
                 if (data.success) {
                     logElement.textContent = data.content;
-                    statusElement.className = 'badge bg-success badge-status';
-                    statusElement.title = 'Latest crash report loaded';
-                    logElement.scrollTop = logElement.scrollHeight;
+                    smartScroll('debug', logElement);
                 } else {
                     logElement.textContent = `Error loading crash report: ${data.error}`;
-                    statusElement.className = 'badge bg-danger badge-status';
                 }
             })
             .catch(error => {
                 console.error('Error loading latest crash report:', error);
                 logElement.textContent = 'No crash reports found or error loading latest crash report';
-                statusElement.className = 'badge bg-secondary badge-status';
-                statusElement.title = 'No crash reports available';
             });
     }
     
     // Log refresh function
     function refreshLog(logType) {
         const logElement = document.getElementById(`${logType}-log`);
-        const statusElement = document.getElementById(`${logType}-status`);
         
         if (!logElement) return;
-        
-        // Update status to loading
-        statusElement.className = 'badge bg-warning badge-status';
-        statusElement.textContent = '●';
         
         fetch(`/logs/content/${logType}`)
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
                     logElement.textContent = `Error loading ${logType} log: ${data.error}`;
-                    statusElement.className = 'badge bg-danger badge-status';
                 } else {
                     logElement.textContent = data.content || `No ${logType} log data available`;
-                    statusElement.className = 'badge bg-success badge-status';
-                    
-                    // Auto-scroll to bottom
-                    logElement.scrollTop = logElement.scrollHeight;
+                    smartScroll(logType, logElement);
                 }
             })
             .catch(error => {
                 logElement.textContent = `Network error loading ${logType} log: ${error.message}`;
-                statusElement.className = 'badge bg-danger badge-status';
                 console.error(`${logType} log fetch error:`, error);
             });
     }
@@ -275,8 +267,7 @@
     // Start following a log using SSE
     function startFollow(logType) {
         const followCheckbox = document.getElementById(`follow-${logType}`);
-        if (!followCheckbox) {
-            console.error(`Follow checkbox not found for ${logType}`);
+        if (!followCheckbox || !followCheckbox.checked) {
             return;
         }
         
@@ -285,113 +276,66 @@
         // Stop existing connection if any
         stopFollow(logType);
         
-        if (followCheckbox.checked) {
-            // Create SSE connection
-            const eventSource = new EventSource(`/logs/stream/${logType}`);
-            sseConnections[logType] = eventSource;
-            
-            const logElement = document.getElementById(`${logType}-log`);
-            const statusElement = document.getElementById(`${logType}-status`);
-            
-            eventSource.onopen = function(event) {
-                console.log(`SSE connection opened for ${logType}`, event);
-                statusElement.className = 'badge bg-success badge-status';
-                statusElement.title = 'Real-time streaming active';
-            };
-            
-            eventSource.onmessage = function(event) {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    // Ensure status is green when receiving any valid message
-                    if (statusElement.className !== 'badge bg-success badge-status') {
-                        statusElement.className = 'badge bg-success badge-status';
-                        statusElement.title = 'Real-time streaming active';
-                    }
-                    
-                    switch(data.type) {
-                        case 'initial':
-                            // Load initial content
-                            logElement.textContent = data.content || `No ${logType} log data available`;
-                            logElement.scrollTop = logElement.scrollHeight;
-                            break;
-                            
-                        case 'connected':
-                            console.log(`SSE connected to ${logType} stream`);
-                            statusElement.className = 'badge bg-success badge-status';
-                            statusElement.title = 'Real-time streaming active';
-                            break;
-                            
-                        case 'reconnected':
-                            console.log(`SSE reconnected to ${logType} stream: ${data.message}`);
-                            logElement.textContent += '\n[RECONNECTED] ' + data.message;
-                            logElement.scrollTop = logElement.scrollHeight;
-                            statusElement.className = 'badge bg-success badge-status';
-                            statusElement.title = 'Real-time streaming active';
-                            break;
-                            
-                        case 'line':
-                            // Append new line
-                            if (data.line.trim()) {
-                                logElement.textContent += '\n' + data.line;
-                                logElement.scrollTop = logElement.scrollHeight;
-                            }
-                            break;
-                            
-                        case 'rotation':
-                            // Log rotation detected
-                            logElement.textContent += '\n[LOG ROTATED] ' + data.message;
-                            logElement.scrollTop = logElement.scrollHeight;
-                            console.log(`Log rotation detected for ${logType}: ${data.message}`);
-                            break;
-                            
-                        case 'keepalive':
-                            // Just keep connection alive
-                            console.log(`Keepalive received for ${logType}`);
-                            break;
-                            
-                        case 'error':
-                            console.error(`SSE error for ${logType}:`, data.error);
-                            logElement.textContent += '\n[ERROR] ' + data.error;
-                            statusElement.className = 'badge bg-danger badge-status';
-                            statusElement.title = 'Streaming error occurred';
-                            break;
-                    }
-                } catch (e) {
-                    console.error(`Error parsing SSE data for ${logType}:`, e);
-                }
-            };
-            
-            eventSource.onerror = function(event) {
-                console.error(`SSE error for ${logType}:`, event);
-                console.error(`SSE readyState: ${eventSource.readyState}`);
-                console.error(`SSE url: ${eventSource.url}`);
+        // Create SSE connection
+        const eventSource = new EventSource(`/logs/stream/${logType}`);
+        sseConnections[logType] = eventSource;
+        
+        const logElement = document.getElementById(`${logType}-log`);
+        
+        eventSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
                 
-                // Only show error status if connection is actually closed (readyState 2)
-                // ReadyState 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
-                if (eventSource.readyState === 2) {
-                    statusElement.className = 'badge bg-danger badge-status';
-                    statusElement.title = 'Connection error';
-                    
-                    // Auto-reconnect after 5 seconds if checkbox is still checked
-                    setTimeout(() => {
-                        const checkbox = document.getElementById(`follow-${logType}`);
-                        if (checkbox && checkbox.checked) {
-                            console.log(`Attempting to reconnect ${logType} stream`);
-                            statusElement.className = 'badge bg-warning badge-status';
-                            statusElement.title = 'Reconnecting...';
-                            startFollow(logType);
+                switch(data.type) {
+                    case 'initial':
+                        // Load initial content
+                        logElement.textContent = data.content || `No ${logType} log data available`;
+                        smartScroll(logType, logElement);
+                        break;
+                        
+                    case 'reconnected':
+                        logElement.textContent += '\n[RECONNECTED] ' + data.message;
+                        smartScroll(logType, logElement);
+                        break;
+                        
+                    case 'line':
+                        // Append new line
+                        if (data.line.trim()) {
+                            logElement.textContent += '\n' + data.line;
+                            smartScroll(logType, logElement);
                         }
-                    }, 5000);
-                } else if (eventSource.readyState === 0) {
-                    // Still connecting, show connecting status
-                    statusElement.className = 'badge bg-warning badge-status';
-                    statusElement.title = 'Connecting...';
+                        break;
+                        
+                    case 'rotation':
+                        // Log rotation detected
+                        logElement.textContent += '\n[LOG ROTATED] ' + data.message;
+                        smartScroll(logType, logElement);
+                        break;
+                        
+                    case 'error':
+                        console.error(`SSE error for ${logType}:`, data.error);
+                        logElement.textContent += '\n[ERROR] ' + data.error;
+                        break;
                 }
-            };
-            
-            console.log(`SSE connection established for ${logType}`);
-        }
+            } catch (e) {
+                console.error(`Error parsing SSE data for ${logType}:`, e);
+            }
+        };
+        
+        eventSource.onerror = function(event) {
+            // Only handle actual connection failures, ignore normal SSE events
+            if (eventSource.readyState === 2) {
+                console.log(`SSE connection closed for ${logType}, will reconnect if needed`);
+                
+                // Auto-reconnect after 3 seconds if checkbox is still checked
+                setTimeout(() => {
+                    const checkbox = document.getElementById(`follow-${logType}`);
+                    if (checkbox && checkbox.checked) {
+                        startFollow(logType);
+                    }
+                }, 3000);
+            }
+        };
     }
     
     // Stop following a log
@@ -400,10 +344,6 @@
             console.log(`Closing SSE connection for ${logType}`);
             sseConnections[logType].close();
             sseConnections[logType] = null;
-            
-            const statusElement = document.getElementById(`${logType}-status`);
-            statusElement.className = 'badge bg-secondary badge-status';
-            statusElement.title = 'Streaming stopped';
         }
     }
     
@@ -438,13 +378,29 @@
         // Set up checkbox event listeners for server logs
         ['latest', 'debug'].forEach(logType => {
             const checkbox = document.getElementById(`follow-${logType}`);
+            const logElement = document.getElementById(`${logType}-log`);
+            
             if (checkbox) {
                 checkbox.addEventListener('change', function() {
                     console.log(`${logType} follow checkbox changed: ${this.checked}`);
                     if (this.checked) {
+                        autoScrollState[logType] = true; // Re-enable auto-scroll when follow is turned on
                         startFollow(logType);
                     } else {
                         stopFollow(logType);
+                    }
+                });
+            }
+            
+            // Add scroll event listener to detect manual scrolling
+            if (logElement) {
+                logElement.addEventListener('scroll', function() {
+                    // If user scrolls away from bottom, disable auto-scroll
+                    if (!isAtBottom(logElement)) {
+                        autoScrollState[logType] = false;
+                    } else {
+                        // If user scrolls back to bottom, re-enable auto-scroll
+                        autoScrollState[logType] = true;
                     }
                 });
             }
