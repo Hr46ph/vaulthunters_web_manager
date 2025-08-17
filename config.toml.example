@@ -118,7 +118,7 @@ backup_download = 3
 [metrics]
 # Metrics collection and storage settings
 # Collection interval in seconds (how often to collect metrics)
-collection_interval = 30
+collection_interval = 5
 
 # Retention period in days (how long to keep historical data)
 retention_days = 7

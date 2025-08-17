@@ -70,8 +70,12 @@
                         <div class="col-md-3">
                             <label for="collection-interval" class="form-label">Collection Interval</label>
                             <select class="form-select form-select-sm" id="collection-interval">
+                                <option value="1">1 second</option>
+                                <option value="2">2 seconds</option>
+                                <option value="5" selected>5 seconds</option>
+                                <option value="10">10 seconds</option>
                                 <option value="15">15 seconds</option>
-                                <option value="30" selected>30 seconds</option>
+                                <option value="30">30 seconds</option>
                                 <option value="60">1 minute</option>
                                 <option value="120">2 minutes</option>
                                 <option value="300">5 minutes</option>
@@ -90,19 +94,20 @@
                         <div class="col-md-3">
                             <label for="chart-range" class="form-label">Chart Time Range</label>
                             <select class="form-select form-select-sm" id="chart-range">
+                                <option value="0.25">15 minutes</option>
+                                <option value="0.5">30 minutes</option>
                                 <option value="1" selected>1 hour</option>
+                                <option value="3">3 hours</option>
                                 <option value="6">6 hours</option>
+                                <option value="12">12 hours</option>
                                 <option value="24">24 hours</option>
                                 <option value="168">1 week</option>
                             </select>
                         </div>
                         <div class="col-md-3 d-flex align-items-end">
-                            <button class="btn btn-sm btn-success me-2" id="save-config">
-                                <i class="fas fa-save"></i> Save
-                            </button>
-                            <button class="btn btn-sm btn-info" id="refresh-charts">
-                                <i class="fas fa-sync"></i> Refresh
-                            </button>
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> Settings auto-save on change
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -307,12 +312,52 @@ let monitoringData = {
 
 // Configuration state
 let currentConfig = {
-    collection_interval: 30,
+    collection_interval: 5,
     retention_days: 7,
     chart_range: 1
 };
 
 let historicalMode = false;
+
+// Local storage functions for auto-save
+function saveSettingsToLocalStorage() {
+    const settings = {
+        collection_interval: parseInt(document.getElementById('collection-interval').value),
+        retention_days: parseInt(document.getElementById('retention-days').value),
+        chart_range: parseFloat(document.getElementById('chart-range').value)
+    };
+    localStorage.setItem('monitoring_settings', JSON.stringify(settings));
+    console.log('Settings saved to localStorage:', settings);
+}
+
+function loadSettingsFromLocalStorage() {
+    const savedSettings = localStorage.getItem('monitoring_settings');
+    if (savedSettings) {
+        try {
+            const settings = JSON.parse(savedSettings);
+            console.log('Settings loaded from localStorage:', settings);
+            
+            // Apply settings to UI elements
+            if (settings.collection_interval) {
+                document.getElementById('collection-interval').value = settings.collection_interval;
+                currentConfig.collection_interval = settings.collection_interval;
+            }
+            if (settings.retention_days) {
+                document.getElementById('retention-days').value = settings.retention_days;
+                currentConfig.retention_days = settings.retention_days;
+            }
+            if (settings.chart_range) {
+                document.getElementById('chart-range').value = settings.chart_range;
+                currentConfig.chart_range = settings.chart_range;
+            }
+            
+            return settings;
+        } catch (e) {
+            console.error('Failed to parse saved settings:', e);
+        }
+    }
+    return null;
+}
 
 // Initialize charts
 function initializeCharts() {
@@ -943,14 +988,18 @@ function loadConfiguration() {
         });
 }
 
-// Save configuration to server
-function saveConfiguration() {
+// Auto-save configuration to server
+function autoSaveConfiguration() {
     const configData = {
         collection_interval: parseInt(document.getElementById('collection-interval').value),
         retention_days: parseInt(document.getElementById('retention-days').value),
         enabled: true
     };
     
+    // Save to localStorage immediately
+    saveSettingsToLocalStorage();
+    
+    // Save to server
     fetch('/api/monitoring/config', {
         method: 'POST',
         headers: {
@@ -963,37 +1012,31 @@ function saveConfiguration() {
         if (data.success) {
             currentConfig.collection_interval = configData.collection_interval;
             currentConfig.retention_days = configData.retention_days;
-            console.log('Configuration saved successfully');
-            
-            // Show success feedback
-            const saveBtn = document.getElementById('save-config');
-            const originalText = saveBtn.innerHTML;
-            saveBtn.innerHTML = '<i class="fas fa-check"></i> Saved';
-            saveBtn.classList.remove('btn-success');
-            saveBtn.classList.add('btn-outline-success');
-            
-            setTimeout(() => {
-                saveBtn.innerHTML = originalText;
-                saveBtn.classList.remove('btn-outline-success');
-                saveBtn.classList.add('btn-success');
-            }, 2000);
+            console.log('Configuration auto-saved successfully');
         } else {
-            console.error('Failed to save configuration:', data.error);
+            console.error('Failed to auto-save configuration:', data.error);
         }
     })
     .catch(error => {
-        console.error('Error saving configuration:', error);
+        console.error('Error auto-saving configuration:', error);
     });
 }
 
-// Load historical data for charts
-function loadHistoricalData() {
-    const hours = parseInt(document.getElementById('chart-range').value);
-    currentConfig.chart_range = hours;
+// Load historical data for charts based on current settings
+function loadHistoricalData(hours = null) {
+    const timeRange = hours || parseFloat(document.getElementById('chart-range').value);
+    currentConfig.chart_range = timeRange;
     
-    historicalMode = true;
+    // Always use historical mode for ranges other than real-time
+    historicalMode = timeRange > 0.25; // 15 minutes or more = historical mode
     
-    console.log(`Loading historical data for ${hours} hours`);
+    console.log(`Loading ${historicalMode ? 'historical' : 'real-time'} data for ${timeRange} hours`);
+    
+    if (!historicalMode) {
+        // Switch to real-time mode
+        switchToRealTimeMode();
+        return;
+    }
     
     // Clear current chart data
     clearChartData();
@@ -1002,7 +1045,7 @@ function loadHistoricalData() {
     const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min'];
     
     Promise.all(metrics.map(metric => 
-        fetch(`/api/monitoring/history/${metric}?hours=${hours}`)
+        fetch(`/api/monitoring/history/${metric}?hours=${timeRange}`)
             .then(r => r.json())
     ))
     .then(results => {
@@ -1105,21 +1148,31 @@ function switchToRealTimeMode() {
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();
-    loadConfiguration();
-    updateMonitoringData();
     
-    // Set up event listeners
-    document.getElementById('save-config').addEventListener('click', saveConfiguration);
-    document.getElementById('refresh-charts').addEventListener('click', loadHistoricalData);
-    document.getElementById('chart-range').addEventListener('change', function() {
-        if (this.value == '1') {
-            // Switch to real-time for 1-hour view
-            switchToRealTimeMode();
-        } else {
-            // Load historical data for longer ranges
-            loadHistoricalData();
-        }
+    // Load saved settings from localStorage first
+    loadSettingsFromLocalStorage();
+    
+    // Then load configuration from server
+    loadConfiguration();
+    
+    // Set up auto-save event listeners
+    document.getElementById('collection-interval').addEventListener('change', function() {
+        autoSaveConfiguration();
     });
+    
+    document.getElementById('retention-days').addEventListener('change', function() {
+        autoSaveConfiguration();
+    });
+    
+    document.getElementById('chart-range').addEventListener('change', function() {
+        saveSettingsToLocalStorage(); // Save UI preference immediately
+        loadHistoricalData(); // Load data based on new time range
+    });
+    
+    // Initial data load based on saved settings
+    setTimeout(() => {
+        loadHistoricalData(currentConfig.chart_range);
+    }, 1000); // Wait for configuration to load
     
     // Update every 5 seconds (only in real-time mode)
     setInterval(function() {
