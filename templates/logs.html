@@ -61,6 +61,17 @@
         margin: 0;
     }
     
+    .search-highlight {
+        background-color: yellow;
+        color: black;
+        font-weight: bold;
+    }
+    
+    [data-bs-theme="dark"] .search-highlight {
+        background-color: #ffd700;
+        color: #000;
+    }
+    
 </style>
 {% endblock %}
 
@@ -73,6 +84,16 @@
                     <div class="log-header">
                         <h6 class="log-title">Latest Server Log</h6>
                         <div class="log-controls">
+                            <div class="input-group input-group-sm me-2" style="width: 200px;">
+                                <input type="text" class="form-control" id="search-latest" placeholder="Search logs...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="clearSearch('latest')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="filter-latest" title="Show only matching lines">
+                                <label class="form-check-label" for="filter-latest">Filter</label>
+                            </div>
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="follow-latest" checked>
                                 <label class="form-check-label" for="follow-latest">Follow</label>
@@ -96,6 +117,16 @@
                     <div class="log-header">
                         <h6 class="log-title">Debug Log</h6>
                         <div class="log-controls">
+                            <div class="input-group input-group-sm me-2" style="width: 200px;">
+                                <input type="text" class="form-control" id="search-debug" placeholder="Search logs...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="clearSearch('debug')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="filter-debug" title="Show only matching lines">
+                                <label class="form-check-label" for="filter-debug">Filter</label>
+                            </div>
                             <div class="btn-group" role="group">
                                 <input type="radio" class="btn-check" name="debug-mode" id="debug-mode-debug" autocomplete="off" checked>
                                 <label class="btn btn-outline-secondary btn-sm" for="debug-mode-debug">Debug</label>
@@ -168,6 +199,12 @@
         debug: true
     };
     
+    // Store original log content for search functionality
+    const originalLogContent = {
+        latest: '',
+        debug: ''
+    };
+    
     // Helper function to check if user is at bottom of log window
     function isAtBottom(element) {
         const threshold = 5; // pixels from bottom
@@ -179,6 +216,90 @@
         if (autoScrollState[logType]) {
             element.scrollTop = element.scrollHeight;
         }
+    }
+    
+    // Search functionality
+    function searchLogs(logType) {
+        const searchInput = document.getElementById(`search-${logType}`);
+        const filterCheckbox = document.getElementById(`filter-${logType}`);
+        const logElement = document.getElementById(`${logType}-log`);
+        
+        if (!searchInput || !logElement) return;
+        
+        const searchTerm = searchInput.value.trim();
+        const filterMode = filterCheckbox ? filterCheckbox.checked : false;
+        const originalContent = originalLogContent[logType];
+        
+        if (!searchTerm) {
+            // No search term, show original content
+            logElement.innerHTML = escapeHtml(originalContent);
+            smartScroll(logType, logElement);
+            return;
+        }
+        
+        const lines = originalContent.split('\n');
+        let processedContent = '';
+        
+        if (filterMode) {
+            // Filter mode: show only matching lines
+            const matchingLines = lines.filter(line => 
+                line.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            processedContent = matchingLines.map(line => highlightSearchTerm(line, searchTerm)).join('\n');
+        } else {
+            // Highlight mode: show all lines but highlight matches
+            processedContent = lines.map(line => highlightSearchTerm(line, searchTerm)).join('\n');
+        }
+        
+        logElement.innerHTML = processedContent;
+        smartScroll(logType, logElement);
+    }
+    
+    function highlightSearchTerm(text, searchTerm) {
+        if (!searchTerm) return escapeHtml(text);
+        
+        const escapedText = escapeHtml(text);
+        const escapedSearchTerm = escapeHtml(searchTerm);
+        
+        // Case insensitive highlighting
+        const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
+        return escapedText.replace(regex, '<span class="search-highlight">$1</span>');
+    }
+    
+    function clearSearch(logType) {
+        const searchInput = document.getElementById(`search-${logType}`);
+        const filterCheckbox = document.getElementById(`filter-${logType}`);
+        
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        if (filterCheckbox) {
+            filterCheckbox.checked = false;
+        }
+        
+        searchLogs(logType);
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Update log content and store original for searching
+    function updateLogContent(logType, content) {
+        originalLogContent[logType] = content;
+        const logElement = document.getElementById(`${logType}-log`);
+        if (logElement) {
+            logElement.textContent = content;
+            searchLogs(logType); // Apply current search
+        }
+    }
+    
+    // Append to log content and store original for searching
+    function appendLogContent(logType, newContent) {
+        originalLogContent[logType] += '\n' + newContent;
+        searchLogs(logType); // Reapply search to include new content
     }
     
     // Get CSRF token
@@ -229,15 +350,15 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    logElement.textContent = data.content;
+                    updateLogContent('debug', data.content);
                     smartScroll('debug', logElement);
                 } else {
-                    logElement.textContent = `Error loading crash report: ${data.error}`;
+                    updateLogContent('debug', `Error loading crash report: ${data.error}`);
                 }
             })
             .catch(error => {
                 console.error('Error loading latest crash report:', error);
-                logElement.textContent = 'No crash reports found or error loading latest crash report';
+                updateLogContent('debug', 'No crash reports found or error loading latest crash report');
             });
     }
     
@@ -251,14 +372,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
-                    logElement.textContent = `Error loading ${logType} log: ${data.error}`;
+                    updateLogContent(logType, `Error loading ${logType} log: ${data.error}`);
                 } else {
-                    logElement.textContent = data.content || `No ${logType} log data available`;
-                    smartScroll(logType, logElement);
+                    updateLogContent(logType, data.content || `No ${logType} log data available`);
                 }
             })
             .catch(error => {
-                logElement.textContent = `Network error loading ${logType} log: ${error.message}`;
+                updateLogContent(logType, `Network error loading ${logType} log: ${error.message}`);
                 console.error(`${logType} log fetch error:`, error);
             });
     }
@@ -289,32 +409,28 @@
                 switch(data.type) {
                     case 'initial':
                         // Load initial content
-                        logElement.textContent = data.content || `No ${logType} log data available`;
-                        smartScroll(logType, logElement);
+                        updateLogContent(logType, data.content || `No ${logType} log data available`);
                         break;
                         
                     case 'reconnected':
-                        logElement.textContent += '\n[RECONNECTED] ' + data.message;
-                        smartScroll(logType, logElement);
+                        appendLogContent(logType, '[RECONNECTED] ' + data.message);
                         break;
                         
                     case 'line':
                         // Append new line
                         if (data.line.trim()) {
-                            logElement.textContent += '\n' + data.line;
-                            smartScroll(logType, logElement);
+                            appendLogContent(logType, data.line);
                         }
                         break;
                         
                     case 'rotation':
                         // Log rotation detected
-                        logElement.textContent += '\n[LOG ROTATED] ' + data.message;
-                        smartScroll(logType, logElement);
+                        appendLogContent(logType, '[LOG ROTATED] ' + data.message);
                         break;
                         
                     case 'error':
                         console.error(`SSE error for ${logType}:`, data.error);
-                        logElement.textContent += '\n[ERROR] ' + data.error;
+                        appendLogContent(logType, '[ERROR] ' + data.error);
                         break;
                 }
             } catch (e) {
@@ -379,6 +495,8 @@
         ['latest', 'debug'].forEach(logType => {
             const checkbox = document.getElementById(`follow-${logType}`);
             const logElement = document.getElementById(`${logType}-log`);
+            const searchInput = document.getElementById(`search-${logType}`);
+            const filterCheckbox = document.getElementById(`filter-${logType}`);
             
             if (checkbox) {
                 checkbox.addEventListener('change', function() {
@@ -402,6 +520,26 @@
                         // If user scrolls back to bottom, re-enable auto-scroll
                         autoScrollState[logType] = true;
                     }
+                });
+            }
+            
+            // Add search input event listener
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    searchLogs(logType);
+                });
+                
+                searchInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        clearSearch(logType);
+                    }
+                });
+            }
+            
+            // Add filter checkbox event listener
+            if (filterCheckbox) {
+                filterCheckbox.addEventListener('change', function() {
+                    searchLogs(logType);
                 });
             }
         });
