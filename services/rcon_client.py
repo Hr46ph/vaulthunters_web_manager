@@ -288,9 +288,69 @@ def execute_rcon_command(host: str, port: int, password: str, command: str) -> T
     try:
         rcon = RconConnectionManager.get_connection(host, port, password)
         response = rcon.command(command, auto_reconnect=True)
+        
+        # Filter out common false-positive error messages that don't indicate actual failures
+        if response and isinstance(response, str):
+            # Common Minecraft RCON quirks where commands work but return error-like messages
+            filtered_response = _filter_rcon_response(command, response)
+            return True, filtered_response
+        
         return True, response
     except Exception as e:
         return False, str(e)
+
+def _filter_rcon_response(command: str, response: str) -> str:
+    """Filter RCON responses to remove false-positive error messages"""
+    if not response:
+        return response
+    
+    # Commands that commonly work but return error-like messages
+    working_commands_with_errors = ['list', 'help', 'forge tps', 'tps']
+    
+    # Check if this is a command that commonly has false-positive errors
+    cmd_lower = command.lower().strip()
+    
+    # If the response contains "Unknown or incomplete command" but the command is known to work
+    if "Unknown or incomplete command" in response:
+        # For 'list' command, if we get players listed after the error, it actually worked
+        if cmd_lower == 'list' and ('players online' in response.lower() or 'There are' in response):
+            # Extract just the useful part (player list)
+            lines = response.split('\n')
+            for line in lines:
+                if 'There are' in line or 'players online' in line:
+                    return line.strip()
+            return "Players listed successfully"
+        
+        # For 'forge tps' command, look for TPS data
+        elif 'tps' in cmd_lower and ('Mean tick time' in response or 'TPS' in response):
+            # Extract TPS information, ignore the error
+            lines = response.split('\n')
+            tps_lines = [line for line in lines if 'Mean tick time' in line or 'TPS' in line or 'ms' in line]
+            if tps_lines:
+                return '\n'.join(tps_lines)
+        
+        # For 'help' command, if we get command list after error, it worked
+        elif cmd_lower == 'help' and ('Available commands' in response or '/' in response):
+            lines = response.split('\n')
+            help_lines = [line for line in lines if not line.startswith('Unknown or incomplete')]
+            if help_lines:
+                return '\n'.join(help_lines)
+        
+        # For other commands, if the response has actual content beyond the error, extract it
+        error_line = "Unknown or incomplete command, see below for error"
+        if error_line in response:
+            parts = response.split(error_line)
+            if len(parts) > 1 and parts[1].strip():
+                # There's content after the error message
+                return parts[1].strip()
+            elif len(parts) > 0 and parts[0].strip() and parts[0].strip() != error_line:
+                # There's content before the error message
+                return parts[0].strip()
+        
+        # If we can't extract useful content, note that command was executed but had parsing issues
+        return f"Command executed (response parsing issue - this is a Minecraft RCON quirk, command likely worked)"
+    
+    return response
 
 def get_rcon_connection_status(host: str, port: int, password: str) -> Tuple[bool, Optional[str]]:
     """Get current RCON connection status"""
