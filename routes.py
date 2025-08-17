@@ -355,32 +355,54 @@ def monitoring():
 def monitoring_metrics():
     """API endpoint for monitoring metrics"""
     try:
-        # Get TPS data via RCON
-        tps_data = get_tps_data()
+        current_app.logger.info('Monitoring metrics endpoint called')
         
-        # Get server status for memory info
-        system_control = SystemControlService()
-        status = system_control.get_server_status()
-        
-        # Get recent lag spikes from performance data (from JavaScript global)
-        # For now, return mock data - will be enhanced with real data storage
-        recent_lag_spikes = []
-        
-        # Get performance events
-        events = get_recent_performance_events()
-        
+        # Initialize default values
         metrics = {
-            'current_tps': tps_data.get('tps', None),
-            'lag_spikes_5min': len([s for s in recent_lag_spikes if (time.time() - s.get('timestamp', 0)/1000) < 300]),
-            'memory_mb': status.get('memory_usage', 0),
-            'recent_lag_spikes': recent_lag_spikes[-10:],  # Last 10 spikes
-            'events': events
+            'current_tps': None,
+            'lag_spikes_5min': 0,
+            'memory_mb': 0,
+            'recent_lag_spikes': [],
+            'events': []
         }
         
+        # Get TPS data via RCON (with error handling)
+        try:
+            tps_data = get_tps_data()
+            metrics['current_tps'] = tps_data.get('tps', None)
+            current_app.logger.info(f'TPS data: {tps_data}')
+        except Exception as e:
+            current_app.logger.warning(f'TPS data failed: {e}')
+        
+        # Get server status for memory info
+        try:
+            system_control = SystemControlService()
+            status = system_control.get_server_status()
+            metrics['memory_mb'] = status.get('memory_usage', 0)
+            current_app.logger.info(f'Server status: memory={status.get("memory_usage", 0)}MB')
+        except Exception as e:
+            current_app.logger.warning(f'Server status failed: {e}')
+        
+        # Get performance events
+        try:
+            events = get_recent_performance_events()
+            metrics['events'] = events
+        except Exception as e:
+            current_app.logger.warning(f'Performance events failed: {e}')
+        
+        current_app.logger.info(f'Returning metrics: {metrics}')
         return jsonify(metrics)
+        
     except Exception as e:
-        current_app.logger.error(f'Monitoring metrics error: {e}')
-        return jsonify({'error': 'Failed to get monitoring metrics'}), 500
+        current_app.logger.error(f'Monitoring metrics error: {e}', exc_info=True)
+        return jsonify({
+            'error': 'Failed to get monitoring metrics',
+            'current_tps': None,
+            'lag_spikes_5min': 0,
+            'memory_mb': 0,
+            'recent_lag_spikes': [],
+            'events': []
+        }), 200  # Return 200 with error data instead of 500
 
 @main_bp.route('/server/control', methods=['POST'])
 def server_control():

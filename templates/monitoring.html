@@ -332,11 +332,22 @@ function initializeCharts() {
 
 // Update monitoring data
 function updateMonitoringData() {
+    console.log('Updating monitoring data...');
+    
     Promise.all([
-        fetch('/api/monitoring/metrics').then(r => r.json()),
-        fetch('/server/status').then(r => r.json())
+        fetch('/api/monitoring/metrics').then(r => {
+            console.log('Monitoring metrics response status:', r.status);
+            return r.json();
+        }),
+        fetch('/server/status').then(r => {
+            console.log('Server status response status:', r.status);
+            return r.json();
+        })
     ])
     .then(([metrics, status]) => {
+        console.log('Monitoring metrics:', metrics);
+        console.log('Server status:', status);
+        
         updateMetricCards(metrics, status);
         updateCharts(metrics);
         updateHealthStatus(status, metrics);
@@ -344,6 +355,12 @@ function updateMonitoringData() {
     })
     .catch(error => {
         console.error('Error updating monitoring data:', error);
+        
+        // Show error state in performance events
+        const container = document.getElementById('performance-events');
+        if (container) {
+            container.innerHTML = '<div class="text-danger text-center"><i class="fas fa-exclamation-triangle"></i> Connection error</div>';
+        }
     });
 }
 
