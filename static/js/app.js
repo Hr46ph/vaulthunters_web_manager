@@ -372,14 +372,14 @@ function updateStatusDisplay(status) {
         }
         
         if (status.cpu_usage > 0) {
-            html += `<p>CPU: ${status.cpu_usage.toFixed(1)}%</p>`;
+            html += `<p>Java CPU: ${status.cpu_usage.toFixed(1)}%</p>`;
         }
         
         if (status.memory_usage > 0) {
             const memoryDisplay = status.memory_usage >= 1024 
                 ? `${(status.memory_usage / 1024).toFixed(1)} GB`
                 : `${status.memory_usage} MB`;
-            html += `<p>Memory: ${memoryDisplay}</p>`;
+            html += `<p>Java Memory: ${memoryDisplay}</p>`;
         }
         
         rightCol.innerHTML = html;
