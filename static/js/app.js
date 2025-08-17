@@ -285,7 +285,7 @@ function showStatusError(message) {
     const statusElement = document.getElementById('server-status');
     if (!statusElement) return;
     
-    const leftCol = statusElement.querySelector('.col-md-6:first-child');
+    const leftCol = statusElement.querySelector('.col-md-4:first-child');
     if (leftCol) {
         leftCol.innerHTML = `
             <h6>Status: 
@@ -334,9 +334,11 @@ function updateStatusDisplay(status) {
         badge.innerHTML = statusIcon + statusText;
     }
     
-    // Update the entire status section with new data
-    const leftCol = statusElement.querySelector('.col-md-6:first-child');
-    const rightCol = statusElement.querySelector('.col-md-6:last-child');
+    // Update the entire status section with new data - now using 3 columns
+    const cols = statusElement.querySelectorAll('.col-md-4');
+    const leftCol = cols[0];   // Status, Uptime, PID
+    const middleCol = cols[1]; // Players, Java CPU, Java Memory  
+    const rightCol = cols[2];  // Performance stats (handled separately)
     
     if (leftCol) {
         let html = `
@@ -350,6 +352,8 @@ function updateStatusDisplay(status) {
         
         if (status.running && status.pid) {
             html += `<p>PID: ${status.pid}</p>`;
+        } else {
+            html += `<p>PID: <span class="text-muted">N/A</span></p>`;
         }
         
         // Show additional info for starting status
@@ -360,7 +364,7 @@ function updateStatusDisplay(status) {
         leftCol.innerHTML = html;
     }
     
-    if (rightCol) {
+    if (middleCol) {
         let html = '';
         
         if (status.status === 'running' && status.server_ready) {
@@ -388,7 +392,7 @@ function updateStatusDisplay(status) {
             html += `<p>Java Memory: <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span></p>`;
         }
         
-        rightCol.innerHTML = html;
+        middleCol.innerHTML = html;
     }
     
     // Update button states - disable controls during startup
