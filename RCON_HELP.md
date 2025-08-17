@@ -1,98 +1,149 @@
-[11:27:52 AM] /help
-/advancement (grant|revoke)
-/attribute <target> <attribute> (get|base|modifier)
-/execute (run|if|unless|as|at|store|positioned|rotated|facing|align|anchored|in)
-/bossbar (add|remove|list|set|get)
-/clear [<targets>]
-/clone <begin> <end> <destination> [replace|masked|filtered]
-/data (merge|get|remove|modify)
-/datapack (enable|disable|list)
-/debug (start|stop|function)
-/defaultgamemode (survival|creative|adventure|spectator)
-/difficulty [peaceful|easy|normal|hard]
-/effect (clear|give)
-/me <action>
-/enchant <targets> <enchantment> [<level>]
-/experience (add|set|query)
-/xp -> experience
-/fill <from> <to> <block> [replace|keep|outline|hollow|destroy]
-/forceload (add|remove|query)
-/function <name>
-/gamemode (survival|creative|adventure|spectator)
-/gamerule (announceAdvancements|commandBlockOutput|disableElytraMovementCheck|disableRaids|doDaylightCycle|doEntityDrops|doFireTick|doImmediateRespawn|doInsomnia|doLimitedCrafting|doMobLoot|doMobSpawning|doPatrolSpawning|doTileDrops|doTraderSpawning|doWeatherCycle|drowningDamage|fallDamage|finalVaultAllowParty|fireDamage|forgiveDeadPlayers|freezeDamage|keepInventory|logAdminCommands|maxCommandChainLength|maxEntityCramming|mobGriefing|naturalRegeneration|playersSleepingPercentage|questExpertMode|randomTickSpeed|reducedDebugInfo|sendCommandFeedback|showDeathMessages|spawnRadius|spectatorsGenerateChunks|universalAnger|vaultAllowKnowledgeBrew|vaultAllowMentoring|vaultAllowWaypoints|vaultBoostPenalty|vaultCrystalMode|vaultCrystalRecipeScaling|vaultExperience|vaultHeraldMinLevel|vaultJoinRequireParty|vaultLevelLock|vaultLocker|vaultLoot|vaultMode|vaultNoOpDifficulty|vaultNoResearchTeamPenalty|vaultPartyExpSharing|vaultPartyMapSharing|vaultPrintSaveDataTiming|vaultSpectatePartyOnly|vaultSpectatorMode|vaultTemplateCacheSize|vaultTimer|vaultWeightedArtifacts)
-/give <targets> <item> [<count>]
-/help [<command>]
-/item (replace|modify)
-/kick <targets> [<reason>]
-/kill [<targets>]
-/list [uuids]
-/locate <structure>
-/locatebiome <biome>
-/loot (replace|insert|give|spawn)
-/msg <targets> <message>
-/tell -> msg
-/w -> msg
-/particle <name> [<pos>]
-/placefeature <feature> [<pos>]
-/playsound <sound> (master|music|record|weather|block|hostile|neutral|player|ambient|voice)
-/reload
-/recipe (give|take)
-/say <message>
-/schedule (function|clear)
-/scoreboard (objectives|players)
-/seed
-/setblock <pos> <block> [destroy|keep|replace]
-/spawnpoint [<targets>]
-/setworldspawn [<pos>]
-/spectate [<target>]
-/spreadplayers <center> <spreadDistance> <maxRange> (<respectTeams>|under)
-/stopsound <targets> [*|master|music|record|weather|block|hostile|neutral|player|ambient|voice]
-/summon <entity> [<pos>]
-/tag <targets> (add|remove|list)
-/team (list|add|remove|empty|join|leave|modify)
-/teammsg <message>
-/tm -> teammsg
-/teleport (<location>|<destination>|<targets>)
-/tp -> teleport
-/tellraw <targets> <message>
-/time (set|add|query)
-/title <targets> (clear|reset|title|subtitle|actionbar|times)
-/trigger <objective> [add|set]
-/weather (clear|rain|thunder)
-/worldborder (add|set|center|damage|get|warning)
-/jfr (start|stop)
-/ban-ip <target> [<reason>]
-/banlist [ips|players]
-/ban <targets> [<reason>]
-/deop <targets>
-/op <targets>
-/pardon <targets>
-/pardon-ip <target>
-/perf (start|stop)
-/save-all [flush]
+# VaultHunters RCON Command Reference
+
+## Core Minecraft Commands
+
+### Server Management
+- **`/stop`** - Safely shutdown the server
+- **`/save-all [flush]`** - Force save all player data and world chunks
+- **`/save-off`** - Disable automatic world saving
+- **`/save-on`** - Enable automatic world saving
+- **`/reload`** - Reload server configuration and data packs
+- **`/perf (start|stop)`** - Start/stop performance profiling
+
+### Player Management
+- **`/list [uuids]`** - Show online players (optionally with UUIDs)
+- **`/kick <targets> [<reason>]`** - Remove player from server
+- **`/ban <targets> [<reason>]`** - Permanently ban players
+- **`/ban-ip <target> [<reason>]`** - Ban IP addresses
+- **`/pardon <targets>`** - Unban players
+- **`/pardon-ip <target>`** - Unban IP addresses
+- **`/banlist [ips|players]`** - View banned players/IPs
+- **`/whitelist (on|off|list|add|remove|reload)`** - Manage server whitelist
+- **`/op <targets>`** - Grant operator privileges
+- **`/deop <targets>`** - Remove operator privileges
+- **`/setidletimeout <minutes>`** - Set idle timeout duration
+
+### World & Environment
+- **`/time (set|add|query)`** - Control world time
+- **`/weather (clear|rain|thunder)`** - Change weather conditions
+- **`/difficulty [peaceful|easy|normal|hard]`** - Set world difficulty
+- **`/gamerule <rule> <value>`** - Modify game rules (see VaultHunters section)
+- **`/worldborder (add|set|center|damage|get|warning)`** - Manage world border
+- **`/seed`** - Display world seed
+
+### Gameplay Commands
+- **`/gamemode (survival|creative|adventure|spectator)`** - Change player gamemode
+- **`/defaultgamemode (survival|creative|adventure|spectator)`** - Set default gamemode
+- **`/give <targets> <item> [<count>]`** - Give items to players
+- **`/clear [<targets>]`** - Clear player inventories
+- **`/enchant <targets> <enchantment> [<level>]`** - Apply enchantments
+- **`/experience (add|set|query)`** - Manage player experience
+- **`/effect (clear|give)`** - Apply or remove status effects
+
+### World Manipulation
+- **`/setblock <pos> <block> [destroy|keep|replace]`** - Place single blocks
+- **`/fill <from> <to> <block> [replace|keep|outline|hollow|destroy]`** - Fill areas with blocks
+- **`/clone <begin> <end> <destination> [replace|masked|filtered]`** - Copy world sections
+- **`/summon <entity> [<pos>]`** - Spawn entities
+- **`/kill [<targets>]`** - Remove entities or players
+
+### Communication
+- **`/say <message>`** - Broadcast server message
+- **`/msg <targets> <message>`** - Send private messages
+- **`/tellraw <targets> <message>`** - Send formatted JSON messages
+- **`/me <action>`** - Send action message
+- **`/title <targets> (clear|reset|title|subtitle|actionbar|times)`** - Display titles
+
+## VaultHunters Specific Commands
+
+### VaultHunters Core
+- **`/sbvh (createSnapshot|restoreFromSnapshot)`** - Create/restore world snapshots
+- **VaultHunters Game Rules:**
+  - `finalVaultAllowParty` - Allow parties in final vault
+  - `vaultAllowKnowledgeBrew` - Enable knowledge brewing
+  - `vaultAllowMentoring` - Allow player mentoring
+  - `vaultAllowWaypoints` - Enable waypoint system
+  - `vaultBoostPenalty` - Vault boost penalty settings
+  - `vaultCrystalMode` - Crystal generation mode
+  - `vaultExperience` - Vault experience settings
+  - `vaultLevelLock` - Level-based restrictions
+  - `vaultLoot` - Vault loot generation
+  - `vaultMode` - Core vault gameplay mode
+  - `vaultPartyExpSharing` - Party experience sharing
+  - `vaultTimer` - Vault time limits
+
+### Mod-Specific Commands
+
+#### Applied Energistics 2
+- **`/ae2things [recover|getuuid]`** - AE2 troubleshooting tools
+
+#### Mekanism
+- **`/mek (chunk|debug|retrogen|radiation|testrules)`** - Mekanism utilities
+
+#### Refined Storage
+- **`/refinedstorage (pattern|disk|network)`** - Storage system management
+
+#### CoFH (Thermal)
+- **`/cofh (crafting|workbench|enderchest|friend|heal|ignite|invis|invuln|recharge|repair|zap)`** - Thermal mod utilities
+
+#### Simple Backups
+- **`/simplebackups (backup|mergeBackups)`** - Create and manage backups
+
+#### Torch Master
+- **`/torchmaster [torchdump|entitydump]`** - Lighting and entity analysis
+
+#### Curios
+- **`/curios (list|replace|set|add|remove|clear|drop|reset)`** - Manage curio items
+
+#### Flux Networks
+- **`/fluxnetworks superadm`** - Network administration
+
+## Advanced Commands
+
+### Data Management
+- **`/data (merge|get|remove|modify)`** - Manipulate NBT data
+- **`/datapack (enable|disable|list)`** - Manage data packs
+- **`/function <name>`** - Execute function files
+
+### Performance & Debug
+- **`/debug (start|stop|function)`** - Debug mode controls
+- **`/forge (tps|track|entity|generate|dimensions|mods|tags)`** - Forge debugging
+- **`/jfr (start|stop)`** - Java Flight Recorder profiling
+
+### Specialized
+- **`/execute (run|if|unless|as|at|store|positioned|rotated|facing|align|anchored|in)`** - Complex command execution
+- **`/scoreboard (objectives|players)`** - Scoreboard management
+- **`/bossbar (add|remove|list|set|get)`** - Custom boss bars
+- **`/schedule (function|clear)`** - Schedule function execution
+
+## Usage Tips
+
+1. **Tab Completion** - Use Tab key for command and parameter completion
+2. **Target Selectors** - Use `@a` (all), `@p` (nearest), `@r` (random), `@s` (self)
+3. **Coordinates** - Use `~` for relative coordinates, `^` for local coordinates
+4. **Safety** - Always use `/save-all` before major operations
+5. **VaultHunters** - Many vault settings require server restart to take effect
+
+## Common Workflows
+
+### Server Maintenance
+```
+/save-all flush
 /save-off
+# Perform maintenance
 /save-on
-/setidletimeout <minutes>
-/stop
-/whitelist (on|off|list|add|remove|reload)
-/placebo serialize_loot_table <loot_table>
-/bookshelf (font|hand)
-/torchmaster [torchdump|entitydump]
-/refinedstorage (pattern|disk|network)
-/curios (list|replace|set|add|remove|clear|drop|reset)
-/libnonymous mods [<mod>]
-/runelic (say|hand|book|tile)
-/oredistribution [<radius>]
-/dumpregistry
-/chunkymcchunkface (list|disable|disable_all)
-/simplebackups (backup|mergeBackups)
-/sbvh (createSnapshot|restoreFromSnapshot)
-/cofh (crafting|workbench|enderchest|friend|heal|ignite|invis|invuln|recharge|repair|zap)
-/forge (tps|track|entity|generate|dimensions|mods|tags)
-/config showfile <mod> <type>
-/dumpHandlers
-/ae2things [recover|getuuid]
-/mek (chunk|debug|retrogen|radiation|testrules)
-/pigpen (say|hand|book|tile)
-/polymorph conflicts
-/fluxnetworks superadm
+```
+
+### Player Management
+```
+/list
+/gamemode creative PlayerName
+/tp PlayerName ~ ~ ~
+```
+
+### Backup & Recovery
+```
+/save-all flush
+/simplebackups backup
+/sbvh createSnapshot
+```
