@@ -86,7 +86,7 @@
     </div>
 </div>
 
-<!-- Charts Row -->
+<!-- Charts Row 1 -->
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="card">
@@ -108,6 +108,43 @@
             <div class="card-body">
                 <div class="chart-container">
                     <canvas id="memory-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 2 -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-microchip"></i> CPU Usage Per Core</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="cpu-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-info-circle"></i> CPU Summary</h6>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <div class="metric-label">System Average</div>
+                    <div class="metric-value" id="cpu-avg">--</div>
+                </div>
+                <div class="text-center mb-3">
+                    <div class="metric-label">CPU Cores</div>
+                    <div class="metric-value" id="cpu-cores">--</div>
+                </div>
+                <div class="text-center">
+                    <div class="metric-label">Highest Core</div>
+                    <div class="metric-value" id="cpu-max">--</div>
                 </div>
             </div>
         </div>
@@ -192,12 +229,13 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // Monitoring page specific JavaScript
-let tpsChart, memoryChart, lagChart;
+let tpsChart, memoryChart, lagChart, cpuChart;
 let monitoringData = {
     tps: [],
     memory: [],
     lagSpikes: [],
-    events: []
+    events: [],
+    cpuCores: []
 };
 
 // Initialize charts
@@ -334,6 +372,56 @@ function initializeCharts() {
             }
         }
     });
+
+    // CPU Per-Core Chart
+    const cpuCtx = document.getElementById('cpu-chart').getContext('2d');
+    cpuChart = new Chart(cpuCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [] // Will be populated dynamically based on CPU core count
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                        }
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
 }
 
 // Update monitoring data
@@ -356,6 +444,8 @@ function updateMonitoringData() {
         
         updateMetricCards(metrics, status);
         updateCharts(metrics);
+        updateCpuChart(metrics);
+        updateCpuSummary(metrics);
         updateHealthStatus(status, metrics);
         updatePerformanceEvents(metrics.events || []);
     })
@@ -376,7 +466,10 @@ function updateMetricCards(metrics, status) {
     document.getElementById('lag-spikes-5min').textContent = metrics.lag_spikes_5min || '--';
     document.getElementById('memory-usage').textContent = status.memory_usage ? 
         (status.memory_usage >= 1024 ? `${(status.memory_usage / 1024).toFixed(1)}GB` : `${status.memory_usage}MB`) : '--';
-    document.getElementById('cpu-usage').textContent = status.cpu_usage ? `${status.cpu_usage.toFixed(1)}%` : '--';
+    
+    // Use system CPU average from new metrics instead of process CPU
+    document.getElementById('cpu-usage').textContent = metrics.cpu_system_avg !== undefined ? 
+        `${metrics.cpu_system_avg.toFixed(1)}%` : '--';
 }
 
 // Update charts
@@ -416,6 +509,79 @@ function updateCharts(metrics) {
         );
         lagChart.data.datasets[0].data = metrics.recent_lag_spikes.map(spike => spike.duration);
         lagChart.update('none');
+    }
+}
+
+// Update CPU chart
+function updateCpuChart(metrics) {
+    if (!metrics.cpu_per_core || metrics.cpu_per_core.length === 0) {
+        return;
+    }
+
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString();
+
+    // Initialize datasets if not already done
+    if (cpuChart.data.datasets.length === 0) {
+        const colors = [
+            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
+            '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'
+        ];
+
+        for (let i = 0; i < metrics.cpu_per_core.length; i++) {
+            cpuChart.data.datasets.push({
+                label: `Core ${i}`,
+                data: [],
+                borderColor: colors[i % colors.length],
+                backgroundColor: colors[i % colors.length] + '20',
+                tension: 0.4,
+                fill: false,
+                pointRadius: 2,
+                pointHoverRadius: 4
+            });
+        }
+    }
+
+    // Add new time label
+    cpuChart.data.labels.push(timeLabel);
+
+    // Add new CPU data for each core
+    metrics.cpu_per_core.forEach((coreUsage, index) => {
+        if (cpuChart.data.datasets[index]) {
+            cpuChart.data.datasets[index].data.push(coreUsage);
+        }
+    });
+
+    // Keep last 20 data points
+    if (cpuChart.data.labels.length > 20) {
+        cpuChart.data.labels.shift();
+        cpuChart.data.datasets.forEach(dataset => {
+            dataset.data.shift();
+        });
+    }
+
+    cpuChart.update('none');
+}
+
+// Update CPU summary
+function updateCpuSummary(metrics) {
+    // System average
+    const avgElement = document.getElementById('cpu-avg');
+    if (avgElement && metrics.cpu_system_avg !== undefined) {
+        avgElement.textContent = `${metrics.cpu_system_avg.toFixed(1)}%`;
+    }
+
+    // CPU cores count
+    const coresElement = document.getElementById('cpu-cores');
+    if (coresElement && metrics.cpu_count !== undefined) {
+        coresElement.textContent = metrics.cpu_count;
+    }
+
+    // Highest core usage
+    const maxElement = document.getElementById('cpu-max');
+    if (maxElement && metrics.cpu_per_core && metrics.cpu_per_core.length > 0) {
+        const maxUsage = Math.max(...metrics.cpu_per_core);
+        maxElement.textContent = `${maxUsage.toFixed(1)}%`;
     }
 }
 

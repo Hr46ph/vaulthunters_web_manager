@@ -389,6 +389,23 @@ def monitoring_metrics():
     except Exception as e:
         current_app.logger.warning(f'Server status failed: {e}')
     
+    # Get per-core CPU usage
+    try:
+        import psutil
+        per_core_cpu = psutil.cpu_percent(percpu=True)
+        system_cpu_avg = psutil.cpu_percent()
+        cpu_count = psutil.cpu_count()
+        
+        metrics['cpu_per_core'] = per_core_cpu
+        metrics['cpu_system_avg'] = system_cpu_avg
+        metrics['cpu_count'] = cpu_count
+        current_app.logger.info(f'CPU cores: {cpu_count}, per-core: {per_core_cpu}, avg: {system_cpu_avg}%')
+    except Exception as e:
+        current_app.logger.warning(f'CPU monitoring failed: {e}')
+        metrics['cpu_per_core'] = []
+        metrics['cpu_system_avg'] = 0
+        metrics['cpu_count'] = 0
+    
     # Get performance events
     try:
         events = get_recent_performance_events()
