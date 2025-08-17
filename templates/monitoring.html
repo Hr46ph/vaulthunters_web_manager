@@ -291,12 +291,18 @@ function initializeCharts() {
                 label: 'Lag Duration (ms)',
                 data: [],
                 backgroundColor: function(context) {
+                    if (!context.parsed || context.parsed.y === undefined) {
+                        return 'rgba(108, 117, 125, 0.8)'; // Default gray
+                    }
                     const value = context.parsed.y;
                     if (value < 1000) return 'rgba(255, 193, 7, 0.8)';
                     if (value < 3000) return 'rgba(255, 108, 47, 0.8)';
                     return 'rgba(220, 53, 69, 0.8)';
                 },
                 borderColor: function(context) {
+                    if (!context.parsed || context.parsed.y === undefined) {
+                        return '#6c757d'; // Default gray
+                    }
                     const value = context.parsed.y;
                     if (value < 1000) return '#ffc107';
                     if (value < 3000) return '#ff6c2f';
