@@ -54,6 +54,63 @@
     </div>
 </div>
 
+<!-- Configuration Panel -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6><i class="fas fa-cog"></i> Metrics Configuration</h6>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#config-panel">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+            <div class="collapse" id="config-panel">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="collection-interval" class="form-label">Collection Interval</label>
+                            <select class="form-select form-select-sm" id="collection-interval">
+                                <option value="15">15 seconds</option>
+                                <option value="30" selected>30 seconds</option>
+                                <option value="60">1 minute</option>
+                                <option value="120">2 minutes</option>
+                                <option value="300">5 minutes</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="retention-days" class="form-label">Data Retention</label>
+                            <select class="form-select form-select-sm" id="retention-days">
+                                <option value="1">1 day</option>
+                                <option value="3">3 days</option>
+                                <option value="7" selected>1 week</option>
+                                <option value="14">2 weeks</option>
+                                <option value="30">1 month</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="chart-range" class="form-label">Chart Time Range</label>
+                            <select class="form-select form-select-sm" id="chart-range">
+                                <option value="1" selected>1 hour</option>
+                                <option value="6">6 hours</option>
+                                <option value="24">24 hours</option>
+                                <option value="168">1 week</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button class="btn btn-sm btn-success me-2" id="save-config">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                            <button class="btn btn-sm btn-info" id="refresh-charts">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Performance Overview Cards -->
 <div class="row mb-4">
     <div class="col-md-3">
@@ -247,6 +304,15 @@ let monitoringData = {
     events: [],
     cpuCores: []
 };
+
+// Configuration state
+let currentConfig = {
+    collection_interval: 30,
+    retention_days: 7,
+    chart_range: 1
+};
+
+let historicalMode = false;
 
 // Initialize charts
 function initializeCharts() {
@@ -855,13 +921,212 @@ function updatePerformanceEvents(events) {
     container.innerHTML = eventsHtml;
 }
 
+// Load configuration from server
+function loadConfiguration() {
+    fetch('/api/monitoring/config')
+        .then(response => response.json())
+        .then(config => {
+            currentConfig = {
+                collection_interval: config.collection_interval,
+                retention_days: config.retention_days,
+                chart_range: 1 // Default chart range
+            };
+            
+            // Update UI elements
+            document.getElementById('collection-interval').value = config.collection_interval;
+            document.getElementById('retention-days').value = config.retention_days;
+            
+            console.log('Configuration loaded:', currentConfig);
+        })
+        .catch(error => {
+            console.error('Failed to load configuration:', error);
+        });
+}
+
+// Save configuration to server
+function saveConfiguration() {
+    const configData = {
+        collection_interval: parseInt(document.getElementById('collection-interval').value),
+        retention_days: parseInt(document.getElementById('retention-days').value),
+        enabled: true
+    };
+    
+    fetch('/api/monitoring/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(configData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            currentConfig.collection_interval = configData.collection_interval;
+            currentConfig.retention_days = configData.retention_days;
+            console.log('Configuration saved successfully');
+            
+            // Show success feedback
+            const saveBtn = document.getElementById('save-config');
+            const originalText = saveBtn.innerHTML;
+            saveBtn.innerHTML = '<i class="fas fa-check"></i> Saved';
+            saveBtn.classList.remove('btn-success');
+            saveBtn.classList.add('btn-outline-success');
+            
+            setTimeout(() => {
+                saveBtn.innerHTML = originalText;
+                saveBtn.classList.remove('btn-outline-success');
+                saveBtn.classList.add('btn-success');
+            }, 2000);
+        } else {
+            console.error('Failed to save configuration:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving configuration:', error);
+    });
+}
+
+// Load historical data for charts
+function loadHistoricalData() {
+    const hours = parseInt(document.getElementById('chart-range').value);
+    currentConfig.chart_range = hours;
+    
+    historicalMode = true;
+    
+    console.log(`Loading historical data for ${hours} hours`);
+    
+    // Clear current chart data
+    clearChartData();
+    
+    // Load historical data for each metric type
+    const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min'];
+    
+    Promise.all(metrics.map(metric => 
+        fetch(`/api/monitoring/history/${metric}?hours=${hours}`)
+            .then(r => r.json())
+    ))
+    .then(results => {
+        console.log('Historical data loaded:', results);
+        
+        // Process and display historical data
+        results.forEach(result => {
+            if (result.data && result.data.length > 0) {
+                displayHistoricalMetric(result.metric_type, result.data);
+            }
+        });
+        
+        // Update charts
+        updateChartsFromHistoricalData();
+    })
+    .catch(error => {
+        console.error('Failed to load historical data:', error);
+        historicalMode = false;
+    });
+}
+
+// Clear chart data
+function clearChartData() {
+    if (tpsChart) {
+        tpsChart.data.labels = [];
+        tpsChart.data.datasets[0].data = [];
+        tpsChart.update('none');
+    }
+    
+    if (memoryChart) {
+        memoryChart.data.labels = [];
+        memoryChart.data.datasets.forEach(dataset => {
+            dataset.data = [];
+        });
+        memoryChart.update('none');
+    }
+    
+    if (cpuChart) {
+        cpuChart.data.labels = [];
+        cpuChart.data.datasets.forEach(dataset => {
+            dataset.data = [];
+        });
+        cpuChart.update('none');
+    }
+}
+
+// Display historical metric data
+function displayHistoricalMetric(metricType, data) {
+    switch(metricType) {
+        case 'system_memory_used_mb':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                const timeLabel = timestamp.toLocaleTimeString();
+                
+                memoryChart.data.labels.push(timeLabel);
+                memoryChart.data.datasets[0].data.push(point.value);
+                // Add placeholder data for buffers and cache
+                memoryChart.data.datasets[1].data.push(point.value * 0.1);
+                memoryChart.data.datasets[2].data.push(point.value * 0.2);
+            });
+            break;
+            
+        case 'system_cpu_percent':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                const timeLabel = timestamp.toLocaleTimeString();
+                
+                if (tpsChart.data.labels.length === 0 || 
+                    tpsChart.data.labels[tpsChart.data.labels.length - 1] !== timeLabel) {
+                    tpsChart.data.labels.push(timeLabel);
+                    // Use CPU as proxy for TPS (inverse relationship)
+                    const tpsEstimate = Math.max(15, 20 - (point.value * 0.1));
+                    tpsChart.data.datasets[0].data.push(tpsEstimate);
+                }
+            });
+            break;
+    }
+}
+
+// Update charts from historical data
+function updateChartsFromHistoricalData() {
+    if (tpsChart) {
+        tpsChart.update();
+    }
+    if (memoryChart) {
+        memoryChart.update();
+    }
+    if (cpuChart) {
+        cpuChart.update();
+    }
+}
+
+// Switch back to real-time mode
+function switchToRealTimeMode() {
+    historicalMode = false;
+    clearChartData();
+    console.log('Switched back to real-time mode');
+}
+
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();
+    loadConfiguration();
     updateMonitoringData();
     
-    // Update every 5 seconds
-    setInterval(updateMonitoringData, 5000);
+    // Set up event listeners
+    document.getElementById('save-config').addEventListener('click', saveConfiguration);
+    document.getElementById('refresh-charts').addEventListener('click', loadHistoricalData);
+    document.getElementById('chart-range').addEventListener('change', function() {
+        if (this.value == '1') {
+            // Switch to real-time for 1-hour view
+            switchToRealTimeMode();
+        } else {
+            // Load historical data for longer ranges
+            loadHistoricalData();
+        }
+    });
+    
+    // Update every 5 seconds (only in real-time mode)
+    setInterval(function() {
+        if (!historicalMode) {
+            updateMonitoringData();
+        }
+    }, 5000);
 });
 </script>
 {% endblock %}

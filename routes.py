@@ -542,6 +542,76 @@ def monitoring_metrics():
     current_app.logger.info(f'Returning test metrics: {test_metrics}')
     return jsonify(test_metrics)
 
+@main_bp.route('/api/monitoring/history/<metric_type>')
+def get_metric_history(metric_type):
+    """Get historical data for a specific metric type"""
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        # Get time range parameter (default to 1 hour)
+        hours = request.args.get('hours', 1, type=int)
+        if hours <= 0 or hours > 168:  # Limit to 1 week max
+            hours = 1
+        
+        # Get historical data
+        history = metrics_storage.get_metrics(metric_type, hours=hours)
+        
+        current_app.logger.info(f'Retrieved {len(history)} data points for {metric_type} over {hours} hours')
+        
+        return jsonify({
+            'metric_type': metric_type,
+            'hours': hours,
+            'data_points': len(history),
+            'data': history
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Failed to get metric history for {metric_type}: {e}')
+        return jsonify({
+            'error': 'Failed to retrieve metric history',
+            'metric_type': metric_type,
+            'data': []
+        }), 500
+
+@main_bp.route('/api/monitoring/config', methods=['GET', 'POST'])
+def monitoring_config():
+    """Get or update monitoring configuration"""
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        if request.method == 'GET':
+            # Return current configuration
+            config = {
+                'collection_interval': current_app.config.get('METRICS_COLLECTION_INTERVAL', 30),
+                'retention_days': current_app.config.get('METRICS_RETENTION_DAYS', 7),
+                'enabled': current_app.config.get('METRICS_ENABLED', True),
+                'collect_system_memory': current_app.config.get('METRICS_COLLECT_SYSTEM_MEMORY', True),
+                'collect_system_cpu': current_app.config.get('METRICS_COLLECT_SYSTEM_CPU', True),
+                'collect_system_load': current_app.config.get('METRICS_COLLECT_SYSTEM_LOAD', True),
+                'collect_java_process': current_app.config.get('METRICS_COLLECT_JAVA_PROCESS', True),
+                'collect_server_tps': current_app.config.get('METRICS_COLLECT_SERVER_TPS', True),
+                'collect_player_count': current_app.config.get('METRICS_COLLECT_PLAYER_COUNT', True)
+            }
+            return jsonify(config)
+        
+        elif request.method == 'POST':
+            # Update configuration (stored in database for runtime changes)
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            # Validate and store configuration
+            valid_keys = ['collection_interval', 'retention_days', 'enabled']
+            for key in valid_keys:
+                if key in data:
+                    metrics_storage.set_config_value(key, data[key])
+            
+            return jsonify({'success': True, 'message': 'Configuration updated'})
+            
+    except Exception as e:
+        current_app.logger.error(f'Failed to handle monitoring config: {e}')
+        return jsonify({'error': 'Configuration operation failed'}), 500
+
 @main_bp.route('/server/control', methods=['POST'])
 def server_control():
     """Handle server control actions (start/stop/restart)"""

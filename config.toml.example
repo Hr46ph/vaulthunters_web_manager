@@ -114,3 +114,25 @@ allowed_backup_extensions = [".zip", ".tar.gz", ".tar", ".7z"]
 server_control = 5
 config_save = 10
 backup_download = 3
+
+[metrics]
+# Metrics collection and storage settings
+# Collection interval in seconds (how often to collect metrics)
+collection_interval = 30
+
+# Retention period in days (how long to keep historical data)
+retention_days = 7
+
+# Database path (relative to application root)
+database_path = "data/metrics.db"
+
+# Enable/disable metrics collection
+enabled = true
+
+# Metrics to collect (true/false for each type)
+collect_system_memory = true
+collect_system_cpu = true
+collect_system_load = true
+collect_java_process = true
+collect_server_tps = true
+collect_player_count = true
