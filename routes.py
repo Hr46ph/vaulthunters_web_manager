@@ -220,28 +220,114 @@ def get_tps_data():
         return {'tps': None, 'error': str(e)}
 
 def get_recent_performance_events():
-    """Get recent performance events (placeholder for now)"""
+    """Get recent performance events from system monitoring"""
     try:
-        # For Phase 1, return mock events
-        # In Phase 2, this would read from stored events
-        mock_events = [
-            {
-                'type': 'Lag Spike',
-                'message': 'Server behind by 2.3s (46 ticks)',
+        events = []
+        
+        # Check server status for events
+        try:
+            system_control = SystemControlService()
+            status = system_control.get_server_status()
+            
+            # Add server status events
+            if status.get('running'):
+                if status.get('status') == 'starting':
+                    events.append({
+                        'type': 'Server Status',
+                        'message': 'Server is starting up',
+                        'timestamp': datetime.now().isoformat(),
+                        'severity': 'info'
+                    })
+                elif status.get('server_ready'):
+                    uptime_minutes = 0
+                    uptime_str = status.get('uptime', '0 minutes')
+                    if 'minute' in uptime_str:
+                        uptime_minutes = int(uptime_str.split()[0]) if uptime_str.split()[0].isdigit() else 0
+                    
+                    if uptime_minutes < 5:
+                        events.append({
+                            'type': 'Server Start',
+                            'message': f'Server started successfully (uptime: {uptime_str})',
+                            'timestamp': datetime.now().isoformat(),
+                            'severity': 'success'
+                        })
+                
+                # Memory usage events
+                memory_mb = status.get('memory_usage', 0)
+                if memory_mb > 20000:  # > 20GB
+                    events.append({
+                        'type': 'High Memory Usage',
+                        'message': f'Memory usage: {memory_mb/1024:.1f}GB',
+                        'timestamp': datetime.now().isoformat(),
+                        'severity': 'warning'
+                    })
+                
+                # CPU usage events
+                cpu_usage = status.get('cpu_usage', 0)
+                if cpu_usage > 80:
+                    events.append({
+                        'type': 'High CPU Usage',
+                        'message': f'CPU usage: {cpu_usage:.1f}%',
+                        'timestamp': datetime.now().isoformat(),
+                        'severity': 'warning'
+                    })
+            else:
+                events.append({
+                    'type': 'Server Status',
+                    'message': 'Server is offline',
+                    'timestamp': datetime.now().isoformat(),
+                    'severity': 'error'
+                })
+        except Exception as e:
+            current_app.logger.warning(f'Status check failed: {e}')
+        
+        # Get TPS events
+        try:
+            tps_data = get_tps_data()
+            if tps_data.get('tps') is not None:
+                tps = tps_data['tps']
+                if tps < 15:
+                    events.append({
+                        'type': 'Poor Performance',
+                        'message': f'TPS dropped to {tps:.1f}',
+                        'timestamp': datetime.now().isoformat(),
+                        'severity': 'warning'
+                    })
+                elif tps < 18:
+                    events.append({
+                        'type': 'TPS Monitoring',
+                        'message': f'TPS slightly low: {tps:.1f}',
+                        'timestamp': datetime.now().isoformat(),
+                        'severity': 'info'
+                    })
+                else:
+                    events.append({
+                        'type': 'Performance',
+                        'message': f'TPS healthy: {tps:.1f}',
+                        'timestamp': datetime.now().isoformat(),
+                        'severity': 'success'
+                    })
+        except Exception as e:
+            current_app.logger.warning(f'TPS check failed: {e}')
+        
+        # If no events, add a default monitoring message
+        if not events:
+            events.append({
+                'type': 'Monitoring',
+                'message': 'System monitoring active',
                 'timestamp': datetime.now().isoformat(),
-                'severity': 'warning'
-            },
-            {
-                'type': 'TPS Drop',
-                'message': 'TPS dropped to 15.2',
-                'timestamp': (datetime.now()).isoformat(),
-                'severity': 'warning'
-            }
-        ]
-        return mock_events[:5]  # Return last 5 events
+                'severity': 'info'
+            })
+        
+        return events[:5]  # Return last 5 events
     except Exception as e:
         current_app.logger.error(f'Performance events error: {e}')
-        return []
+        return [{
+            'type': 'Error',
+            'message': 'Failed to get performance events',
+            'timestamp': datetime.now().isoformat(),
+            'severity': 'error'
+        }]
 
 @main_bp.route('/')
 def index():

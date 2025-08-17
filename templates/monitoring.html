@@ -406,7 +406,17 @@ function initializeCharts() {
             plugins: {
                 legend: {
                     display: true,
-                    position: 'top'
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 15,
+                        font: {
+                            size: 11
+                        },
+                        boxWidth: 8,
+                        boxHeight: 8
+                    }
                 },
                 tooltip: {
                     callbacks: {
@@ -698,15 +708,28 @@ function updatePerformanceEvents(events) {
         return;
     }
 
-    const eventsHtml = events.slice(0, 10).map(event => `
-        <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
-            <div>
-                <div class="fw-bold">${event.type}</div>
-                <small class="text-muted">${event.message}</small>
+    const eventsHtml = events.slice(0, 10).map(event => {
+        // Determine severity badge color
+        let badgeClass = 'bg-secondary';
+        switch(event.severity) {
+            case 'success': badgeClass = 'bg-success'; break;
+            case 'warning': badgeClass = 'bg-warning'; break;
+            case 'error': badgeClass = 'bg-danger'; break;
+            case 'info': badgeClass = 'bg-info'; break;
+        }
+        
+        return `
+            <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
+                <div>
+                    <div class="d-flex align-items-center">
+                        <span class="badge ${badgeClass} me-2" style="font-size: 0.7em;">${event.type}</span>
+                    </div>
+                    <small class="text-muted">${event.message}</small>
+                </div>
+                <small class="text-muted">${new Date(event.timestamp).toLocaleTimeString()}</small>
             </div>
-            <small class="text-muted">${new Date(event.timestamp).toLocaleTimeString()}</small>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 
     container.innerHTML = eventsHtml;
 }
