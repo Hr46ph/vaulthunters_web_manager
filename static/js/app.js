@@ -150,6 +150,42 @@ function updateServerStatus() {
     });
 }
 
+// Update system info
+function updateSystemInfo() {
+    fetch('/system/info')
+    .then(response => response.json())
+    .then(data => {
+        if (!data.error) {
+            // Update version displays
+            const javaElement = document.getElementById('java-version');
+            const vhElement = document.getElementById('vh-version');
+            const kernelElement = document.getElementById('kernel-version');
+            const pythonElement = document.getElementById('python-version');
+            
+            if (javaElement) javaElement.textContent = data.java || 'Unknown';
+            if (vhElement) vhElement.textContent = data.vaulthunters || 'Unknown';
+            if (kernelElement) kernelElement.textContent = data.kernel || 'Unknown';
+            if (pythonElement) pythonElement.textContent = data.python || 'Unknown';
+        } else {
+            console.error('System info error:', data.error);
+            // Show error state for all version elements
+            const elements = ['java-version', 'vh-version', 'kernel-version', 'python-version'];
+            elements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.innerHTML = '<span class="text-danger">Error</span>';
+            });
+        }
+    })
+    .catch(error => {
+        console.error('System info fetch error:', error);
+        // Show error state for all version elements
+        const elements = ['java-version', 'vh-version', 'kernel-version', 'python-version'];
+        elements.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.innerHTML = '<span class="text-danger">Network Error</span>';
+        });
+    });
+}
 
 // Show status loading error
 function showStatusError(message) {
@@ -506,6 +542,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update server status on page load - small delay to let page render first
     setTimeout(updateServerStatus, 100);
+    
+    // Update system info on page load
+    setTimeout(updateSystemInfo, 200);
     
     // Set up periodic status updates (every 10 seconds)
     setInterval(updateServerStatus, 10000);

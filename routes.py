@@ -207,6 +207,79 @@ def server_status():
         current_app.logger.error(f'Server status error: {e}')
         return jsonify({'error': 'Failed to get server status'}), 500
 
+@main_bp.route('/system/info')
+def system_info():
+    """API endpoint for system version information"""
+    try:
+        versions = {}
+        
+        # Get Java version
+        try:
+            java_cmd = current_app.config.get('JAVA_EXECUTABLE', 'java')
+            result = subprocess.run([java_cmd, '-version'], 
+                                 capture_output=True, text=True, timeout=10)
+            java_output = result.stderr  # Java version goes to stderr
+            if java_output:
+                # Parse Java version from output
+                lines = java_output.strip().split('\n')
+                if lines:
+                    # Extract version from first line (e.g., "openjdk version "17.0.2" 2022-01-18")
+                    first_line = lines[0]
+                    if 'openjdk version' in first_line.lower():
+                        versions['java'] = 'OpenJDK ' + first_line.split('"')[1] if '"' in first_line else 'OpenJDK (version unknown)'
+                    elif 'java version' in first_line.lower():
+                        versions['java'] = 'Oracle JDK ' + first_line.split('"')[1] if '"' in first_line else 'Oracle JDK (version unknown)'
+                    else:
+                        versions['java'] = first_line.strip()
+                else:
+                    versions['java'] = 'Unknown'
+            else:
+                versions['java'] = 'Unknown'
+        except Exception as e:
+            current_app.logger.warning(f'Failed to get Java version: {e}')
+            versions['java'] = 'Unknown'
+        
+        # Get VaultHunters version from server data
+        try:
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
+            data_json_path = os.path.join(server_path, 'data', 'the_vault', 'data.json')
+            if os.path.exists(data_json_path):
+                with open(data_json_path, 'r') as f:
+                    data = json.load(f)
+                    versions['vaulthunters'] = data.get('version', 'Unknown')
+            else:
+                versions['vaulthunters'] = 'Not found'
+        except Exception as e:
+            current_app.logger.warning(f'Failed to get VaultHunters version: {e}')
+            versions['vaulthunters'] = 'Unknown'
+        
+        # Get Linux kernel version
+        try:
+            result = subprocess.run(['uname', '-r'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                versions['kernel'] = result.stdout.strip()
+            else:
+                versions['kernel'] = 'Unknown'
+        except Exception as e:
+            current_app.logger.warning(f'Failed to get kernel version: {e}')
+            versions['kernel'] = 'Unknown'
+        
+        # Get Python version
+        try:
+            result = subprocess.run(['python3', '--version'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                versions['python'] = result.stdout.strip().replace('Python ', '')
+            else:
+                versions['python'] = 'Unknown'
+        except Exception as e:
+            current_app.logger.warning(f'Failed to get Python version: {e}')
+            versions['python'] = 'Unknown'
+        
+        return jsonify(versions)
+    except Exception as e:
+        current_app.logger.error(f'System info error: {e}')
+        return jsonify({'error': 'Failed to get system info'}), 500
+
 @main_bp.route('/server/control', methods=['POST'])
 def server_control():
     """Handle server control actions (start/stop/restart)"""
