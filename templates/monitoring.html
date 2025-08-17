@@ -495,11 +495,11 @@ function updateMetricCards(metrics, status) {
     
     const cpuElement = document.getElementById('cpu-usage');
     if (cpuElement) {
-        // Use system CPU average from metrics if available, fallback to process CPU
-        if (metrics.cpu_system_avg !== undefined) {
-            cpuElement.textContent = `${metrics.cpu_system_avg.toFixed(1)}%`;
-        } else if (status.cpu_usage) {
+        // Show Minecraft process CPU (same as dashboard), fallback to system CPU
+        if (status.cpu_usage !== undefined && status.cpu_usage > 0) {
             cpuElement.textContent = `${status.cpu_usage.toFixed(1)}%`;
+        } else if (metrics.cpu_system_avg !== undefined) {
+            cpuElement.textContent = `${metrics.cpu_system_avg.toFixed(1)}% (sys)`;
         } else {
             cpuElement.textContent = '--';
         }
