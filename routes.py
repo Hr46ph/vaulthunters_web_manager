@@ -443,15 +443,19 @@ def monitoring_metrics():
     # Simple test to verify the route works
     current_app.logger.info('=== MONITORING METRICS API CALLED ===')
     
-    # Get real memory data but keep other data as mock for now
-    memory_mb = 1024  # Default
+    # Get system memory data (not just Minecraft process)
+    system_memory = {'used_gb': 0, 'total_gb': 0, 'percent': 0}
     try:
-        system_control = SystemControlService()
-        status = system_control.get_server_status()
-        memory_mb = status.get('memory_usage', 1024)
-        current_app.logger.info(f'Real memory usage: {memory_mb}MB')
+        import psutil
+        memory = psutil.virtual_memory()
+        system_memory = {
+            'used_gb': round(memory.used / (1024**3), 1),
+            'total_gb': round(memory.total / (1024**3), 1),
+            'percent': memory.percent
+        }
+        current_app.logger.info(f'System memory: {system_memory["used_gb"]}GB / {system_memory["total_gb"]}GB ({system_memory["percent"]}%)')
     except Exception as e:
-        current_app.logger.warning(f'Failed to get real memory: {e}')
+        current_app.logger.warning(f'Failed to get system memory: {e}')
     
     # Get real CPU data (carefully, non-blocking)
     cpu_system_avg = 15.5  # Default
@@ -481,7 +485,7 @@ def monitoring_metrics():
     test_metrics = {
         'current_tps': 20.0,  # Still mock for now
         'lag_spikes_5min': 0,
-        'memory_mb': memory_mb,  # Real memory data
+        'system_memory': system_memory,  # Real system memory data
         'recent_lag_spikes': [],
         'events': events,  # Real events
         'rcon_status': 'connected',
