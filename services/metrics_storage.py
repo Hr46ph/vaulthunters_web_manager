@@ -5,9 +5,10 @@ import sqlite3
 import threading
 import time
 import json
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
-from flask import current_app
+from flask import current_app, has_app_context
 import psutil
 
 class MetricsStorage:
@@ -19,9 +20,31 @@ class MetricsStorage:
         self.collection_thread = None
         self.stop_collection = False
         self._lock = threading.Lock()
+        self._logger = logging.getLogger(__name__)
         
         if app is not None:
             self.init_app(app)
+    
+    def _log_info(self, message: str):
+        """Safely log info messages, using Flask logger if available, otherwise standard logging"""
+        if has_app_context():
+            current_app.logger.info(message)
+        else:
+            self._logger.info(message)
+    
+    def _log_warning(self, message: str):
+        """Safely log warning messages"""
+        if has_app_context():
+            current_app.logger.warning(message)
+        else:
+            self._logger.warning(message)
+    
+    def _log_error(self, message: str):
+        """Safely log error messages"""
+        if has_app_context():
+            current_app.logger.error(message)
+        else:
+            self._logger.error(message)
     
     def init_app(self, app):
         """Initialize the metrics storage with Flask app"""
@@ -73,7 +96,7 @@ class MetricsStorage:
             ''')
             
             conn.commit()
-            current_app.logger.info(f'Initialized metrics database at {self.db_path}')
+            self._log_info(f'Initialized metrics database at {self.db_path}')
     
     def store_metric(self, metric_type: str, value: float, metadata: Optional[Dict] = None):
         """Store a single metric in the database"""
@@ -90,7 +113,7 @@ class MetricsStorage:
                     ''', (timestamp, metric_type, value, metadata_json))
                     conn.commit()
             except Exception as e:
-                current_app.logger.error(f'Failed to store metric {metric_type}: {e}')
+                self._log_error(f'Failed to store metric {metric_type}: {e}')
     
     def get_metrics(self, metric_type: str, hours: int = 1) -> List[Dict]:
         """Retrieve metrics of a specific type within the specified time range"""
@@ -118,7 +141,7 @@ class MetricsStorage:
                 
                 return results
         except Exception as e:
-            current_app.logger.error(f'Failed to retrieve metrics {metric_type}: {e}')
+            self._log_error(f'Failed to retrieve metrics {metric_type}: {e}')
             return []
     
     def get_latest_metric(self, metric_type: str) -> Optional[Dict]:
@@ -145,7 +168,7 @@ class MetricsStorage:
                     }
                 return None
         except Exception as e:
-            current_app.logger.error(f'Failed to get latest metric {metric_type}: {e}')
+            self._log_error(f'Failed to get latest metric {metric_type}: {e}')
             return None
     
     def cleanup_old_metrics(self):
@@ -164,9 +187,9 @@ class MetricsStorage:
                     conn.commit()
                     
                     if deleted_count > 0:
-                        current_app.logger.info(f'Cleaned up {deleted_count} old metrics')
+                        self._log_info(f'Cleaned up {deleted_count} old metrics')
             except Exception as e:
-                current_app.logger.error(f'Failed to cleanup old metrics: {e}')
+                self._log_error(f'Failed to cleanup old metrics: {e}')
     
     def collect_system_metrics(self):
         """Collect current system metrics"""
@@ -224,7 +247,7 @@ class MetricsStorage:
                         if status.get('pid'):
                             self.store_metric('java_pid', status['pid'])
                 except Exception as e:
-                    current_app.logger.debug(f'Failed to collect Java process metrics: {e}')
+                    self._log_warning(f'Failed to collect Java process metrics: {e}')
             
             # Server TPS (placeholder - would need RCON integration)
             if config.get('METRICS_COLLECT_SERVER_TPS', True):
@@ -239,7 +262,7 @@ class MetricsStorage:
                 self.store_metric('player_count', 0, {'source': 'placeholder'})
                 
         except Exception as e:
-            current_app.logger.error(f'Failed to collect system metrics: {e}')
+            self._log_error(f'Failed to collect system metrics: {e}')
     
     def _collection_worker(self):
         """Background thread worker for metric collection"""
@@ -255,7 +278,7 @@ class MetricsStorage:
                         self.cleanup_old_metrics()
                 
             except Exception as e:
-                current_app.logger.error(f'Error in metrics collection: {e}')
+                self._log_error(f'Error in metrics collection: {e}')
             
             # Sleep for the configured interval
             time.sleep(interval)
@@ -263,20 +286,20 @@ class MetricsStorage:
     def start_collection(self):
         """Start the background metrics collection thread"""
         if self.collection_thread is not None and self.collection_thread.is_alive():
-            current_app.logger.warning('Metrics collection already running')
+            self._log_warning('Metrics collection already running')
             return
         
         self.stop_collection = False
         self.collection_thread = threading.Thread(target=self._collection_worker, daemon=True)
         self.collection_thread.start()
-        current_app.logger.info('Started metrics collection thread')
+        self._log_info('Started metrics collection thread')
     
     def stop_collection_thread(self):
         """Stop the background metrics collection thread"""
         if self.collection_thread is not None:
             self.stop_collection = True
             self.collection_thread.join(timeout=5)
-            current_app.logger.info('Stopped metrics collection thread')
+            self._log_info('Stopped metrics collection thread')
     
     def get_config_value(self, key: str, default: Any = None) -> Any:
         """Get a configuration value from the database"""
@@ -289,7 +312,7 @@ class MetricsStorage:
                     return json.loads(row[0])
                 return default
         except Exception as e:
-            current_app.logger.error(f'Failed to get config value {key}: {e}')
+            self._log_error(f'Failed to get config value {key}: {e}')
             return default
     
     def set_config_value(self, key: str, value: Any):
@@ -303,7 +326,7 @@ class MetricsStorage:
                 ''', (key, json.dumps(value)))
                 conn.commit()
         except Exception as e:
-            current_app.logger.error(f'Failed to set config value {key}: {e}')
+            self._log_error(f'Failed to set config value {key}: {e}')
 
 # Global instance
 metrics_storage = MetricsStorage()
