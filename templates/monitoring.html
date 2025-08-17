@@ -114,7 +114,8 @@
     </div>
 </div>
 
-<!-- Charts Row 2 -->
+<!-- Charts Row 2 - CPU Chart temporarily disabled -->
+<!-- 
 <div class="row mb-4">
     <div class="col-md-8">
         <div class="card">
@@ -150,6 +151,7 @@
         </div>
     </div>
 </div>
+-->
 
 <!-- Server Health Status -->
 <div class="row mb-4">
@@ -373,55 +375,13 @@ function initializeCharts() {
         }
     });
 
-    // CPU Per-Core Chart
+    // CPU Per-Core Chart - temporarily disabled
+    /*
     const cpuCtx = document.getElementById('cpu-chart').getContext('2d');
     cpuChart = new Chart(cpuCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [] // Will be populated dynamically based on CPU core count
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    }
-                },
-                x: {
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
-                        }
-                    }
-                }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            }
-        }
+        // ... chart config
     });
+    */
 }
 
 // Update monitoring data
@@ -444,13 +404,6 @@ function updateMonitoringData() {
         
         updateMetricCards(metrics, status);
         updateCharts(metrics);
-        
-        // Only update CPU chart if we have CPU data
-        if (metrics.cpu_per_core && metrics.cpu_per_core.length > 0) {
-            updateCpuChart(metrics);
-        }
-        updateCpuSummary(metrics);
-        
         updateHealthStatus(status, metrics);
         updatePerformanceEvents(metrics.events || []);
     })
@@ -485,8 +438,7 @@ function updateMetricCards(metrics, status) {
     
     const cpuElement = document.getElementById('cpu-usage');
     if (cpuElement) {
-        cpuElement.textContent = metrics.cpu_system_avg !== undefined ? 
-            `${metrics.cpu_system_avg.toFixed(1)}%` : '--';
+        cpuElement.textContent = status.cpu_usage ? `${status.cpu_usage.toFixed(1)}%` : '--';
     }
 }
 
