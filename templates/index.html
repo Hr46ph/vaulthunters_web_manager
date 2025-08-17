@@ -25,25 +25,6 @@
                                     <p>CPU: <span class="text-muted">Loading...</span></p>
                                 </div>
                             </div>
-                            
-                            <!-- Performance Indicators -->
-                            <div class="row mt-3">
-                                <div class="col-12">
-                                    <h6 class="mb-2">Performance</h6>
-                                </div>
-                                <div class="col-md-4">
-                                    <small class="text-muted">Recent Lag Spikes (5s):</small><br>
-                                    <span id="lag-spikes-indicator" class="badge bg-success" title="0 lag spikes in last 5 seconds">0</span>
-                                </div>
-                                <div class="col-md-4">
-                                    <small class="text-muted">Frequency:</small><br>
-                                    <span id="frequency-indicator" title="0 lag spikes per minute (average)">0/min</span>
-                                </div>
-                                <div class="col-md-4">
-                                    <small class="text-muted">Severity:</small><br>
-                                    <span id="severity-indicator" class="badge bg-success rounded-circle" title="Severity: 0 spikes/min">●</span>
-                                </div>
-                            </div>
                         </div>
                         
                         <hr>
@@ -75,6 +56,49 @@
                                 <strong>RCON</strong> = Graceful via game commands | 
                                 <strong>Force Kill</strong> = Emergency process termination
                             </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Performance Monitoring -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-tachometer-alt"></i> Performance Monitoring</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-muted d-block">Recent Lag Spikes (5s)</small>
+                                    <span id="lag-spikes-indicator" class="badge bg-success fs-6 px-3 py-2" title="0 lag spikes in last 5 seconds">0</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-muted d-block">Frequency</small>
+                                    <span id="frequency-indicator" class="fs-5 fw-bold" title="0 lag spikes per minute (average)">0/min</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-muted d-block">Severity</small>
+                                    <span id="severity-indicator" class="badge bg-success rounded-circle fs-4 p-2" title="Severity: 0 spikes/min">●</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <small class="text-muted">
+                                    <strong>Legend:</strong> 
+                                    <span class="badge bg-success">Green</span> = Good performance • 
+                                    <span class="badge bg-warning">Yellow</span> = Minor lag • 
+                                    <span class="badge bg-danger">Red</span> = Performance issues
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
