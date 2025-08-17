@@ -357,7 +357,7 @@ def monitoring_metrics():
     # Simple test to verify the route works
     current_app.logger.info('=== MONITORING METRICS API CALLED ===')
     
-    # Return minimal test data to verify JSON response
+    # Return test data with basic CPU info
     test_metrics = {
         'current_tps': 20.0,
         'lag_spikes_5min': 0,
@@ -371,7 +371,10 @@ def monitoring_metrics():
                 'severity': 'info'
             }
         ],
-        'rcon_status': 'connected'
+        'rcon_status': 'connected',
+        'cpu_system_avg': 15.5,  # Mock system CPU average
+        'cpu_count': 8,          # Mock CPU core count
+        'cpu_per_core': [12.1, 18.3, 14.7, 16.9, 13.2, 19.8, 11.5, 20.1]  # Mock per-core data
     }
     
     current_app.logger.info(f'Returning test metrics: {test_metrics}')

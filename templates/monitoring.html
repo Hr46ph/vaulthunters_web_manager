@@ -114,7 +114,8 @@
     </div>
 </div>
 
-<!-- Charts Row 2 - CPU Chart -->
+<!-- Charts Row 2 - CPU Chart (temporarily hidden) -->
+<!--
 <div class="row mb-4">
     <div class="col-md-8">
         <div class="card">
@@ -150,6 +151,7 @@
         </div>
     </div>
 </div>
+-->
 
 <!-- Server Health Status -->
 <div class="row mb-4">
@@ -373,7 +375,8 @@ function initializeCharts() {
         }
     });
 
-    // CPU Per-Core Chart
+    // CPU Per-Core Chart (temporarily disabled)
+    /*
     const cpuCtx = document.getElementById('cpu-chart').getContext('2d');
     cpuChart = new Chart(cpuCtx, {
         type: 'line',
@@ -422,6 +425,7 @@ function initializeCharts() {
             }
         }
     });
+    */
 }
 
 // Update monitoring data
@@ -478,7 +482,14 @@ function updateMetricCards(metrics, status) {
     
     const cpuElement = document.getElementById('cpu-usage');
     if (cpuElement) {
-        cpuElement.textContent = status.cpu_usage ? `${status.cpu_usage.toFixed(1)}%` : '--';
+        // Use system CPU average from metrics if available, fallback to process CPU
+        if (metrics.cpu_system_avg !== undefined) {
+            cpuElement.textContent = `${metrics.cpu_system_avg.toFixed(1)}%`;
+        } else if (status.cpu_usage) {
+            cpuElement.textContent = `${status.cpu_usage.toFixed(1)}%`;
+        } else {
+            cpuElement.textContent = '--';
+        }
     }
 }
 
