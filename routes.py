@@ -453,24 +453,46 @@ def monitoring_metrics():
     except Exception as e:
         current_app.logger.warning(f'Failed to get real memory: {e}')
     
-    # Return test data with real memory and mock CPU info
+    # Get real CPU data (carefully, non-blocking)
+    cpu_system_avg = 15.5  # Default
+    cpu_count = 8  # Default
+    cpu_per_core = [12.1, 18.3, 14.7, 16.9, 13.2, 19.8, 11.5, 20.1]  # Default
+    
+    try:
+        import psutil
+        # Non-blocking calls (interval=None means use cached data from previous call)
+        cpu_system_avg = psutil.cpu_percent(interval=None)
+        cpu_per_core = psutil.cpu_percent(percpu=True, interval=None)
+        cpu_count = psutil.cpu_count()
+        
+        current_app.logger.info(f'Real CPU: {cpu_count} cores, avg: {cpu_system_avg}%, per-core: {cpu_per_core}')
+    except Exception as e:
+        current_app.logger.warning(f'CPU monitoring failed, using defaults: {e}')
+    
+    # Get performance events (real)
+    events = []
+    try:
+        events = get_recent_performance_events()
+    except Exception as e:
+        current_app.logger.warning(f'Performance events failed: {e}')
+        events = [{
+            'type': 'Error',
+            'message': 'Failed to get performance events',
+            'timestamp': datetime.now().isoformat(),
+            'severity': 'error'
+        }]
+    
+    # Return mixed real and test data
     test_metrics = {
-        'current_tps': 20.0,
+        'current_tps': 20.0,  # Still mock for now
         'lag_spikes_5min': 0,
         'memory_mb': memory_mb,  # Real memory data
         'recent_lag_spikes': [],
-        'events': [
-            {
-                'type': 'Test Event',
-                'message': 'API endpoint is working',
-                'timestamp': datetime.now().isoformat(),
-                'severity': 'info'
-            }
-        ],
+        'events': events,  # Real events
         'rcon_status': 'connected',
-        'cpu_system_avg': 15.5,  # Mock system CPU average
-        'cpu_count': 8,          # Mock CPU core count
-        'cpu_per_core': [12.1, 18.3, 14.7, 16.9, 13.2, 19.8, 11.5, 20.1]  # Mock per-core data
+        'cpu_system_avg': cpu_system_avg,  # Real CPU average
+        'cpu_count': cpu_count,  # Real CPU count
+        'cpu_per_core': cpu_per_core  # Real per-core data
     }
     
     current_app.logger.info(f'Returning test metrics: {test_metrics}')
