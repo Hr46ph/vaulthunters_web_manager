@@ -425,8 +425,29 @@ function updateHealthStatus(status, metrics) {
     updateStatusIndicator('server-status', status.running ? 'good' : 'danger', 
         status.running ? 'Running' : 'Stopped');
 
-    // RCON status (placeholder)
-    updateStatusIndicator('rcon-status', 'unknown', 'Unknown');
+    // RCON status
+    let rconStatus = 'unknown';
+    let rconText = 'Unknown';
+    if (metrics.rcon_status) {
+        switch(metrics.rcon_status) {
+            case 'connected':
+                rconStatus = 'good';
+                rconText = 'Connected';
+                break;
+            case 'disconnected':
+                rconStatus = 'warning';
+                rconText = 'Disconnected';
+                break;
+            case 'error':
+                rconStatus = 'danger';
+                rconText = 'Error';
+                break;
+            default:
+                rconStatus = 'unknown';
+                rconText = 'Unknown';
+        }
+    }
+    updateStatusIndicator('rcon-status', rconStatus, rconText);
 
     // Performance status based on TPS
     let perfStatus = 'unknown';
