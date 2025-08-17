@@ -592,19 +592,35 @@ function updateCharts(metrics) {
     }
 
     // Update memory chart with stacked memory data
-    if (metrics.system_memory && metrics.system_memory.used_mb !== undefined) {
+    if (metrics.system_memory) {
         memoryChart.data.labels.push(timeLabel);
         
-        // Add data for each memory type (in MB)
-        const usedMB = metrics.system_memory.used_mb || 0;
-        const buffersMB = metrics.system_memory.buffers_mb || 0;
-        const cacheMB = metrics.system_memory.cache_mb || 0;
-        const javaMB = metrics.java_memory_mb || 0;
-        
-        memoryChart.data.datasets[0].data.push(usedMB);     // Used
-        memoryChart.data.datasets[1].data.push(buffersMB); // Buffers
-        memoryChart.data.datasets[2].data.push(cacheMB);   // Cache
-        memoryChart.data.datasets[3].data.push(javaMB);    // Java
+        // Check if we have detailed memory breakdown
+        if (metrics.system_memory.used_mb !== undefined) {
+            // Add data for each memory type (in MB)
+            const usedMB = metrics.system_memory.used_mb || 0;
+            const buffersMB = metrics.system_memory.buffers_mb || 0;
+            const cacheMB = metrics.system_memory.cache_mb || 0;
+            const javaMB = metrics.java_memory_mb || 0;
+            
+            memoryChart.data.datasets[0].data.push(usedMB);     // Used
+            memoryChart.data.datasets[1].data.push(buffersMB); // Buffers
+            memoryChart.data.datasets[2].data.push(cacheMB);   // Cache
+            memoryChart.data.datasets[3].data.push(javaMB);    // Java
+        } else {
+            // Fallback: use basic memory data and estimate breakdown
+            const totalMB = (metrics.system_memory.total_gb || 1) * 1024;
+            const usedMB = (metrics.system_memory.used_gb || 0) * 1024;
+            const javaMB = metrics.java_memory_mb || 0;
+            const buffersMB = Math.round(usedMB * 0.1); // Estimate 10% for buffers
+            const cacheMB = Math.round(usedMB * 0.2);   // Estimate 20% for cache
+            const actualUsedMB = Math.max(0, usedMB - buffersMB - cacheMB - javaMB);
+            
+            memoryChart.data.datasets[0].data.push(actualUsedMB); // Used
+            memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers (estimated)
+            memoryChart.data.datasets[2].data.push(cacheMB);      // Cache (estimated)
+            memoryChart.data.datasets[3].data.push(javaMB);       // Java
+        }
         
         // Keep last 20 data points
         if (memoryChart.data.labels.length > 20) {
@@ -789,14 +805,22 @@ function updateSwapDisplay(memoryData) {
     const swapUsedElement = document.getElementById('swap-used');
     const swapFreeElement = document.getElementById('swap-free');
     
-    if (swapUsedElement && memoryData.swap_used_mb !== undefined) {
-        const swapUsedGB = (memoryData.swap_used_mb / 1024).toFixed(1);
-        swapUsedElement.textContent = `${swapUsedGB}GB`;
+    if (swapUsedElement) {
+        if (memoryData.swap_used_mb !== undefined) {
+            const swapUsedGB = (memoryData.swap_used_mb / 1024).toFixed(1);
+            swapUsedElement.textContent = `${swapUsedGB}GB`;
+        } else {
+            swapUsedElement.textContent = 'N/A';
+        }
     }
     
-    if (swapFreeElement && memoryData.swap_free_mb !== undefined) {
-        const swapFreeGB = (memoryData.swap_free_mb / 1024).toFixed(1);
-        swapFreeElement.textContent = `${swapFreeGB}GB`;
+    if (swapFreeElement) {
+        if (memoryData.swap_free_mb !== undefined) {
+            const swapFreeGB = (memoryData.swap_free_mb / 1024).toFixed(1);
+            swapFreeElement.textContent = `${swapFreeGB}GB`;
+        } else {
+            swapFreeElement.textContent = 'N/A';
+        }
     }
 }
 

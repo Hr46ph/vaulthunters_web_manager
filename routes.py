@@ -481,11 +481,56 @@ def monitoring_metrics():
         'severity': 'info'
     }]
     
+    # Get system load average
+    system_load = 0.5  # Default
+    try:
+        load_avg = os.getloadavg()
+        system_load = load_avg[0]  # 1-minute load average
+        current_app.logger.info(f'System load: {system_load} (1min: {load_avg[0]}, 5min: {load_avg[1]}, 15min: {load_avg[2]})')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get system load: {e}')
+    
+    # Get detailed memory information
+    detailed_memory = {}
+    try:
+        import psutil
+        memory = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        
+        detailed_memory = {
+            'used_mb': round(memory.used / (1024**2)),
+            'buffers_mb': round(memory.buffers / (1024**2)) if hasattr(memory, 'buffers') else 0,
+            'cache_mb': round(memory.cached / (1024**2)) if hasattr(memory, 'cached') else 0,
+            'swap_used_mb': round(swap.used / (1024**2)),
+            'swap_free_mb': round(swap.free / (1024**2)),
+            'total_mb': round(memory.total / (1024**2)),
+            'used_gb': round(memory.used / (1024**3), 1),
+            'total_gb': round(memory.total / (1024**3), 1),
+            'percent': memory.percent
+        }
+        current_app.logger.info(f'Detailed memory: {detailed_memory}')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get detailed memory: {e}')
+        detailed_memory = system_memory  # Fallback to basic memory
+    
+    # Get Java process memory (if server is running)
+    java_memory_mb = 0
+    try:
+        system_control = SystemControlService()
+        status = system_control.get_server_status()
+        if status.get('running') and status.get('memory_usage'):
+            java_memory_mb = status['memory_usage']
+        current_app.logger.info(f'Java memory: {java_memory_mb}MB')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get Java memory: {e}')
+    
     # Return mixed real and test data
     test_metrics = {
         'current_tps': 20.0,  # Still mock for now
         'lag_spikes_5min': 0,
-        'system_memory': system_memory,  # Real system memory data
+        'system_memory': detailed_memory,  # Enhanced memory data
+        'system_load': system_load,  # Real system load
+        'java_memory_mb': java_memory_mb,  # Real Java memory
         'recent_lag_spikes': [],
         'events': events,  # Real events
         'rcon_status': 'connected',
