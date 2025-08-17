@@ -298,7 +298,7 @@ function initializeCharts() {
             labels: [],
             datasets: [
                 {
-                    label: 'Application Used',
+                    label: 'Used Memory',
                     data: [],
                     borderColor: '#dc3545',
                     backgroundColor: 'rgba(220, 53, 69, 0.7)',
@@ -306,7 +306,7 @@ function initializeCharts() {
                     fill: true
                 },
                 {
-                    label: 'System Buffers',
+                    label: 'Buffers',
                     data: [],
                     borderColor: '#fd7e14',
                     backgroundColor: 'rgba(253, 126, 20, 0.7)',
@@ -314,18 +314,10 @@ function initializeCharts() {
                     fill: true
                 },
                 {
-                    label: 'System Cache',
+                    label: 'Cache',
                     data: [],
                     borderColor: '#198754',
                     backgroundColor: 'rgba(25, 135, 84, 0.7)',
-                    tension: 0.1,
-                    fill: true
-                },
-                {
-                    label: 'Java Process',
-                    data: [],
-                    borderColor: '#0d6efd',
-                    backgroundColor: 'rgba(13, 110, 253, 0.7)',
                     tension: 0.1,
                     fill: true
                 }
@@ -597,43 +589,33 @@ function updateCharts(metrics) {
         
         // Check if we have detailed memory breakdown
         if (metrics.system_memory.used_mb !== undefined) {
-            // Memory breakdown: psutil's 'used' includes buffers+cache, so we need to separate them
+            // Linux memory breakdown: show exactly what Linux reports
             const totalUsedMB = metrics.system_memory.used_mb || 0;
             const buffersMB = metrics.system_memory.buffers_mb || 0;
             const cacheMB = metrics.system_memory.cache_mb || 0;
-            const javaMB = metrics.java_memory_mb || 0;
             
-            // Memory calculation: psutil's 'used' includes everything (apps + buffers + cache + java)
-            // We need to separate the components for visualization:
-            // - Java memory is part of 'used' but we want to show it separately
-            // - Buffers and cache are also part of 'used' but shown separately
-            // - Application memory = used - buffers - cache - java (but java is already in used)
-            
-            const applicationUsedMB = Math.max(0, totalUsedMB - buffersMB - cacheMB - javaMB);
+            // Simple Linux memory breakdown: used includes buffers+cache, so subtract them for "actual used"
+            const actualUsedMB = Math.max(0, totalUsedMB - buffersMB - cacheMB);
             
             // Debug logging to verify memory calculations
-            const totalStackedMB = applicationUsedMB + buffersMB + cacheMB + javaMB;
-            console.log(`Memory breakdown (MB): System Used=${totalUsedMB}, App=${applicationUsedMB}, Buffers=${buffersMB}, Cache=${cacheMB}, Java=${javaMB}, Stacked Total=${totalStackedMB}`);
+            const totalStackedMB = actualUsedMB + buffersMB + cacheMB;
+            console.log(`Linux Memory (MB): Total Used=${totalUsedMB}, Actual Used=${actualUsedMB}, Buffers=${buffersMB}, Cache=${cacheMB}, Stacked Total=${totalStackedMB}`);
             
-            memoryChart.data.datasets[0].data.push(applicationUsedMB); // Application memory (excluding buffers/cache/java)
-            memoryChart.data.datasets[1].data.push(buffersMB);         // Buffers
-            memoryChart.data.datasets[2].data.push(cacheMB);           // Cache  
-            memoryChart.data.datasets[3].data.push(javaMB);            // Java process
+            memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory (excluding buffers/cache)
+            memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers
+            memoryChart.data.datasets[2].data.push(cacheMB);      // Cache
         } else {
             // Fallback: use basic memory data and estimate breakdown
-            const totalMB = (metrics.system_memory.total_gb || 1) * 1024;
             const usedMB = (metrics.system_memory.used_gb || 0) * 1024;
-            const javaMB = metrics.java_memory_mb || 0;
             const buffersMB = Math.round(usedMB * 0.1); // Estimate 10% for buffers
             const cacheMB = Math.round(usedMB * 0.2);   // Estimate 20% for cache
-            const applicationUsedMB = Math.max(0, usedMB - buffersMB - cacheMB - javaMB);
+            const actualUsedMB = Math.max(0, usedMB - buffersMB - cacheMB);
             
-            console.log(`Memory fallback (MB): System Used=${usedMB}, App=${applicationUsedMB}, Buffers=${buffersMB}, Cache=${cacheMB}, Java=${javaMB}`);
+            console.log(`Memory fallback (MB): Total Used=${usedMB}, Actual Used=${actualUsedMB}, Buffers=${buffersMB}, Cache=${cacheMB}`);
             
-            memoryChart.data.datasets[0].data.push(applicationUsedMB); // Application memory
-            memoryChart.data.datasets[1].data.push(buffersMB);         // Buffers (estimated)
-            memoryChart.data.datasets[2].data.push(cacheMB);           // Cache (estimated)
-            memoryChart.data.datasets[3].data.push(javaMB);            // Java process
+            memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory
+            memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers (estimated)
+            memoryChart.data.datasets[2].data.push(cacheMB);      // Cache (estimated)
         }
         
         // Keep last 20 data points
