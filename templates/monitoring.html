@@ -444,13 +444,6 @@ function updateMonitoringData() {
         
         updateMetricCards(metrics, status);
         updateCharts(metrics);
-        
-        // Update CPU chart and summary if we have CPU data
-        if (metrics.cpu_per_core && metrics.cpu_per_core.length > 0) {
-            updateCpuChart(metrics);
-        }
-        updateCpuSummary(metrics);
-        
         updateHealthStatus(status, metrics);
         updatePerformanceEvents(metrics.events || []);
     })
@@ -485,14 +478,7 @@ function updateMetricCards(metrics, status) {
     
     const cpuElement = document.getElementById('cpu-usage');
     if (cpuElement) {
-        // Use system CPU average from metrics if available, fallback to process CPU from status
-        if (metrics.cpu_system_avg !== undefined && metrics.cpu_system_avg > 0) {
-            cpuElement.textContent = `${metrics.cpu_system_avg.toFixed(1)}%`;
-        } else if (status.cpu_usage) {
-            cpuElement.textContent = `${status.cpu_usage.toFixed(1)}%`;
-        } else {
-            cpuElement.textContent = '--';
-        }
+        cpuElement.textContent = status.cpu_usage ? `${status.cpu_usage.toFixed(1)}%` : '--';
     }
 }
 
