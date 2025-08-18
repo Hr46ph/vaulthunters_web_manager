@@ -1056,8 +1056,8 @@ function loadHistoricalData(hours = null) {
     const timeRange = hours || parseFloat(document.getElementById('chart-range').value);
     currentConfig.chart_range = timeRange;
     
-    // Always use historical mode for ranges other than real-time
-    historicalMode = timeRange > 0.25; // 15 minutes or more = historical mode
+    // Use historical mode for ranges 30 minutes or more (15 minutes should use real-time)
+    historicalMode = timeRange >= 0.5; // 30 minutes or more = historical mode
     
     console.log(`Loading ${historicalMode ? 'historical' : 'real-time'} data for ${timeRange} hours`);
     
@@ -1073,10 +1073,23 @@ function loadHistoricalData(hours = null) {
     // Load historical data for each metric type
     const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min'];
     
-    Promise.all(metrics.map(metric => 
-        fetch(`/api/monitoring/history/${metric}?hours=${timeRange}`)
-            .then(r => r.json())
-    ))
+    // Also load CPU per-core data
+    const cpuCorePromises = [];
+    for (let i = 0; i < 16; i++) { // Support up to 16 CPU cores
+        cpuCorePromises.push(
+            fetch(`/api/monitoring/history/system_cpu_core_${i}_percent?hours=${timeRange}`)
+                .then(r => r.json())
+                .catch(() => null) // Ignore cores that don't exist
+        );
+    }
+    
+    Promise.all([
+        ...metrics.map(metric => 
+            fetch(`/api/monitoring/history/${metric}?hours=${timeRange}`)
+                .then(r => r.json())
+        ),
+        ...cpuCorePromises
+    ])
     .then(results => {
         console.log('Historical data loaded:', results);
         
@@ -1151,7 +1164,68 @@ function displayHistoricalMetric(metricType, data) {
                 }
             });
             break;
+        
+        default:
+            // Handle CPU per-core metrics
+            if (metricType.startsWith('system_cpu_core_') && metricType.endsWith('_percent')) {
+                const coreMatch = metricType.match(/system_cpu_core_(\d+)_percent/);
+                if (coreMatch) {
+                    const coreIndex = parseInt(coreMatch[1]);
+                    displayCpuCoreHistoricalData(coreIndex, data);
+                }
+            }
+            break;
     }
+}
+
+// Display CPU per-core historical data
+function displayCpuCoreHistoricalData(coreIndex, data) {
+    if (!data || data.length === 0) return;
+    
+    // Initialize CPU chart datasets if needed
+    if (cpuChart.data.datasets.length === 0) {
+        const colors = [
+            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
+            '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'
+        ];
+        
+        // Create datasets for detected cores
+        const maxCores = Math.max(coreIndex + 1, 8); // At least 8 cores
+        for (let i = 0; i < maxCores; i++) {
+            cpuChart.data.datasets.push({
+                label: `Core ${i + 1}`,
+                data: [],
+                borderColor: colors[i % colors.length],
+                backgroundColor: colors[i % colors.length] + '20',
+                tension: 0.4,
+                fill: false,
+                pointRadius: 2,
+                pointHoverRadius: 4
+            });
+        }
+    }
+    
+    // Add historical data for this specific core
+    data.forEach((point, index) => {
+        const timestamp = new Date(point.timestamp);
+        const timeLabel = timestamp.toLocaleTimeString('en-GB', { hour12: false });
+        
+        // Add time label only once (from first core)
+        if (coreIndex === 0 && index < cpuChart.data.labels.length) {
+            cpuChart.data.labels[index] = timeLabel;
+        } else if (coreIndex === 0) {
+            cpuChart.data.labels.push(timeLabel);
+        }
+        
+        // Add data point for this core
+        if (cpuChart.data.datasets[coreIndex]) {
+            if (index < cpuChart.data.datasets[coreIndex].data.length) {
+                cpuChart.data.datasets[coreIndex].data[index] = point.value;
+            } else {
+                cpuChart.data.datasets[coreIndex].data.push(point.value);
+            }
+        }
+    });
 }
 
 // Update charts from historical data
@@ -1212,8 +1286,10 @@ document.addEventListener('DOMContentLoaded', function() {
         loadHistoricalData(currentRange);
     }, 500);
     
-    // Start initial auto-refresh if enabled
-    updateRefreshRate();
+    // Start initial auto-refresh if enabled (after a delay to ensure settings are loaded)
+    setTimeout(() => {
+        updateRefreshRate();
+    }, 100);
 });
 </script>
 {% endblock %}
