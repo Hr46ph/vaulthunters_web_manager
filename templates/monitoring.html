@@ -251,17 +251,19 @@
                 <h6><i class="fas fa-server"></i> Minecraft Process</h6>
             </div>
             <div class="card-body">
-                <div class="text-center mb-3">
-                    <div class="metric-label">Process CPU</div>
-                    <div class="metric-value" id="minecraft-cpu">--</div>
-                </div>
-                <div class="text-center mb-3">
-                    <div class="metric-label">Process Memory</div>
-                    <div class="metric-value" id="minecraft-memory">--</div>
-                </div>
-                <div class="text-center">
-                    <div class="metric-label">Process PID</div>
-                    <div class="metric-value" id="minecraft-pid">--</div>
+                <div class="d-flex flex-column justify-content-center" style="min-height: 250px;">
+                    <div class="text-center mb-4">
+                        <div class="metric-label">Process CPU</div>
+                        <div class="metric-value" id="minecraft-cpu">--</div>
+                    </div>
+                    <div class="text-center mb-4">
+                        <div class="metric-label">Process Memory</div>
+                        <div class="metric-value" id="minecraft-memory">--</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="metric-label">Process PID</div>
+                        <div class="metric-value" id="minecraft-pid">--</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -290,9 +292,6 @@
             <div class="card-body">
                 <div class="chart-container">
                     <canvas id="player-chart"></canvas>
-                </div>
-                <div class="text-center mt-2">
-                    <small class="text-muted">Current: <span id="current-players" class="fw-bold">--</span> players</small>
                 </div>
             </div>
         </div>
@@ -918,12 +917,6 @@ function updateCharts(metrics, status = null) {
         playerChart.data.datasets[0].data.shift();
     }
     playerChart.update('none');
-    
-    // Update current players display
-    const currentPlayersElement = document.getElementById('current-players');
-    if (currentPlayersElement) {
-        currentPlayersElement.textContent = playerCount;
-    }
 }
 
 // Update CPU chart
@@ -1168,41 +1161,50 @@ function updateRefreshRate() {
 
 // Load historical data for charts based on current settings
 function loadHistoricalData(hours = null) {
+    console.log(`=== loadHistoricalData() CALLED ===`);
     const timeRange = hours || parseFloat(document.getElementById('chart-range').value);
+    console.log(`timeRange: ${timeRange}, hours param: ${hours}`);
+    
+    // EXPLICIT CHECK: 15 minutes (0.25 hours) should NEVER do anything
+    if (timeRange <= 0.25) {
+        console.log(`🚫 EXPLICIT 15-MINUTE BYPASS - timeRange=${timeRange} <= 0.25 - DOING NOTHING`);
+        historicalMode = false;
+        currentConfig.chart_range = timeRange;
+        return;
+    }
+    
     currentConfig.chart_range = timeRange;
     
     // Track previous mode
     wasHistoricalMode = historicalMode;
     
-    // Use historical mode for ranges 30 minutes or more (15 minutes should use real-time)
+    // Use historical mode for ranges 30 minutes or more
     const newHistoricalMode = timeRange >= 0.5; // 30 minutes or more = historical mode
     
-    console.log(`Loading ${newHistoricalMode ? 'historical' : 'real-time'} data for ${timeRange} hours (was: ${wasHistoricalMode ? 'historical' : 'real-time'}, current: ${historicalMode ? 'historical' : 'real-time'})`);
+    console.log(`DECISION: timeRange=${timeRange} >= 0.5 = ${newHistoricalMode}`);
+    console.log(`MODE STATES: was=${wasHistoricalMode}, current=${historicalMode}, new=${newHistoricalMode}`);
     
     if (!newHistoricalMode) {
-        // Switching to real-time mode
-        if (wasHistoricalMode) {
+        console.log(`🔄 REAL-TIME MODE BRANCH (timeRange=${timeRange})`);
+        
+        if (wasHistoricalMode || historicalMode) {
             // Coming from historical mode - clear data and switch
-            console.log('Switching from historical to real-time mode - clearing data');
-            historicalMode = false;
-            clearChartData();
-            switchToRealTimeMode(false); // Don't clear again
-        } else if (historicalMode) {
-            // Was already in historical but switching to real-time - clear data
-            console.log('Was in historical mode, switching to real-time - clearing data');
+            console.log('🧹 Switching from historical to real-time - clearing data');
             historicalMode = false;
             clearChartData();
             switchToRealTimeMode(false); // Don't clear again
         } else {
             // Already in real-time mode - just set the mode, don't clear data
-            console.log('Already in real-time mode - no action needed');
+            console.log('✅ Already in real-time mode - NO ACTION NEEDED');
             historicalMode = false;
         }
+        console.log(`🔄 REAL-TIME MODE COMPLETE - RETURNING EARLY`);
         return;
     }
     
     // Switching to historical mode - always clear data and load historical
-    console.log('Switching to historical mode - clearing data');
+    console.log(`📊 HISTORICAL MODE BRANCH (timeRange=${timeRange})`);
+    console.log('🧹 Switching to historical mode - clearing data');
     historicalMode = true;
     clearChartData();
     
@@ -1247,6 +1249,7 @@ function loadHistoricalData(hours = null) {
 
 // Clear chart data
 function clearChartData() {
+    console.log(`🧹 clearChartData() called - clearing all chart data`);
     if (tpsChart) {
         tpsChart.data.labels = [];
         tpsChart.data.datasets[0].data = [];
@@ -1400,13 +1403,17 @@ function updateChartsFromHistoricalData() {
 
 // Switch back to real-time mode
 function switchToRealTimeMode(clearData = true) {
+    console.log(`🔄 switchToRealTimeMode() called with clearData=${clearData}`);
     historicalMode = false;
     if (clearData) {
+        console.log(`🧹 switchToRealTimeMode calling clearChartData()`);
         clearChartData();
+    } else {
+        console.log(`✅ switchToRealTimeMode NOT clearing data`);
     }
     resetChartZoom();
     updateRefreshRate(); // Restart auto-refresh if enabled
-    console.log(`Switched back to real-time mode (clear data: ${clearData})`);
+    console.log(`✅ switchToRealTimeMode complete`);
 }
 
 // Reset zoom on all charts
