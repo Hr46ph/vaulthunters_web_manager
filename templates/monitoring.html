@@ -1056,7 +1056,6 @@ function updateCpuChart(metrics) {
     }
 
     const now = new Date();
-    const timeLabel = now.toLocaleTimeString('en-GB', { hour12: false });
 
     // Initialize datasets if not already done
     if (cpuChart.data.datasets.length === 0) {
@@ -1080,7 +1079,7 @@ function updateCpuChart(metrics) {
     }
 
     // Add new time label
-    cpuChart.data.labels.push(timeLabel);
+    cpuChart.data.labels.push(now);
 
     // Add new CPU data for each core
     metrics.cpu_per_core.forEach((coreUsage, index) => {
@@ -1451,6 +1450,12 @@ function clearChartData() {
         playerChart.data.labels = [];
         playerChart.data.datasets[0].data = [];
         playerChart.update('none');
+    }
+    
+    if (lagChart) {
+        lagChart.data.labels = [];
+        lagChart.data.datasets[0].data = [];
+        lagChart.update('none');
     }
 }
 
