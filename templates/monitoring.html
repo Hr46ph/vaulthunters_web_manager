@@ -68,27 +68,15 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-3">
-                            <label for="collection-interval" class="form-label">Collection Interval</label>
-                            <select class="form-select form-select-sm" id="collection-interval">
-                                <option value="1">1 second</option>
-                                <option value="2">2 seconds</option>
-                                <option value="5" selected>5 seconds</option>
-                                <option value="10">10 seconds</option>
-                                <option value="15">15 seconds</option>
-                                <option value="30">30 seconds</option>
-                                <option value="60">1 minute</option>
-                                <option value="120">2 minutes</option>
-                                <option value="300">5 minutes</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="retention-days" class="form-label">Data Retention</label>
-                            <select class="form-select form-select-sm" id="retention-days">
-                                <option value="1">1 day</option>
-                                <option value="3">3 days</option>
-                                <option value="7" selected>1 week</option>
-                                <option value="14">2 weeks</option>
-                                <option value="30">1 month</option>
+                            <label for="update-interval" class="form-label">Page Update Rate</label>
+                            <select class="form-select form-select-sm" id="update-interval">
+                                <option value="1000">1 second</option>
+                                <option value="2000">2 seconds</option>
+                                <option value="5000" selected>5 seconds</option>
+                                <option value="10000">10 seconds</option>
+                                <option value="15000">15 seconds</option>
+                                <option value="30000">30 seconds</option>
+                                <option value="60000">1 minute</option>
                             </select>
                         </div>
                         <div class="col-md-3">
@@ -104,9 +92,17 @@
                                 <option value="168">1 week</option>
                             </select>
                         </div>
+                        <div class="col-md-3 d-flex align-items-center">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                                <label class="form-check-label" for="auto-refresh">
+                                    Auto Refresh
+                                </label>
+                            </div>
+                        </div>
                         <div class="col-md-3 d-flex align-items-end">
                             <small class="text-muted">
-                                <i class="fas fa-info-circle"></i> Settings auto-save on change
+                                <i class="fas fa-mouse-pointer"></i> Mouse wheel to zoom charts
                             </small>
                         </div>
                     </div>
@@ -299,6 +295,8 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script>
 // Monitoring page specific JavaScript
 let tpsChart, memoryChart, lagChart, cpuChart;
@@ -312,19 +310,20 @@ let monitoringData = {
 
 // Configuration state
 let currentConfig = {
-    collection_interval: 5,
-    retention_days: 7,
-    chart_range: 1
+    update_interval: 5000, // Page refresh rate in milliseconds
+    chart_range: 1,
+    auto_refresh: true
 };
 
 let historicalMode = false;
+let updateInterval = null; // Store the setInterval ID for dynamic updates
 
 // Local storage functions for auto-save
 function saveSettingsToLocalStorage() {
     const settings = {
-        collection_interval: parseInt(document.getElementById('collection-interval').value),
-        retention_days: parseInt(document.getElementById('retention-days').value),
-        chart_range: parseFloat(document.getElementById('chart-range').value)
+        update_interval: parseInt(document.getElementById('update-interval').value),
+        chart_range: parseFloat(document.getElementById('chart-range').value),
+        auto_refresh: document.getElementById('auto-refresh').checked
     };
     localStorage.setItem('monitoring_settings', JSON.stringify(settings));
     console.log('Settings saved to localStorage:', settings);
@@ -338,17 +337,17 @@ function loadSettingsFromLocalStorage() {
             console.log('Settings loaded from localStorage:', settings);
             
             // Apply settings to UI elements
-            if (settings.collection_interval) {
-                document.getElementById('collection-interval').value = settings.collection_interval;
-                currentConfig.collection_interval = settings.collection_interval;
-            }
-            if (settings.retention_days) {
-                document.getElementById('retention-days').value = settings.retention_days;
-                currentConfig.retention_days = settings.retention_days;
+            if (settings.update_interval) {
+                document.getElementById('update-interval').value = settings.update_interval;
+                currentConfig.update_interval = settings.update_interval;
             }
             if (settings.chart_range) {
                 document.getElementById('chart-range').value = settings.chart_range;
                 currentConfig.chart_range = settings.chart_range;
+            }
+            if (settings.auto_refresh !== undefined) {
+                document.getElementById('auto-refresh').checked = settings.auto_refresh;
+                currentConfig.auto_refresh = settings.auto_refresh;
             }
             
             return settings;
@@ -396,6 +395,21 @@ function initializeCharts() {
             plugins: {
                 legend: {
                     display: false
+                },
+                zoom: {
+                    zoom: {
+                        wheel: {
+                            enabled: true,
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'x',
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                    }
                 }
             }
         }
@@ -478,6 +492,21 @@ function initializeCharts() {
                             return context.dataset.label + ': ' + (context.parsed.y / 1024).toFixed(2) + 'GB';
                         }
                     }
+                },
+                zoom: {
+                    zoom: {
+                        wheel: {
+                            enabled: true,
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'x',
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                    }
                 }
             },
             interaction: {
@@ -536,6 +565,21 @@ function initializeCharts() {
             plugins: {
                 legend: {
                     display: false
+                },
+                zoom: {
+                    zoom: {
+                        wheel: {
+                            enabled: true,
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'x',
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                    }
                 }
             }
         }
@@ -591,6 +635,21 @@ function initializeCharts() {
                         label: function(context) {
                             return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
                         }
+                    }
+                },
+                zoom: {
+                    zoom: {
+                        wheel: {
+                            enabled: true,
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'x',
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
                     }
                 }
             },
@@ -966,68 +1025,30 @@ function updatePerformanceEvents(events) {
     container.innerHTML = eventsHtml;
 }
 
-// Load configuration from server
-function loadConfiguration() {
-    fetch('/api/monitoring/config')
-        .then(response => response.json())
-        .then(config => {
-            currentConfig = {
-                collection_interval: config.collection_interval,
-                retention_days: config.retention_days,
-                chart_range: 1 // Default chart range
-            };
-            
-            // Update UI elements
-            document.getElementById('collection-interval').value = config.collection_interval;
-            document.getElementById('retention-days').value = config.retention_days;
-            
-            console.log('Configuration loaded:', currentConfig);
-        })
-        .catch(error => {
-            console.error('Failed to load configuration:', error);
-        });
-}
-
-// Auto-save configuration to server
-function autoSaveConfiguration() {
-    const configData = {
-        collection_interval: parseInt(document.getElementById('collection-interval').value),
-        retention_days: parseInt(document.getElementById('retention-days').value),
-        enabled: true
-    };
+// Dynamic update interval management
+function updateRefreshRate() {
+    const newInterval = parseInt(document.getElementById('update-interval').value);
+    const autoRefreshEnabled = document.getElementById('auto-refresh').checked;
     
-    // Save to localStorage immediately
+    // Clear existing interval
+    if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+    }
+    
+    // Set new interval if auto-refresh is enabled
+    if (autoRefreshEnabled && !historicalMode) {
+        updateInterval = setInterval(function() {
+            updateMonitoringData();
+        }, newInterval);
+        console.log(`Update rate set to ${newInterval}ms`);
+    } else {
+        console.log('Auto-refresh disabled or in historical mode');
+    }
+    
+    currentConfig.update_interval = newInterval;
+    currentConfig.auto_refresh = autoRefreshEnabled;
     saveSettingsToLocalStorage();
-    
-    // Save to server
-    fetch('/api/monitoring/config', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(configData)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            currentConfig.collection_interval = configData.collection_interval;
-            currentConfig.retention_days = configData.retention_days;
-            console.log(`Configuration auto-saved successfully - Collection interval: ${configData.collection_interval}s`);
-            
-            // Show visual feedback that settings changed
-            const intervalSelect = document.getElementById('collection-interval');
-            const originalBorder = intervalSelect.style.border;
-            intervalSelect.style.border = '2px solid #28a745';
-            setTimeout(() => {
-                intervalSelect.style.border = originalBorder;
-            }, 1000);
-        } else {
-            console.error('Failed to auto-save configuration:', data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error auto-saving configuration:', error);
-    });
 }
 
 // Load historical data for charts based on current settings
@@ -1150,44 +1171,48 @@ function updateChartsFromHistoricalData() {
 function switchToRealTimeMode() {
     historicalMode = false;
     clearChartData();
+    resetChartZoom();
+    updateRefreshRate(); // Restart auto-refresh if enabled
     console.log('Switched back to real-time mode');
+}
+
+// Reset zoom on all charts
+function resetChartZoom() {
+    if (tpsChart) tpsChart.resetZoom();
+    if (memoryChart) memoryChart.resetZoom();
+    if (lagChart) lagChart.resetZoom();
+    if (cpuChart) cpuChart.resetZoom();
 }
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();
     
-    // Load saved settings from localStorage first
+    // Load saved settings from localStorage
     loadSettingsFromLocalStorage();
     
-    // Then load configuration from server
-    loadConfiguration();
-    
-    // Set up auto-save event listeners
-    document.getElementById('collection-interval').addEventListener('change', function() {
-        autoSaveConfiguration();
+    // Set up event listeners for new controls
+    document.getElementById('update-interval').addEventListener('change', function() {
+        updateRefreshRate();
     });
     
-    document.getElementById('retention-days').addEventListener('change', function() {
-        autoSaveConfiguration();
+    document.getElementById('auto-refresh').addEventListener('change', function() {
+        updateRefreshRate();
     });
     
     document.getElementById('chart-range').addEventListener('change', function() {
         saveSettingsToLocalStorage(); // Save UI preference immediately
         loadHistoricalData(); // Load data based on new time range
+        resetChartZoom(); // Reset zoom when changing time range
     });
     
     // Initial data load based on saved settings
     setTimeout(() => {
         loadHistoricalData(currentConfig.chart_range);
-    }, 1000); // Wait for configuration to load
+    }, 500);
     
-    // Update every 5 seconds (only in real-time mode)
-    setInterval(function() {
-        if (!historicalMode) {
-            updateMonitoringData();
-        }
-    }, 5000);
+    // Start initial auto-refresh if enabled
+    updateRefreshRate();
 });
 </script>
 {% endblock %}
