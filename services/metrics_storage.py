@@ -255,11 +255,34 @@ class MetricsStorage:
                 # In a real implementation, this would query the server via RCON
                 self.store_metric('server_tps', 20.0, {'source': 'placeholder'})
             
-            # Player count (placeholder - would need server query)
+            # Player count from server status
             if config.get('METRICS_COLLECT_PLAYER_COUNT', True):
-                # For now, store a placeholder value
-                # In a real implementation, this would query the server
-                self.store_metric('player_count', 0, {'source': 'placeholder'})
+                try:
+                    from services.system_control import SystemControlService
+                    system_control = SystemControlService()
+                    status = system_control.get_server_status()
+                    
+                    if status.get('running') and status.get('players') is not None:
+                        player_count = status.get('players', 0)
+                        max_players = status.get('max_players', 20)
+                        self.store_metric('player_count', player_count, {
+                            'source': 'mcstatus',
+                            'max_players': max_players,
+                            'server_running': True
+                        })
+                    else:
+                        # Server is not running or player data unavailable
+                        self.store_metric('player_count', 0, {
+                            'source': 'server_offline',
+                            'server_running': False
+                        })
+                except Exception as e:
+                    self._log_warning(f'Failed to collect player count: {e}')
+                    # Store 0 with error info on failure
+                    self.store_metric('player_count', 0, {
+                        'source': 'error',
+                        'error': str(e)
+                    })
                 
         except Exception as e:
             self._log_error(f'Failed to collect system metrics: {e}')
