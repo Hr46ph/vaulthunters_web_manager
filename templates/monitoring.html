@@ -883,8 +883,19 @@ function updateChartTimeRanges(timeRangeHours) {
 // Update chart time range for real-time mode (removes fixed bounds for scrolling)
 function updateChartTimeRangeForRealTime(newTime) {
     if (historicalMode) {
-        console.log(`⏸️ Skipping real-time range update - in historical mode`);
-        return; // Only update in real-time mode
+        console.log(`⏰ Historical mode real-time update: ${newTime.toLocaleTimeString()} (updating sliding window)`);
+        // For historical mode, update the sliding window to follow real-time data
+        const timeRangeHours = currentConfig.chart_range || 1;
+        const newStartTime = new Date(newTime.getTime() - (timeRangeHours * 60 * 60 * 1000));
+        
+        [tpsChart, memoryChart, lagChart, cpuChart, playerChart].forEach((chart, index) => {
+            if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
+                chart.options.scales.x.min = newStartTime;
+                chart.options.scales.x.max = newTime;
+                console.log(`   📊 Updated sliding window for chart ${index + 1}`);
+            }
+        });
+        return;
     }
     
     console.log(`⏰ Real-time range update: ${newTime.toLocaleTimeString()} (removing fixed bounds)`);
@@ -1022,12 +1033,26 @@ function updateCharts(metrics, status = null) {
     }
 
     // Update lag chart with recent spikes
-    if (metrics.recent_lag_spikes) {
+    if (metrics.recent_lag_spikes && metrics.recent_lag_spikes.length > 0) {
         lagChart.data.labels = metrics.recent_lag_spikes.map(spike => 
             new Date(spike.timestamp)
         );
         lagChart.data.datasets[0].data = metrics.recent_lag_spikes.map(spike => spike.duration);
         lagChart.update('none');
+    } else if (metrics.recent_lag_spikes !== undefined) {
+        // No lag spikes - add a baseline point at 0 to show the chart is working
+        const now = new Date();
+        if (lagChart.data.labels.length === 0) {
+            // Add baseline data points to show time range
+            const timeRangeHours = currentConfig.chart_range || 1;
+            const points = Math.min(5, Math.ceil(timeRangeHours * 12)); // 5 points max
+            for (let i = 0; i < points; i++) {
+                const time = new Date(now.getTime() - ((points - 1 - i) * (timeRangeHours * 60 * 60 * 1000) / points));
+                lagChart.data.labels.push(time);
+                lagChart.data.datasets[0].data.push(0);
+            }
+            lagChart.update('none');
+        }
     }
 
     // Update player count chart (use server status, not metrics)
@@ -1298,9 +1323,9 @@ function loadHistoricalData(hours = null) {
     const timeRange = hours || parseFloat(document.getElementById('chart-range').value);
     console.log(`timeRange: ${timeRange}, hours param: ${hours}`);
     
-    // EXPLICIT CHECK: 15 minutes (0.25 hours) - load recent historical data then switch to real-time
-    if (timeRange <= 0.25) {
-        console.log(`🔄 15-MINUTE MODE: Loading last 15 minutes of data then switching to real-time`);
+    // EXPLICIT CHECK: 15 and 30 minutes (0.5 hours or less) - load recent historical data then switch to real-time
+    if (timeRange <= 0.5) {
+        console.log(`🔄 SHORT-RANGE MODE (${timeRange} hours): Loading historical data then switching to real-time`);
         historicalMode = false;
         currentConfig.chart_range = timeRange;
         
@@ -1310,16 +1335,31 @@ function loadHistoricalData(hours = null) {
         // Set proper time range on charts
         updateChartTimeRanges(timeRange);
         
-        // Load last 15 minutes of historical data
+        // Load historical data for the selected time range
         const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min', 'player_count'];
         
-        Promise.all(metrics.map(metric => 
-            fetch(`/api/monitoring/history/${metric}?hours=${timeRange}`)
-                .then(r => r.json())
-                .catch(() => null)
-        ))
+        // Also load CPU per-core data
+        const cpuCorePromises = [];
+        for (let i = 0; i < 16; i++) { // Support up to 16 CPU cores
+            cpuCorePromises.push(
+                fetch(`/api/monitoring/history/system_cpu_core_${i}_percent?hours=${timeRange}`)
+                    .then(r => r.json())
+                    .then(data => ({ metric_type: `system_cpu_core_${i}_percent`, data }))
+                    .catch(() => null) // Ignore cores that don't exist
+            );
+        }
+        
+        Promise.all([
+            ...metrics.map(metric => 
+                fetch(`/api/monitoring/history/${metric}?hours=${timeRange}`)
+                    .then(r => r.json())
+                    .then(data => ({ metric_type: metric, data }))
+                    .catch(() => null)
+            ),
+            ...cpuCorePromises
+        ])
         .then(results => {
-            console.log(`📊 15-min: Loaded historical data, now displaying and switching to real-time`);
+            console.log(`📊 Short-range (${timeRange}h): Loaded historical data, now displaying and switching to real-time`);
             
             // Process historical data
             results.forEach(result => {
@@ -1335,11 +1375,12 @@ function loadHistoricalData(hours = null) {
             switchToRealTimeMode(false);
         })
         .catch(error => {
-            console.error('Failed to load 15-minute historical data:', error);
+            console.error(`Failed to load ${timeRange}h historical data:`, error);
             // Fallback to empty real-time mode
             switchToRealTimeMode(false);
         });
         
+        console.log(`🔄 SHORT-RANGE MODE (${timeRange}h) COMPLETE - RETURNING EARLY`);
         return;
     }
     
@@ -1348,10 +1389,10 @@ function loadHistoricalData(hours = null) {
     // Track previous mode
     wasHistoricalMode = historicalMode;
     
-    // Use historical mode for ranges 30 minutes or more
-    const newHistoricalMode = timeRange >= 0.5; // 30 minutes or more = historical mode
+    // Use historical mode for ranges 1 hour or more
+    const newHistoricalMode = timeRange >= 1.0; // 1 hour or more = historical mode
     
-    console.log(`DECISION: timeRange=${timeRange} >= 0.5 = ${newHistoricalMode}`);
+    console.log(`DECISION: timeRange=${timeRange} >= 1.0 = ${newHistoricalMode}`);
     console.log(`MODE STATES: was=${wasHistoricalMode}, current=${historicalMode}, new=${newHistoricalMode}`);
     
     if (!newHistoricalMode) {
