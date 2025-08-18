@@ -1712,36 +1712,21 @@ function processHistoricalMemoryData() {
     memoryChart.data.datasets[1].data = [];
     memoryChart.data.datasets[2].data = [];
     
-    // Create maps for quick lookup by timestamp
-    const buffersMap = new Map();
-    const cacheMap = new Map();
+    // Index-based matching - all metrics are collected at same intervals
+    console.log(`📊 Matching by index: Used=${monitoringData.memoryUsed.length}, Buffers=${monitoringData.memoryBuffers.length}, Cache=${monitoringData.memoryCache.length}`);
     
-    console.log(`📊 Building buffers map from ${monitoringData.memoryBuffers.length} entries`);
-    monitoringData.memoryBuffers.forEach((entry, index) => {
-        const timeKey = entry.timestamp.toISOString();
-        buffersMap.set(timeKey, entry.value);
-        if (index < 3) console.log(`📊   Buffer entry ${index}: ${timeKey} = ${entry.value}MB`);
-    });
-    
-    console.log(`📊 Building cache map from ${monitoringData.memoryCache.length} entries`);
-    monitoringData.memoryCache.forEach((entry, index) => {
-        const timeKey = entry.timestamp.toISOString();
-        cacheMap.set(timeKey, entry.value);
-        if (index < 3) console.log(`📊   Cache entry ${index}: ${timeKey} = ${entry.value}MB`);
-    });
-    
-    console.log(`📊 Buffers map size: ${buffersMap.size}, Cache map size: ${cacheMap.size}`);
-    
-    // Process each used memory entry and match with buffers/cache
+    // Process each used memory entry and match with buffers/cache by index
+    // Since all three metrics are collected at the same time with same data point count,
+    // we can match them by index instead of exact timestamp
     monitoringData.memoryUsed.forEach((entry, index) => {
-        const timeKey = entry.timestamp.toISOString();
         const totalUsedMB = entry.value;
-        const buffersMB = buffersMap.get(timeKey) || 0;
-        const cacheMB = cacheMap.get(timeKey) || 0;
+        
+        // Match by index instead of timestamp for more reliable pairing
+        const buffersMB = (index < monitoringData.memoryBuffers.length) ? monitoringData.memoryBuffers[index].value : 0;
+        const cacheMB = (index < monitoringData.memoryCache.length) ? monitoringData.memoryCache[index].value : 0;
         
         if (index < 3) {
-            console.log(`📊   Used entry ${index}: ${timeKey} = ${totalUsedMB}MB`);
-            console.log(`📊   Looking up: buffers=${buffersMB}MB, cache=${cacheMB}MB`);
+            console.log(`📊   Entry ${index}: Used=${totalUsedMB}MB, Buffers=${buffersMB}MB, Cache=${cacheMB}MB`);
         }
         
         // Calculate actual used memory (same logic as real-time)
