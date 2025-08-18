@@ -54,9 +54,52 @@
     </div>
 </div>
 
-<!-- Configuration Panel -->
+<!-- Server Health Status -->
 <div class="row mb-4">
     <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-heartbeat"></i> Server Health Status</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="status-indicator status-unknown" id="server-status-indicator"></span>
+                            <span>Server Process</span>
+                            <span class="badge bg-secondary ms-auto" id="server-status-badge">Unknown</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="status-indicator status-unknown" id="rcon-status-indicator"></span>
+                            <span>RCON Connection</span>
+                            <span class="badge bg-secondary ms-auto" id="rcon-status-badge">Unknown</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="status-indicator status-unknown" id="performance-status-indicator"></span>
+                            <span>Performance</span>
+                            <span class="badge bg-secondary ms-auto" id="performance-status-badge">Unknown</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="status-indicator status-unknown" id="disk-status-indicator"></span>
+                            <span>Disk Space</span>
+                            <span class="badge bg-secondary ms-auto" id="disk-status-badge">Unknown</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Configuration Panel and Recent Performance Events -->
+<div class="row mb-4">
+    <div class="col-md-8">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h6><i class="fas fa-cog"></i> Metrics Configuration</h6>
@@ -67,7 +110,7 @@
             <div class="collapse" id="config-panel">
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label for="update-interval" class="form-label">Page Update Rate</label>
                             <select class="form-select form-select-sm" id="update-interval">
                                 <option value="1000">1 second</option>
@@ -79,7 +122,7 @@
                                 <option value="60000">1 minute</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label for="chart-range" class="form-label">Chart Time Range</label>
                             <select class="form-select form-select-sm" id="chart-range">
                                 <option value="0.25">15 minutes</option>
@@ -92,19 +135,31 @@
                                 <option value="168">1 week</option>
                             </select>
                         </div>
-                        <div class="col-md-3 d-flex align-items-center">
-                            <div class="form-check">
+                        <div class="col-md-4">
+                            <div class="form-check mb-2">
                                 <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
                                 <label class="form-check-label" for="auto-refresh">
                                     Auto Refresh
                                 </label>
                             </div>
-                        </div>
-                        <div class="col-md-3 d-flex align-items-end">
                             <small class="text-muted">
                                 <i class="fas fa-mouse-pointer"></i> Mouse wheel to zoom charts
                             </small>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-list"></i> Recent Performance Events</h6>
+            </div>
+            <div class="card-body">
+                <div id="performance-events" style="max-height: 200px; overflow-y: auto;">
+                    <div class="text-muted text-center">
+                        <i class="fas fa-spinner fa-spin"></i> Loading events...
                     </div>
                 </div>
             </div>
@@ -219,50 +274,7 @@
     </div>
 </div>
 
-<!-- Server Health Status -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-heartbeat"></i> Server Health Status</h6>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="d-flex align-items-center mb-2">
-                            <span class="status-indicator status-unknown" id="server-status-indicator"></span>
-                            <span>Server Process</span>
-                            <span class="badge bg-secondary ms-auto" id="server-status-badge">Unknown</span>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="d-flex align-items-center mb-2">
-                            <span class="status-indicator status-unknown" id="rcon-status-indicator"></span>
-                            <span>RCON Connection</span>
-                            <span class="badge bg-secondary ms-auto" id="rcon-status-badge">Unknown</span>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="d-flex align-items-center mb-2">
-                            <span class="status-indicator status-unknown" id="performance-status-indicator"></span>
-                            <span>Performance</span>
-                            <span class="badge bg-secondary ms-auto" id="performance-status-badge">Unknown</span>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="d-flex align-items-center mb-2">
-                            <span class="status-indicator status-unknown" id="disk-status-indicator"></span>
-                            <span>Disk Space</span>
-                            <span class="badge bg-secondary ms-auto" id="disk-status-badge">Unknown</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Lag Spike Analysis -->
+<!-- Lag Spike Analysis and Player Count -->
 <div class="row">
     <div class="col-md-8">
         <div class="card">
@@ -279,13 +291,14 @@
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">
-                <h6><i class="fas fa-list"></i> Recent Performance Events</h6>
+                <h6><i class="fas fa-users"></i> Player Count History</h6>
             </div>
             <div class="card-body">
-                <div id="performance-events" style="max-height: 300px; overflow-y: auto;">
-                    <div class="text-muted text-center">
-                        <i class="fas fa-spinner fa-spin"></i> Loading events...
-                    </div>
+                <div class="chart-container">
+                    <canvas id="player-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted">Current: <span id="current-players" class="fw-bold">--</span> players</small>
                 </div>
             </div>
         </div>
@@ -299,7 +312,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script>
 // Monitoring page specific JavaScript
-let tpsChart, memoryChart, lagChart, cpuChart;
+let tpsChart, memoryChart, lagChart, cpuChart, playerChart;
 let monitoringData = {
     tps: [],
     memory: [],
@@ -659,6 +672,68 @@ function initializeCharts() {
             }
         }
     });
+
+    // Player Count Chart
+    const playerCtx = document.getElementById('player-chart').getContext('2d');
+    playerChart = new Chart(playerCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Players',
+                data: [],
+                borderColor: '#6f42c1',
+                backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                tension: 0.4,
+                fill: true,
+                pointRadius: 3,
+                pointHoverRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        stepSize: 1,
+                        callback: function(value) {
+                            return Math.floor(value);
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                zoom: {
+                    zoom: {
+                        wheel: {
+                            enabled: true,
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'x',
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                    }
+                }
+            }
+        }
+    });
 }
 
 // Update monitoring data
@@ -808,6 +883,25 @@ function updateCharts(metrics) {
         );
         lagChart.data.datasets[0].data = metrics.recent_lag_spikes.map(spike => spike.duration);
         lagChart.update('none');
+    }
+
+    // Update player count chart
+    if (metrics.current_players !== undefined) {
+        playerChart.data.labels.push(timeLabel);
+        playerChart.data.datasets[0].data.push(metrics.current_players);
+        
+        // Keep last 20 data points
+        if (playerChart.data.labels.length > 20) {
+            playerChart.data.labels.shift();
+            playerChart.data.datasets[0].data.shift();
+        }
+        playerChart.update('none');
+        
+        // Update current players display
+        const currentPlayersElement = document.getElementById('current-players');
+        if (currentPlayersElement) {
+            currentPlayersElement.textContent = metrics.current_players;
+        }
     }
 }
 
@@ -1062,8 +1156,8 @@ function loadHistoricalData(hours = null) {
     console.log(`Loading ${historicalMode ? 'historical' : 'real-time'} data for ${timeRange} hours`);
     
     if (!historicalMode) {
-        // Switch to real-time mode
-        switchToRealTimeMode();
+        // Switch to real-time mode (don't clear data for 15 minutes)
+        switchToRealTimeMode(false); // false = don't clear existing data
         return;
     }
     
@@ -1071,7 +1165,7 @@ function loadHistoricalData(hours = null) {
     clearChartData();
     
     // Load historical data for each metric type
-    const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min'];
+    const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min', 'player_count'];
     
     // Also load CPU per-core data
     const cpuCorePromises = [];
@@ -1132,6 +1226,12 @@ function clearChartData() {
         });
         cpuChart.update('none');
     }
+    
+    if (playerChart) {
+        playerChart.data.labels = [];
+        playerChart.data.datasets[0].data = [];
+        playerChart.update('none');
+    }
 }
 
 // Display historical metric data
@@ -1162,6 +1262,16 @@ function displayHistoricalMetric(metricType, data) {
                     const tpsEstimate = Math.max(15, 20 - (point.value * 0.1));
                     tpsChart.data.datasets[0].data.push(tpsEstimate);
                 }
+            });
+            break;
+            
+        case 'player_count':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                const timeLabel = timestamp.toLocaleTimeString('en-GB', { hour12: false });
+                
+                playerChart.data.labels.push(timeLabel);
+                playerChart.data.datasets[0].data.push(point.value);
             });
             break;
         
@@ -1239,15 +1349,20 @@ function updateChartsFromHistoricalData() {
     if (cpuChart) {
         cpuChart.update();
     }
+    if (playerChart) {
+        playerChart.update();
+    }
 }
 
 // Switch back to real-time mode
-function switchToRealTimeMode() {
+function switchToRealTimeMode(clearData = true) {
     historicalMode = false;
-    clearChartData();
+    if (clearData) {
+        clearChartData();
+    }
     resetChartZoom();
     updateRefreshRate(); // Restart auto-refresh if enabled
-    console.log('Switched back to real-time mode');
+    console.log(`Switched back to real-time mode (clear data: ${clearData})`);
 }
 
 // Reset zoom on all charts
@@ -1256,6 +1371,7 @@ function resetChartZoom() {
     if (memoryChart) memoryChart.resetZoom();
     if (lagChart) lagChart.resetZoom();
     if (cpuChart) cpuChart.resetZoom();
+    if (playerChart) playerChart.resetZoom();
 }
 
 // Initialize when page loads
