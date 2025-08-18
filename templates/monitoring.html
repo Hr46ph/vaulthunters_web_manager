@@ -311,7 +311,11 @@ let monitoringData = {
     memory: [],
     lagSpikes: [],
     events: [],
-    cpuCores: []
+    cpuCores: [],
+    // Historical memory breakdown
+    memoryUsed: [],
+    memoryBuffers: [],
+    memoryCache: []
 };
 
 // Configuration state
@@ -1336,7 +1340,7 @@ function loadHistoricalData(hours = null) {
         updateChartTimeRanges(timeRange);
         
         // Load historical data for the selected time range
-        const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min', 'player_count'];
+        const metrics = ['system_memory_used_mb', 'system_memory_buffers_mb', 'system_memory_cache_mb', 'system_cpu_percent', 'system_load_1min', 'player_count'];
         
         // Also load CPU per-core data
         const cpuCorePromises = [];
@@ -1471,7 +1475,7 @@ function loadHistoricalData(hours = null) {
     updateChartTimeRanges(timeRange);
     
     // Load historical data for each metric type
-    const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min', 'player_count'];
+    const metrics = ['system_memory_used_mb', 'system_memory_buffers_mb', 'system_memory_cache_mb', 'system_cpu_percent', 'system_load_1min', 'player_count'];
     
     // Also load CPU per-core data
     const cpuCorePromises = [];
@@ -1512,6 +1516,12 @@ function loadHistoricalData(hours = null) {
 // Clear chart data
 function clearChartData() {
     console.log(`🧹 clearChartData() called - clearing all chart data`);
+    
+    // Clear historical memory data storage
+    monitoringData.memoryUsed = [];
+    monitoringData.memoryBuffers = [];
+    monitoringData.memoryCache = [];
+    
     if (tpsChart) {
         tpsChart.data.labels = [];
         tpsChart.data.datasets[0].data = [];
@@ -1557,11 +1567,33 @@ function displayHistoricalMetric(metricType, data) {
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
                 
-                memoryChart.data.labels.push(timestamp);
-                memoryChart.data.datasets[0].data.push(point.value);
-                // Add placeholder data for buffers and cache
-                memoryChart.data.datasets[1].data.push(point.value * 0.1);
-                memoryChart.data.datasets[2].data.push(point.value * 0.2);
+                // Store the memory data for later processing
+                monitoringData.memoryUsed.push({
+                    timestamp: timestamp,
+                    value: point.value
+                });
+            });
+            break;
+            
+        case 'system_memory_buffers_mb':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                monitoringData.memoryBuffers.push({
+                    timestamp: timestamp,
+                    value: point.value
+                });
+            });
+            break;
+            
+        case 'system_memory_cache_mb':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                monitoringData.memoryCache.push({
+                    timestamp: timestamp,
+                    value: point.value
+                });
             });
             break;
             
@@ -1661,8 +1693,62 @@ function displayCpuCoreHistoricalData(coreIndex, data) {
     });
 }
 
+// Process historical memory data with proper breakdown calculation
+function processHistoricalMemoryData() {
+    console.log(`🧮 Processing historical memory data...`);
+    console.log(`   Used entries: ${monitoringData.memoryUsed.length}`);
+    console.log(`   Buffer entries: ${monitoringData.memoryBuffers.length}`);
+    console.log(`   Cache entries: ${monitoringData.memoryCache.length}`);
+    
+    // Clear existing memory chart data
+    memoryChart.data.labels = [];
+    memoryChart.data.datasets[0].data = [];
+    memoryChart.data.datasets[1].data = [];
+    memoryChart.data.datasets[2].data = [];
+    
+    // Create maps for quick lookup by timestamp
+    const buffersMap = new Map();
+    const cacheMap = new Map();
+    
+    monitoringData.memoryBuffers.forEach(entry => {
+        const timeKey = entry.timestamp.toISOString();
+        buffersMap.set(timeKey, entry.value);
+    });
+    
+    monitoringData.memoryCache.forEach(entry => {
+        const timeKey = entry.timestamp.toISOString();
+        cacheMap.set(timeKey, entry.value);
+    });
+    
+    // Process each used memory entry and match with buffers/cache
+    monitoringData.memoryUsed.forEach(entry => {
+        const timeKey = entry.timestamp.toISOString();
+        const totalUsedMB = entry.value;
+        const buffersMB = buffersMap.get(timeKey) || 0;
+        const cacheMB = cacheMap.get(timeKey) || 0;
+        
+        // Calculate actual used memory (same logic as real-time)
+        const actualUsedMB = Math.max(0, totalUsedMB - buffersMB - cacheMB);
+        
+        console.log(`🧮 ${entry.timestamp.toLocaleTimeString()}: Total=${totalUsedMB.toFixed(0)}MB, Buffers=${buffersMB.toFixed(0)}MB, Cache=${cacheMB.toFixed(0)}MB, Actual=${actualUsedMB.toFixed(0)}MB`);
+        
+        // Add to chart
+        memoryChart.data.labels.push(entry.timestamp);
+        memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory (excluding buffers/cache)
+        memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers
+        memoryChart.data.datasets[2].data.push(cacheMB);      // Cache
+    });
+    
+    console.log(`✅ Historical memory processing complete: ${memoryChart.data.labels.length} data points`);
+}
+
 // Update charts from historical data
 function updateChartsFromHistoricalData() {
+    // Process memory data using proper breakdown calculation
+    if (monitoringData.memoryUsed.length > 0) {
+        processHistoricalMemoryData();
+    }
+    
     if (tpsChart) {
         tpsChart.update();
     }
