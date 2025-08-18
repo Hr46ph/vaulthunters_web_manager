@@ -300,6 +300,7 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script>
@@ -402,6 +403,15 @@ function initializeCharts() {
                     }
                 },
                 x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     }
@@ -480,6 +490,14 @@ function initializeCharts() {
                     }
                 },
                 x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        }
+                    },
                     stacked: true,
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
@@ -572,6 +590,15 @@ function initializeCharts() {
                     }
                 },
                 x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     }
@@ -625,6 +652,15 @@ function initializeCharts() {
                     }
                 },
                 x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     }
@@ -709,6 +745,15 @@ function initializeCharts() {
                     }
                 },
                 x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     }
@@ -812,6 +857,29 @@ function updateMetricCards(metrics, status) {
     }
 }
 
+// Update chart axis ranges based on selected time range
+function updateChartTimeRanges(timeRangeHours) {
+    const now = new Date();
+    const startTime = new Date(now.getTime() - (timeRangeHours * 60 * 60 * 1000));
+    
+    console.log(`🕐 Updating chart time ranges: ${timeRangeHours} hours (${startTime.toLocaleTimeString()} - ${now.toLocaleTimeString()})`);
+    
+    const timeRange = {
+        min: startTime,
+        max: now
+    };
+    
+    // Update all chart X-axis ranges
+    [tpsChart, memoryChart, lagChart, cpuChart, playerChart].forEach((chart, index) => {
+        if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
+            chart.options.scales.x.min = timeRange.min;
+            chart.options.scales.x.max = timeRange.max;
+            chart.update('none');
+            console.log(`   📊 Updated chart ${index + 1} time range`);
+        }
+    });
+}
+
 // Debug function to show current chart state
 function debugChartState() {
     console.log(`🔍 CHART STATE DEBUG:`);
@@ -856,15 +924,11 @@ function updateTpsStats() {
 
 // Update charts
 function updateCharts(metrics, status = null) {
-    console.log(`🔄 updateCharts() called - historicalMode=${historicalMode}`);
     const now = new Date();
-    const timeLabel = now.toLocaleTimeString('en-GB', { hour12: false });
 
     // Update TPS chart
-    console.log(`📈 TPS UPDATE: metrics.current_tps = ${metrics.current_tps} (defined: ${metrics.current_tps !== undefined})`);
     if (metrics.current_tps !== undefined) {
-        console.log(`📈 Adding TPS data: ${metrics.current_tps} at ${timeLabel}`);
-        tpsChart.data.labels.push(timeLabel);
+        tpsChart.data.labels.push(now);
         tpsChart.data.datasets[0].data.push(metrics.current_tps);
         
         // Keep last 20 data points
@@ -872,19 +936,15 @@ function updateCharts(metrics, status = null) {
             tpsChart.data.labels.shift();
             tpsChart.data.datasets[0].data.shift();
         }
-        
-        console.log(`📈 TPS chart now has ${tpsChart.data.labels.length} data points`);
         tpsChart.update('none');
         
         // Update TPS statistics
         updateTpsStats();
-    } else {
-        console.log(`❌ TPS UPDATE SKIPPED: current_tps is undefined`);
     }
 
     // Update memory chart with stacked memory data
     if (metrics.system_memory) {
-        memoryChart.data.labels.push(timeLabel);
+        memoryChart.data.labels.push(now);
         
         // Check if we have detailed memory breakdown
         if (metrics.system_memory.used_mb !== undefined) {
@@ -933,7 +993,7 @@ function updateCharts(metrics, status = null) {
     // Update lag chart with recent spikes
     if (metrics.recent_lag_spikes) {
         lagChart.data.labels = metrics.recent_lag_spikes.map(spike => 
-            new Date(spike.timestamp).toLocaleTimeString('en-GB', { hour12: false })
+            new Date(spike.timestamp)
         );
         lagChart.data.datasets[0].data = metrics.recent_lag_spikes.map(spike => spike.duration);
         lagChart.update('none');
@@ -945,7 +1005,7 @@ function updateCharts(metrics, status = null) {
         playerCount = status.players;
     }
     
-    playerChart.data.labels.push(timeLabel);
+    playerChart.data.labels.push(now);
     playerChart.data.datasets[0].data.push(playerCount);
     
     // Keep last 20 data points
@@ -1204,26 +1264,48 @@ function loadHistoricalData(hours = null) {
     const timeRange = hours || parseFloat(document.getElementById('chart-range').value);
     console.log(`timeRange: ${timeRange}, hours param: ${hours}`);
     
-    // EXPLICIT CHECK: 15 minutes (0.25 hours) - switch to real-time, clear only if from historical
+    // EXPLICIT CHECK: 15 minutes (0.25 hours) - load recent historical data then switch to real-time
     if (timeRange <= 0.25) {
-        console.log(`🔄 EXPLICIT 15-MINUTE HANDLING - timeRange=${timeRange}`);
-        console.log(`Current mode: ${historicalMode ? 'historical' : 'real-time'}`);
+        console.log(`🔄 15-MINUTE MODE: Loading last 15 minutes of data then switching to real-time`);
+        historicalMode = false;
+        currentConfig.chart_range = timeRange;
         
-        if (historicalMode) {
-            console.log(`🧹 15-min: Coming from historical mode - clearing data and switching to real-time`);
-            historicalMode = false;
-            currentConfig.chart_range = timeRange;
-            clearChartData();
-            switchToRealTimeMode(false); // Don't clear again
-        } else {
-            console.log(`✅ 15-min: Already in real-time mode - just updating config`);
-            historicalMode = false;
-            currentConfig.chart_range = timeRange;
-        }
+        // Clear current data first
+        clearChartData();
         
-        console.log(`📊 15-min: Final state - historicalMode=${historicalMode}, currentConfig.chart_range=${currentConfig.chart_range}`);
-        console.log(`📈 15-min: Chart should now show real-time data for ${timeRange} hours`);
-        debugChartState();
+        // Set proper time range on charts
+        updateChartTimeRanges(timeRange);
+        
+        // Load last 15 minutes of historical data
+        const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min', 'player_count'];
+        
+        Promise.all(metrics.map(metric => 
+            fetch(`/api/monitoring/history/${metric}?hours=${timeRange}`)
+                .then(r => r.json())
+                .catch(() => null)
+        ))
+        .then(results => {
+            console.log(`📊 15-min: Loaded historical data, now displaying and switching to real-time`);
+            
+            // Process historical data
+            results.forEach(result => {
+                if (result && result.data && result.data.length > 0) {
+                    displayHistoricalMetric(result.metric_type, result.data);
+                }
+            });
+            
+            // Update charts from loaded data
+            updateChartsFromHistoricalData();
+            
+            // Now switch to real-time mode (don't clear data)
+            switchToRealTimeMode(false);
+        })
+        .catch(error => {
+            console.error('Failed to load 15-minute historical data:', error);
+            // Fallback to empty real-time mode
+            switchToRealTimeMode(false);
+        });
+        
         return;
     }
     
@@ -1261,6 +1343,9 @@ function loadHistoricalData(hours = null) {
     console.log('🧹 Switching to historical mode - clearing data');
     historicalMode = true;
     clearChartData();
+    
+    // Set proper time range on charts
+    updateChartTimeRanges(timeRange);
     
     // Load historical data for each metric type
     const metrics = ['system_memory_used_mb', 'system_cpu_percent', 'system_load_1min', 'player_count'];
@@ -1340,9 +1425,8 @@ function displayHistoricalMetric(metricType, data) {
         case 'system_memory_used_mb':
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
-                const timeLabel = timestamp.toLocaleTimeString('en-GB', { hour12: false });
                 
-                memoryChart.data.labels.push(timeLabel);
+                memoryChart.data.labels.push(timestamp);
                 memoryChart.data.datasets[0].data.push(point.value);
                 // Add placeholder data for buffers and cache
                 memoryChart.data.datasets[1].data.push(point.value * 0.1);
@@ -1353,11 +1437,10 @@ function displayHistoricalMetric(metricType, data) {
         case 'system_cpu_percent':
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
-                const timeLabel = timestamp.toLocaleTimeString('en-GB', { hour12: false });
                 
                 if (tpsChart.data.labels.length === 0 || 
-                    tpsChart.data.labels[tpsChart.data.labels.length - 1] !== timeLabel) {
-                    tpsChart.data.labels.push(timeLabel);
+                    tpsChart.data.labels[tpsChart.data.labels.length - 1].getTime() !== timestamp.getTime()) {
+                    tpsChart.data.labels.push(timestamp);
                     // Use CPU as proxy for TPS (inverse relationship)
                     const tpsEstimate = Math.max(15, 20 - (point.value * 0.1));
                     tpsChart.data.datasets[0].data.push(tpsEstimate);
@@ -1369,9 +1452,8 @@ function displayHistoricalMetric(metricType, data) {
         case 'player_count':
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
-                const timeLabel = timestamp.toLocaleTimeString('en-GB', { hour12: false });
                 
-                playerChart.data.labels.push(timeLabel);
+                playerChart.data.labels.push(timestamp);
                 playerChart.data.datasets[0].data.push(point.value);
             });
             break;
@@ -1419,13 +1501,12 @@ function displayCpuCoreHistoricalData(coreIndex, data) {
     // Add historical data for this specific core
     data.forEach((point, index) => {
         const timestamp = new Date(point.timestamp);
-        const timeLabel = timestamp.toLocaleTimeString('en-GB', { hour12: false });
         
         // Add time label only once (from first core)
         if (coreIndex === 0 && index < cpuChart.data.labels.length) {
-            cpuChart.data.labels[index] = timeLabel;
+            cpuChart.data.labels[index] = timestamp;
         } else if (coreIndex === 0) {
-            cpuChart.data.labels.push(timeLabel);
+            cpuChart.data.labels.push(timestamp);
         }
         
         // Add data point for this core
