@@ -109,7 +109,6 @@
                     <div class="col-md-4">
                         <label for="update-interval" class="form-label">Page Update Rate</label>
                         <select class="form-select form-select-sm" id="update-interval">
-                            <option value="1000">1 second</option>
                             <option value="3000">3 seconds</option>
                             <option value="5000" selected>5 seconds</option>
                             <option value="10000">10 seconds</option>
@@ -251,7 +250,7 @@
                 <h6><i class="fas fa-server"></i> Minecraft Process</h6>
             </div>
             <div class="card-body">
-                <div class="d-flex flex-column justify-content-center" style="min-height: 250px;">
+                <div class="d-flex flex-column justify-content-center" style="min-height: 280px;">
                     <div class="text-center mb-4">
                         <div class="metric-label">Process CPU</div>
                         <div class="metric-value" id="minecraft-cpu">--</div>
@@ -1165,11 +1164,22 @@ function loadHistoricalData(hours = null) {
     const timeRange = hours || parseFloat(document.getElementById('chart-range').value);
     console.log(`timeRange: ${timeRange}, hours param: ${hours}`);
     
-    // EXPLICIT CHECK: 15 minutes (0.25 hours) should NEVER do anything
+    // EXPLICIT CHECK: 15 minutes (0.25 hours) - switch to real-time, clear only if from historical
     if (timeRange <= 0.25) {
-        console.log(`🚫 EXPLICIT 15-MINUTE BYPASS - timeRange=${timeRange} <= 0.25 - DOING NOTHING`);
-        historicalMode = false;
-        currentConfig.chart_range = timeRange;
+        console.log(`🔄 EXPLICIT 15-MINUTE HANDLING - timeRange=${timeRange}`);
+        console.log(`Current mode: ${historicalMode ? 'historical' : 'real-time'}`);
+        
+        if (historicalMode) {
+            console.log(`🧹 15-min: Coming from historical mode - clearing data and switching to real-time`);
+            historicalMode = false;
+            currentConfig.chart_range = timeRange;
+            clearChartData();
+            switchToRealTimeMode(false); // Don't clear again
+        } else {
+            console.log(`✅ 15-min: Already in real-time mode - just updating config`);
+            historicalMode = false;
+            currentConfig.chart_range = timeRange;
+        }
         return;
     }
     
