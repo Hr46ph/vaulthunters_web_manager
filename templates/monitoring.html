@@ -1730,13 +1730,14 @@ function processHistoricalMemoryData() {
         // Calculate actual used memory (same logic as real-time)
         const actualUsedMB = Math.max(0, totalUsedMB - buffersMB - cacheMB);
         
-        console.log(`🧮 ${entry.timestamp.toLocaleTimeString()}: Total=${totalUsedMB.toFixed(0)}MB, Buffers=${buffersMB.toFixed(0)}MB, Cache=${cacheMB.toFixed(0)}MB, Actual=${actualUsedMB.toFixed(0)}MB`);
+        console.log(`🧮 ${entry.timestamp.toLocaleTimeString()}: Total=${totalUsedMB.toFixed(0)}MB, Actual=${actualUsedMB.toFixed(0)}MB, Buffers=${buffersMB.toFixed(0)}MB, Cache=${cacheMB.toFixed(0)}MB`);
+        console.log(`🧮    Stacked total: ${(actualUsedMB + buffersMB + cacheMB).toFixed(0)}MB`);
         
-        // Add to chart
+        // Add to chart (stacked format - same as real-time)
         memoryChart.data.labels.push(entry.timestamp);
-        memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory (excluding buffers/cache)
-        memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers
-        memoryChart.data.datasets[2].data.push(cacheMB);      // Cache
+        memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory (excluding buffers/cache) - RED
+        memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers - ORANGE
+        memoryChart.data.datasets[2].data.push(cacheMB);      // Cache - GREEN
     });
     
     console.log(`✅ Historical memory processing complete: ${memoryChart.data.labels.length} data points`);
