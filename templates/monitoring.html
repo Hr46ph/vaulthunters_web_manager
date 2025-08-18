@@ -856,11 +856,14 @@ function updateTpsStats() {
 
 // Update charts
 function updateCharts(metrics, status = null) {
+    console.log(`🔄 updateCharts() called - historicalMode=${historicalMode}`);
     const now = new Date();
     const timeLabel = now.toLocaleTimeString('en-GB', { hour12: false });
 
     // Update TPS chart
+    console.log(`📈 TPS UPDATE: metrics.current_tps = ${metrics.current_tps} (defined: ${metrics.current_tps !== undefined})`);
     if (metrics.current_tps !== undefined) {
+        console.log(`📈 Adding TPS data: ${metrics.current_tps} at ${timeLabel}`);
         tpsChart.data.labels.push(timeLabel);
         tpsChart.data.datasets[0].data.push(metrics.current_tps);
         
@@ -869,10 +872,14 @@ function updateCharts(metrics, status = null) {
             tpsChart.data.labels.shift();
             tpsChart.data.datasets[0].data.shift();
         }
+        
+        console.log(`📈 TPS chart now has ${tpsChart.data.labels.length} data points`);
         tpsChart.update('none');
         
         // Update TPS statistics
         updateTpsStats();
+    } else {
+        console.log(`❌ TPS UPDATE SKIPPED: current_tps is undefined`);
     }
 
     // Update memory chart with stacked memory data
@@ -1165,8 +1172,10 @@ function updatePerformanceEvents(events) {
 
 // Dynamic update interval management
 function updateRefreshRate() {
+    console.log(`⚙️ updateRefreshRate() called`);
     const newInterval = parseInt(document.getElementById('update-interval').value);
     const autoRefreshEnabled = document.getElementById('auto-refresh').checked;
+    console.log(`⚙️ newInterval=${newInterval}, autoRefreshEnabled=${autoRefreshEnabled}, historicalMode=${historicalMode}`);
     
     // Clear existing interval
     if (updateInterval) {
