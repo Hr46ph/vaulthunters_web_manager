@@ -26,6 +26,7 @@ def create_flask_config(toml_config: Dict[str, Any]) -> Dict[str, Any]:
     web_config = toml_config.get('web', {})
     security_config = toml_config.get('security', {})
     jvm_config = toml_config.get('jvm', {})
+    memory_config = toml_config.get('memory', {})
     logs_config = toml_config.get('logs', {})
     files_config = toml_config.get('files', {})
     metrics_config = toml_config.get('metrics', {})
@@ -35,15 +36,11 @@ def create_flask_config(toml_config: Dict[str, Any]) -> Dict[str, Any]:
         'MINECRAFT_SERVER_PATH': server_config.get('minecraft_server_path', '/home/minecraft/vaulthunters'),
         'BACKUP_PATH': server_config.get('backup_path', '/home/minecraft/backups'),
         'JAVA_EXECUTABLE': server_config.get('java_executable', 'java'),
-        'SERVER_JAR': server_config.get('server_jar', 'forge-1.18.2-40.2.21-universal.jar'),
         'MINECRAFT_SERVER_HOST': server_config.get('minecraft_server_host', 'localhost'),
         'MINECRAFT_SERVER_PORT': server_config.get('minecraft_server_port', 25565),
         
-        # JVM settings
-        'MEMORY_MIN': jvm_config.get('memory_min', '4G'),
-        'MEMORY_MAX': jvm_config.get('memory_max', '8G'),
-        'OPTIMIZATION_FLAGS': jvm_config.get('optimization_flags', []),
-        'SYSTEM_PROPERTIES': jvm_config.get('system_properties', []),
+        # Memory settings (loaded from [memory] section but handled by config_manager directly)
+        'MEMORY_LARGE_HEAP_THRESHOLD': memory_config.get('large_heap_threshold', 12),
         
         # Web interface
         'HOST': web_config.get('host', '0.0.0.0'),

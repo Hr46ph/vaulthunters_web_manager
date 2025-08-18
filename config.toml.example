@@ -12,56 +12,27 @@ backup_path = "/home/minecraft/backups"
 # Java executable path (use full path if java is not in PATH)
 java_executable = "java"
 
-# Server jar filename (should be in your minecraft_server_path)
-server_jar = "forge-1.18.2-40.2.21-universal.jar"
-
 # Minecraft server connection details
 minecraft_server_host = "localhost"
 minecraft_server_port = 25565
 
-[jvm]
-# Memory allocation (adjust based on your system)
-# Recommended: Use same value for min and max memory for optimal performance
-memory_min = "4G"
-memory_max = "8G"
+[memory]
+# Java memory allocation settings based on system RAM
+# The web manager will automatically select appropriate heap size and flags
+# based on your system memory and these settings
 
-# Aikar's JVM optimization flags for VaultHunters
-# These flags are specifically optimized for Minecraft servers with high memory allocation rates
-# Source: https://docs.papermc.io/paper/aikars-flags/
-# 
-# Key benefits:
-# - Reduces garbage collection pause times
-# - Optimizes G1 garbage collector for Minecraft's allocation patterns  
-# - Improves server performance and reduces lag spikes
-# - Handles VaultHunters' high memory usage efficiently
-#
-# Note: These flags are tested and recommended for all Minecraft versions (1.8 to 1.20+)
-optimization_flags = [
-    "+UseG1GC",
-    "+ParallelRefProcEnabled", 
-    "MaxGCPauseMillis=200",
-    "+UnlockExperimentalVMOptions",
-    "+DisableExplicitGC",
-    "+AlwaysPreTouch",
-    "G1NewSizePercent=30",
-    "G1MaxNewSizePercent=40", 
-    "G1HeapRegionSize=8M",
-    "G1ReservePercent=20",
-    "G1HeapWastePercent=5",
-    "G1MixedGCCountTarget=4",
-    "InitiatingHeapOccupancyPercent=15",
-    "G1MixedGCLiveThresholdPercent=90",
-    "G1RSetUpdatingPauseTimePercent=5",
-    "SurvivorRatio=32",
-    "+PerfDisableSharedMem",
-    "MaxTenuringThreshold=1"
-]
+# Threshold for switching between flag sets (in GB)  
+# Systems with less than this use small heap optimizations
+# Systems with this amount or more use large heap optimizations
+large_heap_threshold = 12
 
-# Aikar's flag identification (do not modify)
-system_properties = [
-    "using.aikars.flags=https://mcflags.emc.gs",
-    "aikars.new.flags=true"
-]
+# Direct memory allocation table - customize these values if needed
+# Leave commented out to use automatic detection based on system RAM
+# heap_8gb_system = 6   # For 8GB RAM systems
+# heap_12gb_system = 8  # For 12GB RAM systems  
+# heap_16gb_system = 10 # For 16GB RAM systems
+# heap_24gb_system = 16 # For 24GB RAM systems
+# heap_32gb_plus_system = 24 # For 32GB+ RAM systems
 
 [web]
 # Web interface binding
