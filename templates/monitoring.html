@@ -1564,6 +1564,7 @@ function displayHistoricalMetric(metricType, data) {
     
     switch(metricType) {
         case 'system_memory_used_mb':
+            console.log(`📊 Loading ${data.length} used memory data points`);
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
                 
@@ -1573,6 +1574,7 @@ function displayHistoricalMetric(metricType, data) {
                     value: point.value
                 });
             });
+            console.log(`📊 Total used memory entries now: ${monitoringData.memoryUsed.length}`);
             break;
             
         case 'system_memory_buffers_mb':
@@ -1760,9 +1762,15 @@ function processHistoricalMemoryData() {
 
 // Update charts from historical data
 function updateChartsFromHistoricalData() {
+    console.log(`📈 updateChartsFromHistoricalData() called`);
+    console.log(`📈 Memory data available: used=${monitoringData.memoryUsed.length}, buffers=${monitoringData.memoryBuffers.length}, cache=${monitoringData.memoryCache.length}`);
+    
     // Process memory data using proper breakdown calculation
     if (monitoringData.memoryUsed.length > 0) {
+        console.log(`📈 Calling processHistoricalMemoryData()`);
         processHistoricalMemoryData();
+    } else {
+        console.log(`📈 No used memory data to process`);
     }
     
     if (tpsChart) {
