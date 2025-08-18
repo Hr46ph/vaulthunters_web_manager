@@ -1352,21 +1352,51 @@ function loadHistoricalData(hours = null) {
         Promise.all([
             ...metrics.map(metric => 
                 fetch(`/api/monitoring/history/${metric}?hours=${timeRange}`)
-                    .then(r => r.json())
-                    .then(data => ({ metric_type: metric, data }))
-                    .catch(() => null)
+                    .then(r => {
+                        console.log(`📡 HTTP response for ${metric}:`, r.status, r.statusText);
+                        return r.json();
+                    })
+                    .then(response => {
+                        console.log(`📡 JSON response for ${metric}:`, response);
+                        // Handle both formats: direct data array or wrapped response
+                        const data = response.data || response;
+                        return { metric_type: metric, data };
+                    })
+                    .catch(error => {
+                        console.error(`📡 Failed to fetch ${metric}:`, error);
+                        return null;
+                    })
             ),
             ...cpuCorePromises
         ])
         .then(results => {
             console.log(`📊 Short-range (${timeRange}h): Loaded historical data, now displaying and switching to real-time`);
+            console.log(`📊 Raw results:`, results);
+            
+            let totalDataPoints = 0;
             
             // Process historical data
             results.forEach(result => {
-                if (result && result.data && result.data.length > 0) {
-                    displayHistoricalMetric(result.metric_type, result.data);
+                if (result) {
+                    console.log(`📊 Processing result:`, result);
+                    if (result.data && result.data.length > 0) {
+                        console.log(`📊 Found ${result.data.length} data points for ${result.metric_type}`);
+                        totalDataPoints += result.data.length;
+                        displayHistoricalMetric(result.metric_type, result.data);
+                    } else {
+                        console.log(`⚠️ No data for ${result.metric_type || 'unknown metric'}`);
+                    }
+                } else {
+                    console.log(`⚠️ Null result received`);
                 }
             });
+            
+            console.log(`📊 Total data points loaded: ${totalDataPoints}`);
+            
+            if (totalDataPoints === 0) {
+                console.log(`⚠️ No historical data available for ${timeRange}h range`);
+                console.log(`⚠️ This might be expected if the system hasn't been running long enough to collect data`);
+            }
             
             // Update charts from loaded data
             updateChartsFromHistoricalData();
@@ -1502,6 +1532,8 @@ function clearChartData() {
 
 // Display historical metric data
 function displayHistoricalMetric(metricType, data) {
+    console.log(`🎯 displayHistoricalMetric called: ${metricType} with ${data ? data.length : 0} points`);
+    
     switch(metricType) {
         case 'system_memory_used_mb':
             data.forEach(point => {
