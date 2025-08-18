@@ -250,7 +250,7 @@
                 <h6><i class="fas fa-server"></i> Minecraft Process</h6>
             </div>
             <div class="card-body">
-                <div class="d-flex flex-column justify-content-center" style="min-height: 280px;">
+                <div class="d-flex flex-column justify-content-center" style="min-height: 300px;">
                     <div class="text-center mb-4">
                         <div class="metric-label">Process CPU</div>
                         <div class="metric-value" id="minecraft-cpu">--</div>
@@ -880,6 +880,29 @@ function updateChartTimeRanges(timeRangeHours) {
     });
 }
 
+// Update chart time range for real-time mode (removes fixed bounds for scrolling)
+function updateChartTimeRangeForRealTime(newTime) {
+    if (historicalMode) {
+        console.log(`⏸️ Skipping real-time range update - in historical mode`);
+        return; // Only update in real-time mode
+    }
+    
+    console.log(`⏰ Real-time range update: ${newTime.toLocaleTimeString()} (removing fixed bounds)`);
+    
+    // Remove fixed min/max to allow Chart.js to handle scrolling naturally
+    [tpsChart, memoryChart, lagChart, cpuChart, playerChart].forEach((chart, index) => {
+        if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
+            // Remove fixed bounds - let Chart.js scroll naturally with data limit
+            const hadBounds = chart.options.scales.x.min || chart.options.scales.x.max;
+            delete chart.options.scales.x.min;
+            delete chart.options.scales.x.max;
+            if (hadBounds) {
+                console.log(`   🔓 Removed fixed bounds from chart ${index + 1}`);
+            }
+        }
+    });
+}
+
 // Debug function to show current chart state
 function debugChartState() {
     console.log(`🔍 CHART STATE DEBUG:`);
@@ -931,11 +954,17 @@ function updateCharts(metrics, status = null) {
         tpsChart.data.labels.push(now);
         tpsChart.data.datasets[0].data.push(metrics.current_tps);
         
-        // Keep last 20 data points
-        if (tpsChart.data.labels.length > 20) {
+        // Keep data points based on time range (15 min = 18 points, 30 min = 36 points, 1hr = 72 points, etc.)
+        const timeRangeHours = currentConfig.chart_range || 1;
+        const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72)); // 72 points per hour (5-second intervals)
+        if (tpsChart.data.labels.length > maxPoints) {
             tpsChart.data.labels.shift();
             tpsChart.data.datasets[0].data.shift();
         }
+        
+        // Update time range to include new data point
+        updateChartTimeRangeForRealTime(now);
+        
         tpsChart.update('none');
         
         // Update TPS statistics
@@ -977,8 +1006,10 @@ function updateCharts(metrics, status = null) {
             memoryChart.data.datasets[2].data.push(cacheMB);      // Cache (estimated)
         }
         
-        // Keep last 20 data points
-        if (memoryChart.data.labels.length > 20) {
+        // Keep data points based on time range
+        const timeRangeHours = currentConfig.chart_range || 1;
+        const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72));
+        if (memoryChart.data.labels.length > maxPoints) {
             memoryChart.data.labels.shift();
             memoryChart.data.datasets.forEach(dataset => {
                 dataset.data.shift();
@@ -1008,8 +1039,10 @@ function updateCharts(metrics, status = null) {
     playerChart.data.labels.push(now);
     playerChart.data.datasets[0].data.push(playerCount);
     
-    // Keep last 20 data points
-    if (playerChart.data.labels.length > 20) {
+    // Keep data points based on time range
+    const timeRangeHours = currentConfig.chart_range || 1;
+    const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72));
+    if (playerChart.data.labels.length > maxPoints) {
         playerChart.data.labels.shift();
         playerChart.data.datasets[0].data.shift();
     }
@@ -1056,8 +1089,10 @@ function updateCpuChart(metrics) {
         }
     });
 
-    // Keep last 20 data points
-    if (cpuChart.data.labels.length > 20) {
+    // Keep data points based on time range
+    const timeRangeHours = currentConfig.chart_range || 1;
+    const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72));
+    if (cpuChart.data.labels.length > maxPoints) {
         cpuChart.data.labels.shift();
         cpuChart.data.datasets.forEach(dataset => {
             dataset.data.shift();
