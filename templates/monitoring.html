@@ -1715,25 +1715,32 @@ function processHistoricalMemoryData() {
     const cacheMap = new Map();
     
     console.log(`📊 Building buffers map from ${monitoringData.memoryBuffers.length} entries`);
-    monitoringData.memoryBuffers.forEach(entry => {
+    monitoringData.memoryBuffers.forEach((entry, index) => {
         const timeKey = entry.timestamp.toISOString();
         buffersMap.set(timeKey, entry.value);
+        if (index < 3) console.log(`📊   Buffer entry ${index}: ${timeKey} = ${entry.value}MB`);
     });
     
     console.log(`📊 Building cache map from ${monitoringData.memoryCache.length} entries`);
-    monitoringData.memoryCache.forEach(entry => {
+    monitoringData.memoryCache.forEach((entry, index) => {
         const timeKey = entry.timestamp.toISOString();
         cacheMap.set(timeKey, entry.value);
+        if (index < 3) console.log(`📊   Cache entry ${index}: ${timeKey} = ${entry.value}MB`);
     });
     
     console.log(`📊 Buffers map size: ${buffersMap.size}, Cache map size: ${cacheMap.size}`);
     
     // Process each used memory entry and match with buffers/cache
-    monitoringData.memoryUsed.forEach(entry => {
+    monitoringData.memoryUsed.forEach((entry, index) => {
         const timeKey = entry.timestamp.toISOString();
         const totalUsedMB = entry.value;
         const buffersMB = buffersMap.get(timeKey) || 0;
         const cacheMB = cacheMap.get(timeKey) || 0;
+        
+        if (index < 3) {
+            console.log(`📊   Used entry ${index}: ${timeKey} = ${totalUsedMB}MB`);
+            console.log(`📊   Looking up: buffers=${buffersMB}MB, cache=${cacheMB}MB`);
+        }
         
         // Calculate actual used memory (same logic as real-time)
         const actualUsedMB = Math.max(0, totalUsedMB - buffersMB - cacheMB);
