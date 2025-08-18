@@ -266,11 +266,16 @@ class MetricsStorage:
     
     def _collection_worker(self):
         """Background thread worker for metric collection"""
-        interval = self.app.config.get('METRICS_COLLECTION_INTERVAL', 30)
-        
         while not self.stop_collection:
             try:
                 with self.app.app_context():
+                    # Check for updated collection interval from database
+                    stored_interval = self.get_config_value('collection_interval')
+                    if stored_interval:
+                        interval = stored_interval
+                    else:
+                        interval = self.app.config.get('METRICS_COLLECTION_INTERVAL', 5)
+                    
                     self.collect_system_metrics()
                     
                     # Cleanup old metrics every hour
@@ -279,6 +284,7 @@ class MetricsStorage:
                 
             except Exception as e:
                 self._log_error(f'Error in metrics collection: {e}')
+                interval = 5  # Fallback interval on error
             
             # Sleep for the configured interval
             time.sleep(interval)

@@ -1012,7 +1012,15 @@ function autoSaveConfiguration() {
         if (data.success) {
             currentConfig.collection_interval = configData.collection_interval;
             currentConfig.retention_days = configData.retention_days;
-            console.log('Configuration auto-saved successfully');
+            console.log(`Configuration auto-saved successfully - Collection interval: ${configData.collection_interval}s`);
+            
+            // Show visual feedback that settings changed
+            const intervalSelect = document.getElementById('collection-interval');
+            const originalBorder = intervalSelect.style.border;
+            intervalSelect.style.border = '2px solid #28a745';
+            setTimeout(() => {
+                intervalSelect.style.border = originalBorder;
+            }, 1000);
         } else {
             console.error('Failed to auto-save configuration:', data.error);
         }

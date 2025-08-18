@@ -602,11 +602,19 @@ def monitoring_config():
             
             # Validate and store configuration
             valid_keys = ['collection_interval', 'retention_days', 'enabled']
+            updated_keys = []
             for key in valid_keys:
                 if key in data:
                     metrics_storage.set_config_value(key, data[key])
+                    updated_keys.append(f"{key}={data[key]}")
             
-            return jsonify({'success': True, 'message': 'Configuration updated'})
+            current_app.logger.info(f'Metrics configuration updated: {", ".join(updated_keys)}')
+            
+            return jsonify({
+                'success': True, 
+                'message': 'Configuration updated',
+                'updated': updated_keys
+            })
             
     except Exception as e:
         current_app.logger.error(f'Failed to handle monitoring config: {e}')
