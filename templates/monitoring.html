@@ -336,30 +336,39 @@ function saveSettingsToLocalStorage() {
 }
 
 function loadSettingsFromLocalStorage() {
+    console.log(`💾 LOADING SETTINGS FROM LOCALSTORAGE`);
     const savedSettings = localStorage.getItem('monitoring_settings');
     if (savedSettings) {
         try {
             const settings = JSON.parse(savedSettings);
-            console.log('Settings loaded from localStorage:', settings);
+            console.log('📄 Settings loaded from localStorage:', settings);
             
             // Apply settings to UI elements
             if (settings.update_interval) {
+                console.log(`⏱️ Setting update_interval: ${settings.update_interval}`);
                 document.getElementById('update-interval').value = settings.update_interval;
                 currentConfig.update_interval = settings.update_interval;
             }
             if (settings.chart_range) {
+                console.log(`📊 Setting chart_range: ${settings.chart_range}`);
+                const oldValue = document.getElementById('chart-range').value;
                 document.getElementById('chart-range').value = settings.chart_range;
                 currentConfig.chart_range = settings.chart_range;
+                console.log(`📊 Chart range changed from ${oldValue} to ${settings.chart_range}`);
             }
             if (settings.auto_refresh !== undefined) {
+                console.log(`🔄 Setting auto_refresh: ${settings.auto_refresh}`);
                 document.getElementById('auto-refresh').checked = settings.auto_refresh;
                 currentConfig.auto_refresh = settings.auto_refresh;
             }
             
+            console.log(`✅ SETTINGS LOADED SUCCESSFULLY`);
             return settings;
         } catch (e) {
-            console.error('Failed to parse saved settings:', e);
+            console.error('❌ Failed to parse saved settings:', e);
         }
+    } else {
+        console.log(`📄 No saved settings found in localStorage`);
     }
     return null;
 }
@@ -803,6 +812,28 @@ function updateMetricCards(metrics, status) {
     }
 }
 
+// Debug function to show current chart state
+function debugChartState() {
+    console.log(`🔍 CHART STATE DEBUG:`);
+    console.log(`   📊 historicalMode: ${historicalMode}`);
+    console.log(`   ⚙️ currentConfig.chart_range: ${currentConfig.chart_range}`);
+    console.log(`   🎯 dropdown value: ${document.getElementById('chart-range').value}`);
+    console.log(`   🎯 dropdown text: ${document.getElementById('chart-range').options[document.getElementById('chart-range').selectedIndex].text}`);
+    
+    if (tpsChart) {
+        console.log(`   📈 TPS chart labels: ${tpsChart.data.labels.length} points`);
+        console.log(`   📈 TPS chart data: ${tpsChart.data.datasets[0].data.length} points`);
+        if (tpsChart.data.labels.length > 0) {
+            console.log(`   📈 TPS latest: ${tpsChart.data.labels[tpsChart.data.labels.length - 1]} = ${tpsChart.data.datasets[0].data[tpsChart.data.datasets[0].data.length - 1]}`);
+        }
+    }
+    
+    if (memoryChart) {
+        console.log(`   💾 Memory chart labels: ${memoryChart.data.labels.length} points`);
+        console.log(`   💾 Memory chart data: ${memoryChart.data.datasets[0].data.length} points`);
+    }
+}
+
 // Update TPS statistics display
 function updateTpsStats() {
     if (!tpsChart || !tpsChart.data.datasets[0] || tpsChart.data.datasets[0].data.length === 0) {
@@ -1180,6 +1211,10 @@ function loadHistoricalData(hours = null) {
             historicalMode = false;
             currentConfig.chart_range = timeRange;
         }
+        
+        console.log(`📊 15-min: Final state - historicalMode=${historicalMode}, currentConfig.chart_range=${currentConfig.chart_range}`);
+        console.log(`📈 15-min: Chart should now show real-time data for ${timeRange} hours`);
+        debugChartState();
         return;
     }
     
@@ -1437,10 +1472,15 @@ function resetChartZoom() {
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
+    console.log(`🎬 PAGE LOADED - DOMContentLoaded event fired`);
+    console.log(`🔧 Starting initialization...`);
+    
     initializeCharts();
+    console.log(`📊 Charts initialized`);
     
     // Load saved settings from localStorage
     loadSettingsFromLocalStorage();
+    console.log(`💾 Settings loading completed`);
     
     // Set up event listeners for new controls
     document.getElementById('update-interval').addEventListener('change', function() {
@@ -1452,15 +1492,34 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     document.getElementById('chart-range').addEventListener('change', function() {
+        const selectedValue = document.getElementById('chart-range').value;
+        const selectedText = document.getElementById('chart-range').options[document.getElementById('chart-range').selectedIndex].text;
+        console.log(`🎯 CHART RANGE CHANGED: ${selectedText} (value: ${selectedValue})`);
+        console.log(`📊 Current state before change: historicalMode=${historicalMode}, currentConfig.chart_range=${currentConfig.chart_range}`);
+        
         saveSettingsToLocalStorage(); // Save UI preference immediately
+        console.log(`💾 Settings saved to localStorage`);
+        
         loadHistoricalData(); // Load data based on new time range
+        console.log(`📈 loadHistoricalData() completed`);
+        
         resetChartZoom(); // Reset zoom when changing time range
+        console.log(`🔍 Chart zoom reset completed`);
+        
+        console.log(`✅ CHART RANGE CHANGE COMPLETE: ${selectedText}`);
+        debugChartState();
     });
     
     // Initial data load based on current dropdown selection (after settings are loaded)
     setTimeout(() => {
+        console.log(`🚀 INITIAL DATA LOAD - starting after 500ms delay`);
         const currentRange = parseFloat(document.getElementById('chart-range').value);
+        const currentText = document.getElementById('chart-range').options[document.getElementById('chart-range').selectedIndex].text;
+        console.log(`🎯 Initial load with: ${currentText} (value: ${currentRange})`);
+        console.log(`📊 Initial state: historicalMode=${historicalMode}, currentConfig.chart_range=${currentConfig.chart_range}`);
+        
         loadHistoricalData(currentRange);
+        console.log(`✅ INITIAL DATA LOAD COMPLETE`);
     }, 500);
     
     // Start initial auto-refresh if enabled (after a delay to ensure settings are loaded)
