@@ -1576,6 +1576,7 @@ function displayHistoricalMetric(metricType, data) {
             break;
             
         case 'system_memory_buffers_mb':
+            console.log(`📊 Loading ${data.length} buffer data points`);
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
                 
@@ -1584,9 +1585,11 @@ function displayHistoricalMetric(metricType, data) {
                     value: point.value
                 });
             });
+            console.log(`📊 Total buffer entries now: ${monitoringData.memoryBuffers.length}`);
             break;
             
         case 'system_memory_cache_mb':
+            console.log(`📊 Loading ${data.length} cache data points`);
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
                 
@@ -1595,6 +1598,7 @@ function displayHistoricalMetric(metricType, data) {
                     value: point.value
                 });
             });
+            console.log(`📊 Total cache entries now: ${monitoringData.memoryCache.length}`);
             break;
             
         case 'system_cpu_percent':
@@ -1710,15 +1714,19 @@ function processHistoricalMemoryData() {
     const buffersMap = new Map();
     const cacheMap = new Map();
     
+    console.log(`📊 Building buffers map from ${monitoringData.memoryBuffers.length} entries`);
     monitoringData.memoryBuffers.forEach(entry => {
         const timeKey = entry.timestamp.toISOString();
         buffersMap.set(timeKey, entry.value);
     });
     
+    console.log(`📊 Building cache map from ${monitoringData.memoryCache.length} entries`);
     monitoringData.memoryCache.forEach(entry => {
         const timeKey = entry.timestamp.toISOString();
         cacheMap.set(timeKey, entry.value);
     });
+    
+    console.log(`📊 Buffers map size: ${buffersMap.size}, Cache map size: ${cacheMap.size}`);
     
     // Process each used memory entry and match with buffers/cache
     monitoringData.memoryUsed.forEach(entry => {
