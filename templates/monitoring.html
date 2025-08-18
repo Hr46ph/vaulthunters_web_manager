@@ -1343,9 +1343,20 @@ function loadHistoricalData(hours = null) {
         for (let i = 0; i < 16; i++) { // Support up to 16 CPU cores
             cpuCorePromises.push(
                 fetch(`/api/monitoring/history/system_cpu_core_${i}_percent?hours=${timeRange}`)
-                    .then(r => r.json())
-                    .then(data => ({ metric_type: `system_cpu_core_${i}_percent`, data }))
-                    .catch(() => null) // Ignore cores that don't exist
+                    .then(r => {
+                        console.log(`📡 CPU Core ${i} HTTP response:`, r.status, r.statusText);
+                        return r.json();
+                    })
+                    .then(response => {
+                        console.log(`📡 CPU Core ${i} JSON response:`, response);
+                        // Handle both formats: direct data array or wrapped response
+                        const data = response.data || response;
+                        return { metric_type: `system_cpu_core_${i}_percent`, data };
+                    })
+                    .catch(error => {
+                        console.log(`📡 CPU Core ${i} not available:`, error.message);
+                        return null; // Ignore cores that don't exist
+                    })
             );
         }
         
@@ -1392,6 +1403,13 @@ function loadHistoricalData(hours = null) {
             });
             
             console.log(`📊 Total data points loaded: ${totalDataPoints}`);
+            
+            // Debug: Show what metrics had data vs no data
+            const metricsWithData = results.filter(r => r && r.data && r.data.length > 0);
+            const metricsWithoutData = results.filter(r => r && (!r.data || r.data.length === 0));
+            
+            console.log(`📊 Metrics WITH data:`, metricsWithData.map(r => r.metric_type));
+            console.log(`📊 Metrics WITHOUT data:`, metricsWithoutData.map(r => r.metric_type));
             
             if (totalDataPoints === 0) {
                 console.log(`⚠️ No historical data available for ${timeRange}h range`);
@@ -1574,11 +1592,17 @@ function displayHistoricalMetric(metricType, data) {
         default:
             // Handle CPU per-core metrics
             if (metricType.startsWith('system_cpu_core_') && metricType.endsWith('_percent')) {
+                console.log(`🎯 Detected CPU per-core metric: ${metricType}`);
                 const coreMatch = metricType.match(/system_cpu_core_(\d+)_percent/);
                 if (coreMatch) {
                     const coreIndex = parseInt(coreMatch[1]);
+                    console.log(`🎯 Calling displayCpuCoreHistoricalData for core ${coreIndex}`);
                     displayCpuCoreHistoricalData(coreIndex, data);
+                } else {
+                    console.log(`⚠️ Failed to parse core index from ${metricType}`);
                 }
+            } else {
+                console.log(`⚠️ Unknown metric type: ${metricType}`);
             }
             break;
     }
@@ -1586,7 +1610,11 @@ function displayHistoricalMetric(metricType, data) {
 
 // Display CPU per-core historical data
 function displayCpuCoreHistoricalData(coreIndex, data) {
-    if (!data || data.length === 0) return;
+    console.log(`🎯 displayCpuCoreHistoricalData called: Core ${coreIndex} with ${data ? data.length : 0} points`);
+    if (!data || data.length === 0) {
+        console.log(`⚠️ No data for CPU Core ${coreIndex}`);
+        return;
+    }
     
     // Initialize CPU chart datasets if needed
     if (cpuChart.data.datasets.length === 0) {
