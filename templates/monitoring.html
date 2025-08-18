@@ -71,7 +71,7 @@
                             <label for="update-interval" class="form-label">Page Update Rate</label>
                             <select class="form-select form-select-sm" id="update-interval">
                                 <option value="1000">1 second</option>
-                                <option value="2000">2 seconds</option>
+                                <option value="3000">3 seconds</option>
                                 <option value="5000" selected>5 seconds</option>
                                 <option value="10000">10 seconds</option>
                                 <option value="15000">15 seconds</option>
@@ -738,7 +738,7 @@ function updateMetricCards(metrics, status) {
 // Update charts
 function updateCharts(metrics) {
     const now = new Date();
-    const timeLabel = now.toLocaleTimeString();
+    const timeLabel = now.toLocaleTimeString('en-GB', { hour12: false });
 
     // Update TPS chart
     if (metrics.current_tps !== undefined) {
@@ -804,7 +804,7 @@ function updateCharts(metrics) {
     // Update lag chart with recent spikes
     if (metrics.recent_lag_spikes) {
         lagChart.data.labels = metrics.recent_lag_spikes.map(spike => 
-            new Date(spike.timestamp).toLocaleTimeString()
+            new Date(spike.timestamp).toLocaleTimeString('en-GB', { hour12: false })
         );
         lagChart.data.datasets[0].data = metrics.recent_lag_spikes.map(spike => spike.duration);
         lagChart.update('none');
@@ -818,7 +818,7 @@ function updateCpuChart(metrics) {
     }
 
     const now = new Date();
-    const timeLabel = now.toLocaleTimeString();
+    const timeLabel = now.toLocaleTimeString('en-GB', { hour12: false });
 
     // Initialize datasets if not already done
     if (cpuChart.data.datasets.length === 0) {
@@ -1017,7 +1017,7 @@ function updatePerformanceEvents(events) {
                     </div>
                     <small class="text-muted">${event.message}</small>
                 </div>
-                <small class="text-muted">${new Date(event.timestamp).toLocaleTimeString()}</small>
+                <small class="text-muted">${new Date(event.timestamp).toLocaleTimeString('en-GB', { hour12: false })}</small>
             </div>
         `;
     }).join('');
@@ -1127,7 +1127,7 @@ function displayHistoricalMetric(metricType, data) {
         case 'system_memory_used_mb':
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
-                const timeLabel = timestamp.toLocaleTimeString();
+                const timeLabel = timestamp.toLocaleTimeString('en-GB', { hour12: false });
                 
                 memoryChart.data.labels.push(timeLabel);
                 memoryChart.data.datasets[0].data.push(point.value);
@@ -1140,7 +1140,7 @@ function displayHistoricalMetric(metricType, data) {
         case 'system_cpu_percent':
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
-                const timeLabel = timestamp.toLocaleTimeString();
+                const timeLabel = timestamp.toLocaleTimeString('en-GB', { hour12: false });
                 
                 if (tpsChart.data.labels.length === 0 || 
                     tpsChart.data.labels[tpsChart.data.labels.length - 1] !== timeLabel) {
@@ -1206,9 +1206,10 @@ document.addEventListener('DOMContentLoaded', function() {
         resetChartZoom(); // Reset zoom when changing time range
     });
     
-    // Initial data load based on saved settings
+    // Initial data load based on current dropdown selection (after settings are loaded)
     setTimeout(() => {
-        loadHistoricalData(currentConfig.chart_range);
+        const currentRange = parseFloat(document.getElementById('chart-range').value);
+        loadHistoricalData(currentRange);
     }, 500);
     
     // Start initial auto-refresh if enabled

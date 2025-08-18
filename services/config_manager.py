@@ -650,7 +650,7 @@ class ConfigManager:
             return 8  # Default to 8GB if detection fails
     
     def _get_memory_threshold(self):
-        """Get memory threshold from config.toml, with fallback to 12GB"""
+        """Get memory threshold from config.toml, with fallback to 12GB minimum"""
         try:
             # Try to read threshold from config.toml
             server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
@@ -669,7 +669,15 @@ class ConfigManager:
                 config_data = toml.load(f)
             
             memory_config = config_data.get('memory', {})
-            return memory_config.get('large_heap_threshold', 12)
+            threshold = memory_config.get('large_heap_threshold', 12)
+            
+            # Enforce minimum threshold of 12GB for safety
+            # This prevents users from accidentally using large heap optimizations on small systems
+            if threshold < 12:
+                self.logger.warning(f"large_heap_threshold set to {threshold}GB, enforcing minimum of 12GB")
+                return 12
+            
+            return threshold
             
         except Exception as e:
             self.logger.warning(f"Could not read memory threshold from config: {e}")

@@ -549,7 +549,7 @@ def get_metric_history(metric_type):
         from services.metrics_storage import metrics_storage
         
         # Get time range parameter (default to 1 hour)
-        hours = request.args.get('hours', 1, type=int)
+        hours = request.args.get('hours', 1, type=float)
         if hours <= 0 or hours > 168:  # Limit to 1 week max
             hours = 1
         

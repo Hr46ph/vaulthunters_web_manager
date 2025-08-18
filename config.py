@@ -49,9 +49,6 @@ def create_flask_config(toml_config: Dict[str, Any]) -> Dict[str, Any]:
         'DEBUG': web_config.get('debug', False),
         
         # Security
-        'SESSION_COOKIE_SECURE': security_config.get('session_cookie_secure', False),
-        'SESSION_COOKIE_HTTPONLY': security_config.get('session_cookie_httponly', True),
-        'SESSION_COOKIE_SAMESITE': security_config.get('session_cookie_samesite', 'Lax'),
         'CSRF_ENABLED': security_config.get('csrf_enabled', True),
         'CSRF_TIME_LIMIT': security_config.get('csrf_time_limit', 3600),
         'MAX_CONTENT_LENGTH': security_config.get('max_file_size_mb', 16) * 1024 * 1024,
