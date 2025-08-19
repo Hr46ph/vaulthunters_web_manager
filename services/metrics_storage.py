@@ -191,6 +191,128 @@ class MetricsStorage:
             except Exception as e:
                 self._log_error(f'Failed to cleanup old metrics: {e}')
     
+    def _collect_server_tps_safe(self) -> Optional[Dict]:
+        """Safely collect server TPS data via RCON without blocking the metrics thread"""
+        try:
+            # Get server configuration for RCON connection
+            server_host = self.app.config.get('SERVER_HOST', 'localhost')
+            rcon_password = self.app.config.get('RCON_PASSWORD')
+            
+            if not rcon_password:
+                return None
+            
+            # Get RCON port from server.properties or config
+            rcon_port = self._get_rcon_port()
+            if not rcon_port:
+                return None
+            
+            # Create isolated RCON client with very short timeout for metrics collection
+            from services.rcon_client import RconClient
+            rcon = RconClient(server_host, rcon_port, rcon_password, timeout=3.0, max_retries=1)
+            
+            # Quick connect and execute
+            rcon.connect()
+            response = rcon.command("forge tps", auto_reconnect=False)
+            rcon.disconnect()
+            
+            # Parse TPS data from response
+            return self._parse_forge_tps_response(response)
+            
+        except Exception as e:
+            # Log warning but don't let RCON failures break metrics collection
+            self._log_warning(f'RCON TPS collection failed (this is non-critical): {e}')
+            return None
+    
+    def _get_rcon_port(self) -> Optional[int]:
+        """Get RCON port from server.properties or config"""
+        try:
+            # Try config first
+            config_rcon_port = self.app.config.get('RCON_PORT')
+            if config_rcon_port:
+                return int(config_rcon_port)
+            
+            # Try reading from server.properties
+            server_path = self.app.config.get('SERVER_PATH')
+            if server_path:
+                props_file = os.path.join(server_path, 'server.properties')
+                if os.path.exists(props_file):
+                    with open(props_file, 'r') as f:
+                        for line in f:
+                            if line.startswith('rcon.port='):
+                                return int(line.split('=')[1].strip())
+            
+            return None
+        except Exception:
+            return None
+    
+    def _parse_forge_tps_response(self, response: str) -> Optional[Dict]:
+        """Parse /forge tps response to extract dimension TPS data"""
+        if not response:
+            return None
+        
+        try:
+            dimensions = {}
+            overall_tps = 20.0  # Default fallback
+            
+            lines = response.split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Look for dimension TPS lines like:
+                # "Dim  0 (minecraft:overworld): Mean tick time: 47.778 ms. Mean TPS: 20.000"
+                # "Overall: Mean tick time: 47.778 ms. Mean TPS: 20.000"
+                
+                if 'Mean tick time:' in line and 'Mean TPS:' in line:
+                    try:
+                        # Extract tick time and TPS
+                        tick_time_part = line.split('Mean tick time:')[1].split('ms')[0].strip()
+                        tps_part = line.split('Mean TPS:')[1].strip()
+                        
+                        tick_time = float(tick_time_part)
+                        tps = float(tps_part)
+                        
+                        if line.startswith('Overall:'):
+                            overall_tps = tps
+                        elif line.startswith('Dim '):
+                            # Extract dimension info from "Dim  0 (minecraft:overworld): Mean tick time..."
+                            if '(' in line and ')' in line:
+                                # Extract the part between parentheses
+                                paren_start = line.index('(')
+                                paren_end = line.index(')')
+                                dim_name = line[paren_start+1:paren_end]
+                                # Clean dimension name
+                                dim_name = dim_name.replace('minecraft:', '').replace('the_vault:', '').replace(':', '_')
+                                dimensions[dim_name] = {
+                                    'tps': tps,
+                                    'mean_tick_time': tick_time
+                                }
+                    except (ValueError, IndexError) as e:
+                        self._log_warning(f'Failed to parse TPS line "{line}": {e}')
+                        continue
+            
+            # Return data if we found any TPS information
+            found_tps_data = False
+            
+            # Check if we parsed any lines with TPS data
+            for line in lines:
+                if 'Mean tick time:' in line and 'Mean TPS:' in line:
+                    found_tps_data = True
+                    break
+            
+            if found_tps_data:
+                return {
+                    'overall_tps': overall_tps,
+                    'dimensions': dimensions
+                }
+            
+            return None
+            
+        except Exception as e:
+            self._log_warning(f'Failed to parse forge tps response: {e}')
+            return None
+
     def collect_system_metrics(self):
         """Collect current system metrics"""
         config = self.app.config
@@ -249,11 +371,30 @@ class MetricsStorage:
                 except Exception as e:
                     self._log_warning(f'Failed to collect Java process metrics: {e}')
             
-            # Server TPS (placeholder - would need RCON integration)
+            # Server TPS via RCON
             if config.get('METRICS_COLLECT_SERVER_TPS', True):
-                # For now, store a placeholder value
-                # In a real implementation, this would query the server via RCON
-                self.store_metric('server_tps', 20.0, {'source': 'placeholder'})
+                try:
+                    tps_data = self._collect_server_tps_safe()
+                    if tps_data:
+                        self.store_metric('server_tps', tps_data['overall_tps'], {
+                            'source': 'rcon_forge_tps',
+                            'dimensions': tps_data['dimensions']
+                        })
+                        
+                        # Store individual dimension TPS
+                        for dim_name, dim_data in tps_data['dimensions'].items():
+                            self.store_metric(f'server_tps_{dim_name}', dim_data['tps'], {
+                                'source': 'rcon_forge_tps',
+                                'dimension': dim_name,
+                                'mean_tick_time': dim_data['mean_tick_time']
+                            })
+                    else:
+                        # Fallback to placeholder when RCON fails
+                        self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_failed'})
+                except Exception as e:
+                    self._log_warning(f'Failed to collect server TPS via RCON: {e}')
+                    # Store placeholder on any error to keep metrics consistent
+                    self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_error'})
             
             # Player count from server status
             if config.get('METRICS_COLLECT_PLAYER_COUNT', True):
@@ -297,7 +438,7 @@ class MetricsStorage:
                     if stored_interval:
                         interval = stored_interval
                     else:
-                        interval = self.app.config.get('METRICS_COLLECTION_INTERVAL', 5)
+                        interval = self.app.config.get('METRICS_COLLECTION_INTERVAL', 30)
                     
                     self.collect_system_metrics()
                     
@@ -307,7 +448,7 @@ class MetricsStorage:
                 
             except Exception as e:
                 self._log_error(f'Error in metrics collection: {e}')
-                interval = 5  # Fallback interval on error
+                interval = self.app.config.get('METRICS_COLLECTION_INTERVAL', 30)  # Fallback interval on error
             
             # Sleep for the configured interval
             time.sleep(interval)
