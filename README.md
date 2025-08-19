@@ -52,6 +52,22 @@ Reviewing and editing of unix_args.txt:
 
 ## Installation
 
+Before or after installation, you can switch to a different branch to try out new features. The one I am working on currently is the Monitoring page. To try it out, follow these steps:
+```bash
+git fetch --all
+git checkout feature/monitoring-metric-history
+```
+
+If you want to switch back to the main version, checkout main:
+```bash
+# git fetch is not required
+git checkout main
+```
+If you do this after installation, you need to restart the service:
+```bash
+sudo systemctl restart vaulthunters-web.service
+```
+
 ### Quick Install (Recommended)
 
 **Automated Installation Script:**
