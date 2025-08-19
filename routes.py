@@ -508,7 +508,6 @@ def monitoring_metrics():
             'total_gb': round(memory.total / (1024**3), 1),
             'percent': memory.percent
         }
-        current_app.logger.info(f'Detailed memory: {detailed_memory}')
     except Exception as e:
         current_app.logger.warning(f'Failed to get detailed memory: {e}')
         detailed_memory = system_memory  # Fallback to basic memory
@@ -524,6 +523,24 @@ def monitoring_metrics():
     except Exception as e:
         current_app.logger.warning(f'Failed to get Java memory: {e}')
     
+    # Get hardware temperature data
+    temperature_data = {}
+    try:
+        from services.temperature_monitor import get_temperature_monitor
+        temp_monitor = get_temperature_monitor()
+        temperature_data = temp_monitor.get_temperature_summary()
+        current_app.logger.info(f'Temperature readings: CPU={temperature_data.get("temperatures", {}).get("cpu", "N/A")}°C, '
+                              f'GPU={temperature_data.get("temperatures", {}).get("gpu", "N/A")}°C, '
+                              f'NVMe={temperature_data.get("temperatures", {}).get("nvme", "N/A")}°C')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get temperature data: {e}')
+        temperature_data = {
+            'temperatures': {},
+            'alerts': [],
+            'status': 'error',
+            'error': str(e)
+        }
+    
     # Return mixed real and test data
     test_metrics = {
         'current_tps': 20.0,  # Still mock for now
@@ -536,10 +553,10 @@ def monitoring_metrics():
         'rcon_status': 'connected',
         'cpu_system_avg': cpu_system_avg,  # Real CPU average
         'cpu_count': cpu_count,  # Real CPU count
-        'cpu_per_core': cpu_per_core  # Real per-core data
+        'cpu_per_core': cpu_per_core,  # Real per-core data
+        'temperatures': temperature_data  # Real temperature data
     }
     
-    current_app.logger.info(f'Returning test metrics: {test_metrics}')
     return jsonify(test_metrics)
 
 @main_bp.route('/api/monitoring/history/<metric_type>')
@@ -782,7 +799,6 @@ def log_stream(log_type):
     log_path = os.path.join(server_path, log_files.get(log_type, f'logs/{log_type}.log'))
     
     # Log the attempt
-    current_app.logger.info(f'SSE request for {log_type} log at {log_path}')
     
     def generate():
         tail_process = None
@@ -839,7 +855,6 @@ def log_stream(log_type):
                     return process
                 
                 tail_process = start_tail_process()
-                current_app.logger.info(f"Started tail process for {log_type}")
                 
                 # Stream with file rotation detection
                 while True:
@@ -864,7 +879,6 @@ def log_stream(log_type):
                                 new_stat.st_ino != file_stat.st_ino or 
                                 (new_stat.st_size < file_stat.st_size - 1000)):  # File truncated by more than 1KB
                                 
-                                current_app.logger.info(f"Log file rotation detected for {log_type}, restarting tail")
                                 
                                 # Kill old tail process
                                 tail_process.terminate()
@@ -917,13 +931,13 @@ def log_stream(log_type):
                         break
                     
             except GeneratorExit:
-                current_app.logger.info(f"SSE generator exit for {log_type}")
+                pass
             except Exception as e:
                 current_app.logger.error(f"Tail process error for {log_type}: {e}")
                 yield f"data: {json.dumps({'type': 'error', 'error': f'Tail process error: {str(e)}'})}\n\n"
                 
         except GeneratorExit:
-            current_app.logger.info(f"SSE outer generator exit for {log_type}")
+            pass
         except Exception as e:
             current_app.logger.error(f"SSE setup error for {log_type}: {e}")
             yield f"data: {json.dumps({'type': 'error', 'error': f'SSE setup error: {str(e)}'})}\n\n"
@@ -938,7 +952,6 @@ def log_stream(log_type):
                     except subprocess.TimeoutExpired:
                         tail_process.kill()
                         tail_process.wait()
-                    current_app.logger.info(f"Cleaned up tail process for {log_type}")
                 except Exception as e:
                     current_app.logger.error(f"Error cleaning up tail process for {log_type}: {e}")
     
@@ -958,15 +971,12 @@ def log_stream(log_type):
 def rotate_log(log_type):
     """API endpoint for rotating (clearing) log files"""
     try:
-        current_app.logger.info(f'Log rotation request: {log_type}')
         current_app.logger.info(f'Request method: {request.method}')
         current_app.logger.info(f'Request headers: {dict(request.headers)}')
         current_app.logger.info(f'Request form data: {dict(request.form)}')
         
         # Skip CSRF validation for now to isolate the issue
-        current_app.logger.info('Skipping CSRF validation temporarily for debugging')
         csrf_token = request.headers.get('X-CSRFToken') or request.form.get('csrf_token')
-        current_app.logger.info(f'CSRF token received: {csrf_token[:10] if csrf_token else "None"}...')
         
         # TODO: Re-enable CSRF validation after fixing the core issue
         # from flask_wtf.csrf import validate_csrf
@@ -985,7 +995,6 @@ def rotate_log(log_type):
             current_app.logger.error(f'Invalid log type requested: {log_type}')
             return jsonify({'success': False, 'error': 'Invalid log type - crash logs cannot be rotated'}), 400
         
-        current_app.logger.info(f'Creating LogService for {log_type}')
         try:
             log_service = LogService()
             current_app.logger.info('LogService created successfully')
@@ -993,16 +1002,13 @@ def rotate_log(log_type):
             current_app.logger.error(f'Failed to create LogService: {e}', exc_info=True)
             return jsonify({'success': False, 'error': f'Service initialization failed: {str(e)}'}), 500
         
-        current_app.logger.info(f'Calling rotate_log_file for {log_type}')
         try:
             result = log_service.rotate_log_file(log_type)
-            current_app.logger.info(f'rotate_log_file returned: {result}')
         except Exception as e:
             current_app.logger.error(f'rotate_log_file threw exception: {e}', exc_info=True)
             return jsonify({'success': False, 'error': f'Log rotation service error: {str(e)}'}), 500
         
         if result.get('success'):
-            current_app.logger.info(f'Log rotation successful for: {log_type}')
             return jsonify({
                 'success': True,
                 'message': result['message'],
@@ -1353,7 +1359,6 @@ def console_status():
         # Test basic network connectivity first
         import socket
         try:
-            current_app.logger.info(f'Testing socket connection to {server_host}:{rcon_port}')
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(5)
             result = sock.connect_ex((server_host, rcon_port))
@@ -1375,7 +1380,6 @@ def console_status():
         
         # Test RCON connection using custom client to avoid signal issues
         try:
-            current_app.logger.info('Testing RCON connection with custom client')
             
             from services.rcon_client import get_rcon_connection_status, test_rcon_connection
             # First check if we have an existing connection

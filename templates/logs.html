@@ -327,7 +327,6 @@
             console.error('CSRF token content is empty');
             return '';
         }
-        console.log('CSRF token retrieved successfully');
         return token;
     }
     
@@ -404,7 +403,6 @@
             return;
         }
         
-        console.log(`Starting real-time follow for ${logType}`);
         
         // Stop existing connection if any
         stopFollow(logType);
@@ -454,8 +452,6 @@
         eventSource.onerror = function(event) {
             // Only handle actual connection failures, ignore normal SSE events
             if (eventSource.readyState === 2) {
-                console.log(`SSE connection closed for ${logType}, will reconnect if needed`);
-                
                 // Auto-reconnect after 3 seconds if checkbox is still checked
                 setTimeout(() => {
                     const checkbox = document.getElementById(`follow-${logType}`);
@@ -470,7 +466,6 @@
     // Stop following a log
     function stopFollow(logType) {
         if (sseConnections[logType]) {
-            console.log(`Closing SSE connection for ${logType}`);
             sseConnections[logType].close();
             sseConnections[logType] = null;
         }
@@ -513,7 +508,6 @@
             
             if (checkbox) {
                 checkbox.addEventListener('change', function() {
-                    console.log(`${logType} follow checkbox changed: ${this.checked}`);
                     if (this.checked) {
                         autoScrollState[logType] = true; // Re-enable auto-scroll when follow is turned on
                         startFollow(logType);
@@ -583,13 +577,11 @@
             ['latest', 'debug'].forEach(logType => {
                 const checkbox = document.getElementById(`follow-${logType}`);
                 if (checkbox && checkbox.checked) {
-                    console.log(`Starting follow for ${logType} (checkbox was checked on page load)`);
                     startFollow(logType);
                 }
             });
         }, 100);
         
-        console.log('Enhanced logs page initialized');
     });
     
     // Cleanup SSE connections when page is unloaded

@@ -377,7 +377,6 @@ function attemptAutoReconnect() {
         })
         .catch(error => {
             // Server status check failed, assume server not ready
-            console.log('Server status check failed during auto-reconnect, will retry later');
         });
 }
 

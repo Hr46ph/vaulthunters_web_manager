@@ -424,6 +424,56 @@ class MetricsStorage:
                         'source': 'error',
                         'error': str(e)
                     })
+            
+            # Hardware temperature monitoring
+            if config.get('METRICS_COLLECT_TEMPERATURE', True):
+                try:
+                    from services.temperature_monitor import get_temperature_monitor
+                    temp_monitor = get_temperature_monitor()
+                    readings = temp_monitor.get_temperature_readings()
+                    
+                    if readings.get('status') == 'success':
+                        # Store CPU temperature
+                        if readings.get('cpu'):
+                            self.store_metric('temperature_cpu_celsius', readings['cpu']['current'], {
+                                'sensor': readings['cpu']['sensor'],
+                                'label': readings['cpu']['label'],
+                                'high_threshold': readings['cpu']['high'],
+                                'critical_threshold': readings['cpu']['critical']
+                            })
+                        
+                        # Store GPU temperature
+                        if readings.get('gpu'):
+                            self.store_metric('temperature_gpu_celsius', readings['gpu']['current'], {
+                                'sensor': readings['gpu']['sensor'],
+                                'label': readings['gpu']['label'],
+                                'high_threshold': readings['gpu']['high'],
+                                'critical_threshold': readings['gpu']['critical']
+                            })
+                        
+                        # Store NVMe temperature (composite)
+                        if readings.get('nvme', {}).get('composite'):
+                            nvme_data = readings['nvme']['composite']
+                            self.store_metric('temperature_nvme_celsius', nvme_data['current'], {
+                                'sensor': nvme_data['sensor'],
+                                'label': nvme_data['label'],
+                                'high_threshold': nvme_data['high'],
+                                'critical_threshold': nvme_data['critical']
+                            })
+                        
+                        # Store NVMe Sensor 1 temperature if available
+                        if readings.get('nvme', {}).get('sensor1'):
+                            nvme_sensor1 = readings['nvme']['sensor1']
+                            self.store_metric('temperature_nvme_sensor1_celsius', nvme_sensor1['current'], {
+                                'sensor': nvme_sensor1['sensor'],
+                                'label': nvme_sensor1['label'],
+                                'high_threshold': nvme_sensor1['high'],
+                                'critical_threshold': nvme_sensor1['critical']
+                            })
+                    else:
+                        self._log_warning(f"Temperature reading failed: {readings.get('error', 'Unknown error')}")
+                except Exception as e:
+                    self._log_warning(f'Failed to collect temperature data: {e}')
                 
         except Exception as e:
             self._log_error(f'Failed to collect system metrics: {e}')
