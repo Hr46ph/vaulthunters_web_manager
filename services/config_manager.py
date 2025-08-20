@@ -548,26 +548,210 @@ class ConfigManager:
             return self._get_default_aikars_flags()
     
     def _get_default_aikars_flags(self):
-        """Get default Aikar's flags if config.toml is not available - matches official script generator"""
-        return [
-            'XX:+AlwaysPreTouch',
-            'XX:+DisableExplicitGC',
-            'XX:+ParallelRefProcEnabled',
-            'XX:+PerfDisableSharedMem',
-            'XX:+UnlockExperimentalVMOptions',
-            'XX:+UseG1GC',
-            'XX:G1HeapRegionSize=8M',
-            'XX:G1HeapWastePercent=5',
-            'XX:G1MaxNewSizePercent=40',
-            'XX:G1MixedGCCountTarget=4',
-            'XX:G1MixedGCLiveThresholdPercent=90',
-            'XX:G1NewSizePercent=30',
-            'XX:G1RSetUpdatingPauseTimePercent=5',
-            'XX:G1ReservePercent=20',
-            'XX:InitiatingHeapOccupancyPercent=15',
-            'XX:MaxGCPauseMillis=200',
-            'XX:MaxTenuringThreshold=1',
-            'XX:SurvivorRatio=32',
-            'Dusing.aikars.flags=https://mcflags.emc.gs',
-            'Daikars.new.flags=true'
-        ]
+        """Get optimized Aikar's flags based on system memory and configuration"""
+        try:
+            # Get system memory and determine heap size
+            heap_size_gb = self._get_recommended_heap_size()
+            
+            # Get threshold from config
+            threshold = self._get_memory_threshold()
+            
+            # Base flags that are always included
+            base_flags = [
+                'XX:+UseG1GC',
+                'XX:+UnlockExperimentalVMOptions', 
+                'XX:+AlwaysPreTouch',
+                'XX:+PerfDisableSharedMem',
+                'XX:MaxGCPauseMillis=200',
+                'XX:+ParallelRefProcEnabled',
+                'XX:G1RSetUpdatingPauseTimePercent=5',
+                'XX:G1MixedGCCountTarget=4',
+                'XX:MaxTenuringThreshold=1',
+                'XX:SurvivorRatio=32',
+                'XX:+DisableExplicitGC',
+                'Dusing.aikars.flags=https://mcflags.emc.gs',
+                'Daikars.new.flags=true'
+            ]
+            
+            # Memory size flags (always include heap size)
+            memory_flags = [
+                f'Xms{heap_size_gb}G',
+                f'Xmx{heap_size_gb}G'
+            ]
+            
+            # Conditional flags based on heap size threshold
+            if heap_size_gb < threshold:
+                # Small heap optimizations (< 12GB)
+                conditional_flags = [
+                    'XX:G1NewSizePercent=40',
+                    'XX:G1MaxNewSizePercent=50', 
+                    'XX:G1HeapRegionSize=8M',
+                    'XX:G1ReservePercent=20',
+                    'XX:InitiatingHeapOccupancyPercent=30',
+                    'XX:G1MixedGCLiveThresholdPercent=85'
+                ]
+                # Add large pages for smaller systems too
+                conditional_flags.append('XX:+UseLargePagesInMetaspace')
+            else:
+                # Large heap optimizations (>= 12GB)
+                conditional_flags = [
+                    'XX:G1NewSizePercent=40',
+                    'XX:G1MaxNewSizePercent=50',
+                    'XX:G1HeapRegionSize=16M',
+                    'XX:G1ReservePercent=15', 
+                    'XX:InitiatingHeapOccupancyPercent=20',
+                    'XX:G1MixedGCLiveThresholdPercent=90'
+                ]
+            
+            # Combine all flags
+            all_flags = memory_flags + base_flags + conditional_flags
+            
+            self.logger.info(f"Generated Aikar's flags for {heap_size_gb}GB heap (threshold: {threshold}GB)")
+            return all_flags
+            
+        except Exception as e:
+            self.logger.error(f"Error generating optimized flags, using fallback: {e}")
+            # Fallback to basic flags
+            return [
+                'Xms6G',
+                'Xmx6G',
+                'XX:+UseG1GC',
+                'XX:+UnlockExperimentalVMOptions',
+                'XX:G1NewSizePercent=40',
+                'XX:G1MaxNewSizePercent=50',
+                'XX:G1HeapRegionSize=8M',
+                'XX:G1ReservePercent=20',
+                'XX:InitiatingHeapOccupancyPercent=30',
+                'XX:G1MixedGCLiveThresholdPercent=85',
+                'XX:+AlwaysPreTouch',
+                'XX:+PerfDisableSharedMem',
+                'XX:MaxGCPauseMillis=200',
+                'XX:+ParallelRefProcEnabled',
+                'XX:G1RSetUpdatingPauseTimePercent=5',
+                'XX:G1MixedGCCountTarget=4',
+                'XX:MaxTenuringThreshold=1',
+                'XX:SurvivorRatio=32',
+                'XX:+DisableExplicitGC',
+                'XX:+UseLargePagesInMetaspace',
+                'Dusing.aikars.flags=https://mcflags.emc.gs',
+                'Daikars.new.flags=true'
+            ]
+    
+    def _get_system_memory_gb(self):
+        """Get total system memory in GB"""
+        try:
+            import psutil
+            # Get total memory in bytes, convert to GB
+            memory_bytes = psutil.virtual_memory().total
+            memory_gb = memory_bytes / (1024 ** 3)
+            return round(memory_gb)
+        except Exception as e:
+            self.logger.warning(f"Could not detect system memory: {e}")
+            return 8  # Default to 8GB if detection fails
+    
+    def _get_memory_threshold(self):
+        """Get memory threshold from config.toml, with fallback to 12GB minimum"""
+        try:
+            # Try to read threshold from config.toml
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
+            if not server_path:
+                return 12
+            
+            # Look for config.toml in the project root
+            project_root = os.path.dirname(os.path.dirname(server_path))
+            config_toml_path = os.path.join(project_root, 'config.toml')
+            
+            if not os.path.exists(config_toml_path):
+                return 12
+            
+            import toml
+            with open(config_toml_path, 'r') as f:
+                config_data = toml.load(f)
+            
+            memory_config = config_data.get('memory', {})
+            threshold = memory_config.get('large_heap_threshold', 12)
+            
+            # Enforce minimum threshold of 12GB for safety
+            # This prevents users from accidentally using large heap optimizations on small systems
+            if threshold < 12:
+                self.logger.warning(f"large_heap_threshold set to {threshold}GB, enforcing minimum of 12GB")
+                return 12
+            
+            return threshold
+            
+        except Exception as e:
+            self.logger.warning(f"Could not read memory threshold from config: {e}")
+            return 12
+    
+    def _get_recommended_heap_size(self):
+        """Calculate recommended heap size based on system RAM using simple lookup table"""
+        try:
+            system_ram_gb = self._get_system_memory_gb()
+            
+            # Try to get custom values from config.toml, otherwise use defaults
+            heap_values = self._get_memory_heap_values()
+            
+            # Simple lookup table - much clearer than ratios
+            if system_ram_gb <= 8:
+                heap_gb = heap_values.get('heap_8gb_system', 6)
+            elif system_ram_gb <= 12:
+                heap_gb = heap_values.get('heap_12gb_system', 8)
+            elif system_ram_gb <= 16:
+                heap_gb = heap_values.get('heap_16gb_system', 10)
+            elif system_ram_gb <= 24:
+                heap_gb = heap_values.get('heap_24gb_system', 16)
+            else:  # 32GB or more
+                heap_gb = heap_values.get('heap_32gb_plus_system', 24)
+            
+            # Ensure minimum of 4GB
+            heap_gb = max(heap_gb, 4)
+            
+            self.logger.info(f"System RAM: {system_ram_gb}GB -> Recommended heap: {heap_gb}GB")
+            return heap_gb
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating heap size: {e}")
+            return 6  # Safe default
+    
+    def _get_memory_heap_values(self):
+        """Get heap size values from config.toml with defaults"""
+        try:
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
+            if not server_path:
+                return self._get_default_heap_values()
+            
+            # Look for config.toml in the project root
+            project_root = os.path.dirname(os.path.dirname(server_path))
+            config_toml_path = os.path.join(project_root, 'config.toml')
+            
+            if not os.path.exists(config_toml_path):
+                return self._get_default_heap_values()
+            
+            import toml
+            with open(config_toml_path, 'r') as f:
+                config_data = toml.load(f)
+            
+            memory_config = config_data.get('memory', {})
+            
+            # Return heap values with defaults - simple and clear
+            return {
+                'heap_8gb_system': memory_config.get('heap_8gb_system', 6),
+                'heap_12gb_system': memory_config.get('heap_12gb_system', 8),
+                'heap_16gb_system': memory_config.get('heap_16gb_system', 10),
+                'heap_24gb_system': memory_config.get('heap_24gb_system', 16),
+                'heap_32gb_plus_system': memory_config.get('heap_32gb_plus_system', 24)
+            }
+            
+        except Exception as e:
+            self.logger.warning(f"Could not read heap values from config: {e}")
+            return self._get_default_heap_values()
+    
+    def _get_default_heap_values(self):
+        """Get default heap size values - the proven Minecraft optimization table"""
+        return {
+            'heap_8gb_system': 6,    # 8GB RAM -> 6GB heap
+            'heap_12gb_system': 8,   # 12GB RAM -> 8GB heap  
+            'heap_16gb_system': 10,  # 16GB RAM -> 10GB heap
+            'heap_24gb_system': 16,  # 24GB RAM -> 16GB heap
+            'heap_32gb_plus_system': 24  # 32GB+ RAM -> 24GB heap
+        }

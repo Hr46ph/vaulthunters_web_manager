@@ -459,19 +459,28 @@ def monitoring_metrics():
     
     # Get real CPU data (carefully, non-blocking)
     cpu_system_avg = 15.5  # Default
-    cpu_count = 8  # Default
-    cpu_per_core = [12.1, 18.3, 14.7, 16.9, 13.2, 19.8, 11.5, 20.1]  # Default
+    cpu_count = 4  # Safe default if detection fails
+    cpu_per_core = []  # Will be populated based on actual detection
     
     try:
         import psutil
+        # Always get actual core count first
+        cpu_count = psutil.cpu_count()
+        
         # Non-blocking calls (interval=None means use cached data from previous call)
         cpu_system_avg = psutil.cpu_percent(interval=None)
         cpu_per_core = psutil.cpu_percent(percpu=True, interval=None)
-        cpu_count = psutil.cpu_count()
         
-        current_app.logger.info(f'Real CPU: {cpu_count} cores, avg: {cpu_system_avg}%, per-core: {cpu_per_core}')
+        # Ensure per-core list matches actual core count
+        if len(cpu_per_core) != cpu_count:
+            current_app.logger.warning(f'Core count mismatch: detected {cpu_count} but got {len(cpu_per_core)} usage values')
+            cpu_per_core = [cpu_system_avg] * cpu_count  # Use average for all cores as fallback
+        
+        current_app.logger.info(f'Real CPU: {cpu_count} cores, avg: {cpu_system_avg}%, per-core samples: {len(cpu_per_core)}')
     except Exception as e:
         current_app.logger.warning(f'CPU monitoring failed, using defaults: {e}')
+        # Create default per-core data based on detected or fallback core count
+        cpu_per_core = [cpu_system_avg] * cpu_count
     
     # Get performance events (simplified to avoid blocking)
     events = [{
@@ -508,7 +517,6 @@ def monitoring_metrics():
             'total_gb': round(memory.total / (1024**3), 1),
             'percent': memory.percent
         }
-        current_app.logger.info(f'Detailed memory: {detailed_memory}')
     except Exception as e:
         current_app.logger.warning(f'Failed to get detailed memory: {e}')
         detailed_memory = system_memory  # Fallback to basic memory
@@ -524,6 +532,24 @@ def monitoring_metrics():
     except Exception as e:
         current_app.logger.warning(f'Failed to get Java memory: {e}')
     
+    # Get hardware temperature data
+    temperature_data = {}
+    try:
+        from services.temperature_monitor import get_temperature_monitor
+        temp_monitor = get_temperature_monitor()
+        temperature_data = temp_monitor.get_temperature_summary()
+        current_app.logger.info(f'Temperature readings: CPU={temperature_data.get("temperatures", {}).get("cpu", "N/A")}°C, '
+                              f'GPU={temperature_data.get("temperatures", {}).get("gpu", "N/A")}°C, '
+                              f'NVMe={temperature_data.get("temperatures", {}).get("nvme", "N/A")}°C')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get temperature data: {e}')
+        temperature_data = {
+            'temperatures': {},
+            'alerts': [],
+            'status': 'error',
+            'error': str(e)
+        }
+    
     # Return mixed real and test data
     test_metrics = {
         'current_tps': 20.0,  # Still mock for now
@@ -536,11 +562,130 @@ def monitoring_metrics():
         'rcon_status': 'connected',
         'cpu_system_avg': cpu_system_avg,  # Real CPU average
         'cpu_count': cpu_count,  # Real CPU count
-        'cpu_per_core': cpu_per_core  # Real per-core data
+        'cpu_per_core': cpu_per_core,  # Real per-core data
+        'temperatures': temperature_data  # Real temperature data
     }
     
-    current_app.logger.info(f'Returning test metrics: {test_metrics}')
     return jsonify(test_metrics)
+
+@main_bp.route('/api/monitoring/history/<metric_type>')
+def get_metric_history(metric_type):
+    """Get historical data for a specific metric type"""
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        # Get time range parameter (default to 1 hour)
+        hours = request.args.get('hours', 1, type=float)
+        if hours <= 0 or hours > 72:  # Limit to 3 days max
+            hours = 1
+        
+        # Get historical data
+        history = metrics_storage.get_metrics(metric_type, hours=hours)
+        
+        current_app.logger.info(f'Retrieved {len(history)} data points for {metric_type} over {hours} hours')
+        
+        return jsonify({
+            'metric_type': metric_type,
+            'hours': hours,
+            'data_points': len(history),
+            'data': history
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Failed to get metric history for {metric_type}: {e}')
+        return jsonify({
+            'error': 'Failed to retrieve metric history',
+            'metric_type': metric_type,
+            'data': []
+        }), 500
+
+@main_bp.route('/api/monitoring/history/bulk')
+def get_bulk_metric_history():
+    """Get historical data for all metrics in a single query"""
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        # Get time range parameter (default to 1 hour)
+        hours = request.args.get('hours', 1, type=float)
+        if hours <= 0 or hours > 72:  # Limit to 3 days max
+            hours = 1
+        
+        # Get all historical data in one query
+        bulk_history = metrics_storage.get_bulk_metrics(hours=hours)
+        
+        # Count total data points and analyze sampling efficiency
+        total_points = sum(len(metric_data) for metric_data in bulk_history.values())
+        avg_points_per_metric = total_points / len(bulk_history) if bulk_history else 0
+        current_app.logger.info(f'Retrieved {total_points} total points ({avg_points_per_metric:.0f} avg/metric) across {len(bulk_history)} metrics over {hours}h - 300-sample optimization active')
+        
+        return jsonify({
+            'hours': hours,
+            'metric_count': len(bulk_history),
+            'total_data_points': total_points,
+            'data': bulk_history
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Failed to get bulk metric history: {e}')
+        return jsonify({
+            'error': 'Failed to retrieve bulk metric history',
+            'data': {}
+        }), 500
+
+@main_bp.route('/api/monitoring/config', methods=['GET', 'POST'])
+def monitoring_config():
+    """Get or update monitoring configuration"""
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        if request.method == 'GET':
+            # Return current configuration (collection_interval is read-only from config.toml)
+            config_interval = current_app.config.get('METRICS_COLLECTION_INTERVAL', 5)
+            actual_interval = max(3, min(10, config_interval))  # Apply same bounds as metrics collection
+            config = {
+                'collection_interval': actual_interval,
+                'collection_interval_source': 'config.toml (read-only)',
+                'retention_days': current_app.config.get('METRICS_RETENTION_DAYS', 7),
+                'enabled': current_app.config.get('METRICS_ENABLED', True),
+                'collect_system_memory': current_app.config.get('METRICS_COLLECT_SYSTEM_MEMORY', True),
+                'collect_system_cpu': current_app.config.get('METRICS_COLLECT_SYSTEM_CPU', True),
+                'collect_system_load': current_app.config.get('METRICS_COLLECT_SYSTEM_LOAD', True),
+                'collect_java_process': current_app.config.get('METRICS_COLLECT_JAVA_PROCESS', True),
+                'collect_server_tps': current_app.config.get('METRICS_COLLECT_SERVER_TPS', True),
+                'collect_player_count': current_app.config.get('METRICS_COLLECT_PLAYER_COUNT', True)
+            }
+            return jsonify(config)
+        
+        elif request.method == 'POST':
+            # Update configuration (stored in database for runtime changes)
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            # Validate and store configuration (collection_interval is read-only from config.toml)
+            valid_keys = ['retention_days', 'enabled']  # Removed collection_interval
+            updated_keys = []
+            
+            # Warn if someone tries to change collection_interval
+            if 'collection_interval' in data:
+                current_app.logger.warning('Attempt to change collection_interval via API ignored - use config.toml instead')
+            
+            for key in valid_keys:
+                if key in data:
+                    metrics_storage.set_config_value(key, data[key])
+                    updated_keys.append(f"{key}={data[key]}")
+            
+            current_app.logger.info(f'Metrics configuration updated: {", ".join(updated_keys)}')
+            
+            return jsonify({
+                'success': True, 
+                'message': 'Configuration updated',
+                'updated': updated_keys
+            })
+            
+    except Exception as e:
+        current_app.logger.error(f'Failed to handle monitoring config: {e}')
+        return jsonify({'error': 'Configuration operation failed'}), 500
 
 @main_bp.route('/server/control', methods=['POST'])
 def server_control():
@@ -704,7 +849,6 @@ def log_stream(log_type):
     log_path = os.path.join(server_path, log_files.get(log_type, f'logs/{log_type}.log'))
     
     # Log the attempt
-    current_app.logger.info(f'SSE request for {log_type} log at {log_path}')
     
     def generate():
         tail_process = None
@@ -761,7 +905,6 @@ def log_stream(log_type):
                     return process
                 
                 tail_process = start_tail_process()
-                current_app.logger.info(f"Started tail process for {log_type}")
                 
                 # Stream with file rotation detection
                 while True:
@@ -786,7 +929,6 @@ def log_stream(log_type):
                                 new_stat.st_ino != file_stat.st_ino or 
                                 (new_stat.st_size < file_stat.st_size - 1000)):  # File truncated by more than 1KB
                                 
-                                current_app.logger.info(f"Log file rotation detected for {log_type}, restarting tail")
                                 
                                 # Kill old tail process
                                 tail_process.terminate()
@@ -839,13 +981,13 @@ def log_stream(log_type):
                         break
                     
             except GeneratorExit:
-                current_app.logger.info(f"SSE generator exit for {log_type}")
+                pass
             except Exception as e:
                 current_app.logger.error(f"Tail process error for {log_type}: {e}")
                 yield f"data: {json.dumps({'type': 'error', 'error': f'Tail process error: {str(e)}'})}\n\n"
                 
         except GeneratorExit:
-            current_app.logger.info(f"SSE outer generator exit for {log_type}")
+            pass
         except Exception as e:
             current_app.logger.error(f"SSE setup error for {log_type}: {e}")
             yield f"data: {json.dumps({'type': 'error', 'error': f'SSE setup error: {str(e)}'})}\n\n"
@@ -860,7 +1002,6 @@ def log_stream(log_type):
                     except subprocess.TimeoutExpired:
                         tail_process.kill()
                         tail_process.wait()
-                    current_app.logger.info(f"Cleaned up tail process for {log_type}")
                 except Exception as e:
                     current_app.logger.error(f"Error cleaning up tail process for {log_type}: {e}")
     
@@ -880,15 +1021,12 @@ def log_stream(log_type):
 def rotate_log(log_type):
     """API endpoint for rotating (clearing) log files"""
     try:
-        current_app.logger.info(f'Log rotation request: {log_type}')
         current_app.logger.info(f'Request method: {request.method}')
         current_app.logger.info(f'Request headers: {dict(request.headers)}')
         current_app.logger.info(f'Request form data: {dict(request.form)}')
         
         # Skip CSRF validation for now to isolate the issue
-        current_app.logger.info('Skipping CSRF validation temporarily for debugging')
         csrf_token = request.headers.get('X-CSRFToken') or request.form.get('csrf_token')
-        current_app.logger.info(f'CSRF token received: {csrf_token[:10] if csrf_token else "None"}...')
         
         # TODO: Re-enable CSRF validation after fixing the core issue
         # from flask_wtf.csrf import validate_csrf
@@ -907,7 +1045,6 @@ def rotate_log(log_type):
             current_app.logger.error(f'Invalid log type requested: {log_type}')
             return jsonify({'success': False, 'error': 'Invalid log type - crash logs cannot be rotated'}), 400
         
-        current_app.logger.info(f'Creating LogService for {log_type}')
         try:
             log_service = LogService()
             current_app.logger.info('LogService created successfully')
@@ -915,16 +1052,13 @@ def rotate_log(log_type):
             current_app.logger.error(f'Failed to create LogService: {e}', exc_info=True)
             return jsonify({'success': False, 'error': f'Service initialization failed: {str(e)}'}), 500
         
-        current_app.logger.info(f'Calling rotate_log_file for {log_type}')
         try:
             result = log_service.rotate_log_file(log_type)
-            current_app.logger.info(f'rotate_log_file returned: {result}')
         except Exception as e:
             current_app.logger.error(f'rotate_log_file threw exception: {e}', exc_info=True)
             return jsonify({'success': False, 'error': f'Log rotation service error: {str(e)}'}), 500
         
         if result.get('success'):
-            current_app.logger.info(f'Log rotation successful for: {log_type}')
             return jsonify({
                 'success': True,
                 'message': result['message'],
@@ -1275,7 +1409,6 @@ def console_status():
         # Test basic network connectivity first
         import socket
         try:
-            current_app.logger.info(f'Testing socket connection to {server_host}:{rcon_port}')
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(5)
             result = sock.connect_ex((server_host, rcon_port))
@@ -1297,7 +1430,6 @@ def console_status():
         
         # Test RCON connection using custom client to avoid signal issues
         try:
-            current_app.logger.info('Testing RCON connection with custom client')
             
             from services.rcon_client import get_rcon_connection_status, test_rcon_connection
             # First check if we have an existing connection

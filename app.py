@@ -66,6 +66,10 @@ def create_app(config_name=None):
             'app_name': 'VaultHunters Web Manager'
         }
     
+    # Initialize metrics storage
+    from services.metrics_storage import metrics_storage
+    metrics_storage.init_app(app)
+    
     # Register routes
     from routes import main_bp
     app.register_blueprint(main_bp)

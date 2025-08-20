@@ -12,56 +12,29 @@ backup_path = "/home/minecraft/backups"
 # Java executable path (use full path if java is not in PATH)
 java_executable = "java"
 
-# Server jar filename (should be in your minecraft_server_path)
-server_jar = "forge-1.18.2-40.2.21-universal.jar"
-
 # Minecraft server connection details
 minecraft_server_host = "localhost"
 minecraft_server_port = 25565
 
-[jvm]
-# Memory allocation (adjust based on your system)
-# Recommended: Use same value for min and max memory for optimal performance
-memory_min = "4G"
-memory_max = "8G"
+[memory]
+# Java memory allocation settings based on system RAM
+# The web manager will automatically select appropriate heap size and flags
+# based on your system memory and these settings
 
-# Aikar's JVM optimization flags for VaultHunters
-# These flags are specifically optimized for Minecraft servers with high memory allocation rates
-# Source: https://docs.papermc.io/paper/aikars-flags/
-# 
-# Key benefits:
-# - Reduces garbage collection pause times
-# - Optimizes G1 garbage collector for Minecraft's allocation patterns  
-# - Improves server performance and reduces lag spikes
-# - Handles VaultHunters' high memory usage efficiently
-#
-# Note: These flags are tested and recommended for all Minecraft versions (1.8 to 1.20+)
-optimization_flags = [
-    "+UseG1GC",
-    "+ParallelRefProcEnabled", 
-    "MaxGCPauseMillis=200",
-    "+UnlockExperimentalVMOptions",
-    "+DisableExplicitGC",
-    "+AlwaysPreTouch",
-    "G1NewSizePercent=30",
-    "G1MaxNewSizePercent=40", 
-    "G1HeapRegionSize=8M",
-    "G1ReservePercent=20",
-    "G1HeapWastePercent=5",
-    "G1MixedGCCountTarget=4",
-    "InitiatingHeapOccupancyPercent=15",
-    "G1MixedGCLiveThresholdPercent=90",
-    "G1RSetUpdatingPauseTimePercent=5",
-    "SurvivorRatio=32",
-    "+PerfDisableSharedMem",
-    "MaxTenuringThreshold=1"
-]
+# Threshold for switching between flag sets (in GB)  
+# Systems with less than this use small heap optimizations
+# Systems with this amount or more use large heap optimizations
+# MINIMUM VALUE: 12GB (values below 12 will be ignored and 12GB will be used)
+# This prevents accidentally using large heap flags on systems that can't handle them
+large_heap_threshold = 12
 
-# Aikar's flag identification (do not modify)
-system_properties = [
-    "using.aikars.flags=https://mcflags.emc.gs",
-    "aikars.new.flags=true"
-]
+# Direct memory allocation table - customize these values if needed
+# Leave commented out to use automatic detection based on system RAM
+# heap_8gb_system = 6   # For 8GB RAM systems
+# heap_12gb_system = 8  # For 12GB RAM systems  
+# heap_16gb_system = 10 # For 16GB RAM systems
+# heap_24gb_system = 16 # For 24GB RAM systems
+# heap_32gb_plus_system = 24 # For 32GB+ RAM systems
 
 [web]
 # Web interface binding
@@ -76,12 +49,6 @@ secret_key = "change-this-to-a-random-secret-key"
 debug = false
 
 [security]
-# Session settings
-session_lifetime_hours = 24
-session_cookie_secure = false  # Set to true when using HTTPS
-session_cookie_httponly = true
-session_cookie_samesite = "Lax"
-
 # CSRF protection
 csrf_enabled = true
 csrf_time_limit = 3600  # 1 hour
@@ -114,3 +81,25 @@ allowed_backup_extensions = [".zip", ".tar.gz", ".tar", ".7z"]
 server_control = 5
 config_save = 10
 backup_download = 3
+
+[metrics]
+# Metrics collection and storage settings
+# Collection interval in seconds (how often to collect metrics)
+collection_interval = 5
+
+# Retention period in days (how long to keep historical data)
+retention_days = 7
+
+# Database path (relative to application root)
+database_path = "data/metrics.db"
+
+# Enable/disable metrics collection
+enabled = true
+
+# Metrics to collect (true/false for each type)
+collect_system_memory = true
+collect_system_cpu = true
+collect_system_load = true
+collect_java_process = true
+collect_server_tps = true
+collect_player_count = true

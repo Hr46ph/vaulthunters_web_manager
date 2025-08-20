@@ -84,3 +84,42 @@ pip install -r requirements.txt
 - Performance analytics API endpoint `/api/monitoring/metrics` with psutil system data
 - Dashboard indicators with loading states and real-time updates every 5-10 seconds
 - Production-ready security and error handling throughout all services
+
+## Monitoring Implementation
+
+**Philosophy**: Monitoring is a secondary feature for server management convenience, not a primary monitoring solution.
+
+### Hardcoded Monitoring Settings
+
+**Data Retention**: 3 days maximum (automatic cleanup)
+**Time Ranges**: 1min, 5min, 15min, 30min, 1hour, 3hours, 6hours, 12hours, 24hours, 3 days
+
+#### Collection Intervals by Metric Type
+- **CPU & Hardware Temps**: 5 seconds (high volatility metrics)
+- **Memory & Player Count**: 10 seconds (moderate change metrics)  
+- **TPS & Lag Spikes**: 3 seconds (critical performance metrics)
+
+#### Implementation Details
+- **No user configuration**: All monitoring settings hardcoded for simplicity
+- **Automatic cleanup**: Purge database records older than 3 days
+- **Database storage**: `data/metrics.db` with metric_type-based collection timing
+- **Performance target**: All time ranges load in <5 seconds with current approach
+
+### Future Enhancement: Metric-Specific 300-Sample Optimization
+
+**Phase 1 (Current)**: Hardcoded intervals, 3-day retention, basic sampling
+**Phase 2 (Future)**: Implement 300-sample strategy per metric type based on collection intervals:
+
+#### Revised Sampling Strategy
+| Metric Type | Collection | 15min | 3hours | 24hours | 3days | Target |
+|-------------|------------|-------|--------|---------|-------|---------|
+| TPS/Lag | 3s | 300 raw | 900 → 300 | 28k → 300 | 259k → 300 | ⚡ Fast |
+| CPU/Temp | 5s | 180 raw | 540 → 300 | 17k → 300 | 155k → 300 | ⚡ Fast |
+| Memory/Players | 10s | 90 raw | 270 → 300 | 8.6k → 300 | 77k → 300 | ⚡ Fast |
+
+**Benefits**:
+- Metric-appropriate sampling based on actual collection rates
+- Consistent 300-sample performance across all charts
+- Preserves high-resolution data where it matters (TPS spikes)
+
+**Status**: Phase 1 implemented. Phase 2 ready for future optimization when needed.

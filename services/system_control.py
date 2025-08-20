@@ -115,7 +115,6 @@ class SystemControlService:
                     server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
                     server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
                     
-                    self.logger.info(f"mcstatus attempting connection to {server_host}:{server_port}")
                     
                     server = JavaServer(server_host, server_port)
                     query_status = server.status()

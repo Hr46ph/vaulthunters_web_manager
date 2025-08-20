@@ -54,113 +54,6 @@
     </div>
 </div>
 
-<!-- Performance Overview Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="metric-card text-center">
-            <div class="metric-label">Server TPS</div>
-            <div class="metric-value" id="current-tps">--</div>
-            <small class="text-muted">Target: 20.0</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="metric-card text-center">
-            <div class="metric-label">Lag Spikes (5min)</div>
-            <div class="metric-value" id="lag-spikes-5min">--</div>
-            <small class="text-muted">Last 5 minutes</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="metric-card text-center">
-            <div class="metric-label">System Memory</div>
-            <div class="metric-value" id="memory-usage">--</div>
-            <small class="text-muted">used / total</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="metric-card text-center">
-            <div class="metric-label">Average System Load</div>
-            <div class="metric-value" id="system-load">--</div>
-            <small class="text-muted">1-minute average</small>
-        </div>
-    </div>
-</div>
-
-<!-- Charts Row 1 -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-tachometer-alt"></i> TPS History</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="tps-chart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-memory"></i> System Memory Usage</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="memory-chart"></canvas>
-                </div>
-                <div class="row mt-3">
-                    <div class="col-6">
-                        <small class="text-muted">Swap Used:</small>
-                        <div id="swap-used" class="fw-bold">--</div>
-                    </div>
-                    <div class="col-6">
-                        <small class="text-muted">Swap Free:</small>
-                        <div id="swap-free" class="fw-bold">--</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Charts Row 2 - CPU Chart -->
-<div class="row mb-4">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-microchip"></i> CPU Usage Per Core</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="cpu-chart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-server"></i> Minecraft Process</h6>
-            </div>
-            <div class="card-body">
-                <div class="text-center mb-3">
-                    <div class="metric-label">Process CPU</div>
-                    <div class="metric-value" id="minecraft-cpu">--</div>
-                </div>
-                <div class="text-center mb-3">
-                    <div class="metric-label">Process Memory</div>
-                    <div class="metric-value" id="minecraft-memory">--</div>
-                </div>
-                <div class="text-center">
-                    <div class="metric-label">Process PID</div>
-                    <div class="metric-value" id="minecraft-pid">--</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Server Health Status -->
 <div class="row mb-4">
     <div class="col-12">
@@ -204,16 +97,52 @@
     </div>
 </div>
 
-<!-- Lag Spike Analysis -->
-<div class="row">
+<!-- Configuration Panel and Recent Performance Events -->
+<div class="row mb-4">
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
-                <h6><i class="fas fa-exclamation-triangle"></i> Lag Spike History</h6>
+                <h6><i class="fas fa-cog"></i> Metrics Configuration</h6>
             </div>
             <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="lag-chart"></canvas>
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="update-interval" class="form-label">Page Update Rate</label>
+                        <select class="form-select form-select-sm" id="update-interval">
+                            <option value="3000">3 seconds</option>
+                            <option value="5000" selected>5 seconds</option>
+                            <option value="10000">10 seconds</option>
+                            <option value="15000">15 seconds</option>
+                            <option value="30000">30 seconds</option>
+                            <option value="60000">1 minute</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="chart-range" class="form-label">Chart Time Range</label>
+                        <select class="form-select form-select-sm" id="chart-range">
+                            <option value="0.0167">1 minute</option>
+                            <option value="0.0833">5 minutes</option>
+                            <option value="0.25">15 minutes</option>
+                            <option value="0.5">30 minutes</option>
+                            <option value="1" selected>1 hour</option>
+                            <option value="3">3 hours</option>
+                            <option value="6">6 hours</option>
+                            <option value="12">12 hours</option>
+                            <option value="24">24 hours</option>
+                            <option value="72">3 days</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                            <label class="form-check-label" for="auto-refresh">
+                                Auto Refresh
+                            </label>
+                        </div>
+                        <small class="text-muted">
+                <i class="fas fa-clock"></i> Use time range dropdown for detail
+                        </small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -224,10 +153,165 @@
                 <h6><i class="fas fa-list"></i> Recent Performance Events</h6>
             </div>
             <div class="card-body">
-                <div id="performance-events" style="max-height: 300px; overflow-y: auto;">
+                <div id="performance-events" style="max-height: 200px; overflow-y: auto;">
                     <div class="text-muted text-center">
                         <i class="fas fa-spinner fa-spin"></i> Loading events...
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Overview Cards -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="metric-card text-center">
+            <div class="metric-label">Server TPS</div>
+            <div class="metric-value" id="current-tps">--</div>
+            <small class="text-muted">Target: 20.0</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="metric-card text-center">
+            <div class="metric-label">Lag Spikes (5min)</div>
+            <div class="metric-value" id="lag-spikes-5min">--</div>
+            <small class="text-muted">Last 5 minutes</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="metric-card text-center">
+            <div class="metric-label">System Memory</div>
+            <div class="metric-value" id="memory-usage">--</div>
+            <small class="text-muted">used / total</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="metric-card text-center">
+            <div class="metric-label">Average System Load</div>
+            <div class="metric-value" id="system-load">--</div>
+            <small class="text-muted">1-minute average</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="metric-card text-center">
+            <div class="metric-label">Java Process CPU</div>
+            <div class="metric-value" id="minecraft-cpu">--</div>
+            <small class="text-muted">minecraft server</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="metric-card text-center">
+            <div class="metric-label">Java Process RSS</div>
+            <div class="metric-value" id="minecraft-memory">--</div>
+            <small class="text-muted">resident memory</small>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 1 -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-microchip"></i> CPU Usage Per Core</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="cpu-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted">System CPU: <span id="system-cpu" class="fw-bold">--</span>%</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-memory"></i> System Memory Usage</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="memory-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted me-3">Swap Used: <span id="swap-used" class="fw-bold">--</span></small>
+                    <small class="text-muted">Swap Free: <span id="swap-free" class="fw-bold">--</span></small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 2 - TPS and Lag History -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-tachometer-alt"></i> TPS History</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="tps-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted me-3">Min: <span id="tps-min" class="fw-bold">--</span></small>
+                    <small class="text-muted me-3">Max: <span id="tps-max" class="fw-bold">--</span></small>
+                    <small class="text-muted">Ave: <span id="tps-ave" class="fw-bold">--</span></small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-exclamation-triangle"></i> Lag Spike History</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="lag-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted me-3">Min: <span id="lag-min" class="fw-bold">--</span>ms</small>
+                    <small class="text-muted me-3">Max: <span id="lag-max" class="fw-bold">--</span>ms</small>
+                    <small class="text-muted">Ave: <span id="lag-ave" class="fw-bold">--</span>ms</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 3 - Temperature and Player Count Charts -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-thermometer-half"></i> Hardware Temperature</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="temperature-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted me-3">CPU Max: <span id="temp-cpu-max" class="fw-bold">--</span>°C</small>
+                    <small class="text-muted me-3">GPU Max: <span id="temp-gpu-max" class="fw-bold">--</span>°C</small>
+                    <small class="text-muted">NVMe Max: <span id="temp-nvme-max" class="fw-bold">--</span>°C</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-users"></i> Player Count History</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="player-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted">Max Players: <span id="player-max" class="fw-bold">--</span></small>
                 </div>
             </div>
         </div>
@@ -237,16 +321,82 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
 <script>
 // Monitoring page specific JavaScript
-let tpsChart, memoryChart, lagChart, cpuChart;
+let tpsChart, memoryChart, lagChart, cpuChart, playerChart, temperatureChart;
 let monitoringData = {
     tps: [],
     memory: [],
     lagSpikes: [],
     events: [],
-    cpuCores: []
+    cpuCores: [],
+    // Historical memory breakdown
+    memoryUsed: [],
+    memoryBuffers: [],
+    memoryCache: []
 };
+
+// Configuration state
+let currentConfig = {
+    update_interval: 5000, // Page refresh rate in milliseconds
+    chart_range: 1,
+    auto_refresh: true
+};
+
+let historicalMode = false;
+let wasHistoricalMode = false; // Track previous mode
+let updateInterval = null; // Store the setInterval ID for dynamic updates
+
+// System configuration
+let systemMemoryMaxGB = 64;  // Default, will be updated dynamically
+
+// Calculate system memory max rounded to nearest power of 2
+function calculateMemoryMax(totalMemoryMB) {
+    const totalGB = totalMemoryMB / 1024;
+    // Find next power of 2 (e.g., 30.5GB -> 32GB, 62.4GB -> 64GB)
+    const powerOf2 = Math.pow(2, Math.ceil(Math.log2(totalGB)));
+    return powerOf2;
+}
+
+// Local storage functions for auto-save
+function saveSettingsToLocalStorage() {
+    const settings = {
+        update_interval: parseInt(document.getElementById('update-interval').value),
+        chart_range: parseFloat(document.getElementById('chart-range').value),
+        auto_refresh: document.getElementById('auto-refresh').checked
+    };
+    localStorage.setItem('monitoring_settings', JSON.stringify(settings));
+}
+
+function loadSettingsFromLocalStorage() {
+    const savedSettings = localStorage.getItem('monitoring_settings');
+    if (savedSettings) {
+        try {
+            const settings = JSON.parse(savedSettings);
+            
+            // Apply settings to UI elements
+            if (settings.update_interval) {
+                document.getElementById('update-interval').value = settings.update_interval;
+                currentConfig.update_interval = settings.update_interval;
+            }
+            if (settings.chart_range) {
+                document.getElementById('chart-range').value = settings.chart_range;
+                currentConfig.chart_range = settings.chart_range;
+            }
+            if (settings.auto_refresh !== undefined) {
+                document.getElementById('auto-refresh').checked = settings.auto_refresh;
+                currentConfig.auto_refresh = settings.auto_refresh;
+            }
+            
+            return settings;
+        } catch (e) {
+            console.error('❌ Failed to parse saved settings:', e);
+        }
+    }
+    return null;
+}
 
 // Initialize charts
 function initializeCharts() {
@@ -277,6 +427,15 @@ function initializeCharts() {
                     }
                 },
                 x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     }
@@ -285,7 +444,7 @@ function initializeCharts() {
             plugins: {
                 legend: {
                     display: false
-                }
+                },
             }
         }
     });
@@ -306,15 +465,7 @@ function initializeCharts() {
                     fill: true
                 },
                 {
-                    label: 'Buffers',
-                    data: [],
-                    borderColor: '#fd7e14',
-                    backgroundColor: 'rgba(253, 126, 20, 0.7)',
-                    tension: 0.1,
-                    fill: true
-                },
-                {
-                    label: 'Cache',
+                    label: 'Buffers/Cache',
                     data: [],
                     borderColor: '#198754',
                     backgroundColor: 'rgba(25, 135, 84, 0.7)',
@@ -329,6 +480,7 @@ function initializeCharts() {
             scales: {
                 y: {
                     beginAtZero: true,
+                    max: systemMemoryMaxGB * 1024, // Will be updated dynamically
                     stacked: true,
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
@@ -340,6 +492,14 @@ function initializeCharts() {
                     }
                 },
                 x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        }
+                    },
                     stacked: true,
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
@@ -367,7 +527,7 @@ function initializeCharts() {
                             return context.dataset.label + ': ' + (context.parsed.y / 1024).toFixed(2) + 'GB';
                         }
                     }
-                }
+                },
             },
             interaction: {
                 intersect: false,
@@ -417,6 +577,15 @@ function initializeCharts() {
                     }
                 },
                 x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     }
@@ -425,7 +594,7 @@ function initializeCharts() {
             plugins: {
                 legend: {
                     display: false
-                }
+                },
             }
         }
     });
@@ -455,6 +624,15 @@ function initializeCharts() {
                     }
                 },
                 x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     }
@@ -481,7 +659,163 @@ function initializeCharts() {
                             return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
                         }
                     }
+                },
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+
+    // Player Count Chart
+    const playerCtx = document.getElementById('player-chart').getContext('2d');
+    playerChart = new Chart(playerCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Players',
+                data: [],
+                borderColor: '#6f42c1',
+                backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                tension: 0.4,
+                fill: true,
+                pointRadius: 3,
+                pointHoverRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        stepSize: 1,
+                        callback: function(value) {
+                            return Math.floor(value);
+                        }
+                    }
+                },
+                x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
                 }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+            }
+        }
+    });
+
+    // Temperature Chart
+    const temperatureCtx = document.getElementById('temperature-chart').getContext('2d');
+    temperatureChart = new Chart(temperatureCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'CPU',
+                    data: [],
+                    borderColor: '#dc3545',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    tension: 0.4,
+                    fill: false,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                },
+                {
+                    label: 'GPU',
+                    data: [],
+                    borderColor: '#198754',
+                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                    tension: 0.4,
+                    fill: false,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                },
+                {
+                    label: 'NVMe',
+                    data: [],
+                    borderColor: '#fd7e14',
+                    backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                    tension: 0.4,
+                    fill: false,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    grace: '10%', // Add 10% padding above and below data range
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '°C';
+                        }
+                    }
+                },
+                x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 15,
+                        font: {
+                            size: 11
+                        },
+                        boxWidth: 8,
+                        boxHeight: 8
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '°C';
+                        }
+                    }
+                },
             },
             interaction: {
                 intersect: false,
@@ -493,28 +827,24 @@ function initializeCharts() {
 
 // Update monitoring data
 function updateMonitoringData() {
-    console.log('Updating monitoring data...');
-    
     Promise.all([
-        fetch('/api/monitoring/metrics').then(r => {
-            console.log('Monitoring metrics response status:', r.status);
-            return r.json();
-        }),
-        fetch('/server/status').then(r => {
-            console.log('Server status response status:', r.status);
-            return r.json();
-        })
+        fetch('/api/monitoring/metrics').then(r => r.json()),
+        fetch('/server/status').then(r => r.json())
     ])
     .then(([metrics, status]) => {
-        console.log('Monitoring metrics:', metrics);
-        console.log('Server status:', status);
         
         updateMetricCards(metrics, status);
-        updateCharts(metrics);
+        updateCharts(metrics, status);
         
         // Update CPU chart if we have CPU data
         if (metrics.cpu_per_core && metrics.cpu_per_core.length > 0) {
             updateCpuChart(metrics);
+        }
+        
+        // Update temperature chart and alerts
+        if (metrics.temperatures) {
+            updateTemperatureChart(metrics.temperatures);
+            updateTemperatureAlerts(metrics.temperatures);
         }
         
         // Update Minecraft process summary
@@ -549,7 +879,9 @@ function updateMetricCards(metrics, status) {
     const memoryElement = document.getElementById('memory-usage');
     if (memoryElement) {
         if (metrics.system_memory && metrics.system_memory.total_gb > 0) {
-            memoryElement.textContent = `${metrics.system_memory.used_gb}GB / ${metrics.system_memory.total_gb}GB`;
+            // Use same rounding logic as chart: round total to nearest power of 2
+            const roundedTotalGB = calculateMemoryMax(metrics.system_memory.total_mb || (metrics.system_memory.total_gb * 1024));
+            memoryElement.textContent = `${metrics.system_memory.used_gb}GB / ${roundedTotalGB}GB`;
         } else {
             memoryElement.textContent = '--';
         }
@@ -563,29 +895,245 @@ function updateMetricCards(metrics, status) {
             loadElement.textContent = '--';
         }
     }
+    
+    // Update system CPU
+    const systemCpuElement = document.getElementById('system-cpu');
+    if (systemCpuElement) {
+        if (metrics.cpu_system_avg !== undefined) {
+            systemCpuElement.textContent = metrics.cpu_system_avg.toFixed(1);
+        } else {
+            systemCpuElement.textContent = '--';
+        }
+    }
+    
+    // Update temperature cards
+    const cpuTempElement = document.getElementById('cpu-temp');
+    if (cpuTempElement) {
+        if (metrics.temperatures && metrics.temperatures.temperatures && metrics.temperatures.temperatures.cpu !== undefined) {
+            const cpuTemp = metrics.temperatures.temperatures.cpu;
+            cpuTempElement.textContent = cpuTemp.toFixed(1);
+            
+            // Color code based on temperature
+            if (cpuTemp >= 85) {
+                cpuTempElement.style.color = '#dc3545'; // Critical - red
+            } else if (cpuTemp >= 75) {
+                cpuTempElement.style.color = '#ffc107'; // Warning - yellow
+            } else {
+                cpuTempElement.style.color = 'var(--bs-primary)'; // Normal - blue
+            }
+        } else {
+            cpuTempElement.textContent = '--';
+            cpuTempElement.style.color = 'var(--bs-primary)';
+        }
+    }
+    
+    const gpuTempElement = document.getElementById('gpu-temp');
+    if (gpuTempElement) {
+        if (metrics.temperatures && metrics.temperatures.temperatures && metrics.temperatures.temperatures.gpu !== undefined) {
+            const gpuTemp = metrics.temperatures.temperatures.gpu;
+            gpuTempElement.textContent = gpuTemp.toFixed(1);
+            
+            // Color code based on temperature
+            if (gpuTemp >= 90) {
+                gpuTempElement.style.color = '#dc3545'; // Critical - red
+            } else if (gpuTemp >= 80) {
+                gpuTempElement.style.color = '#ffc107'; // Warning - yellow
+            } else {
+                gpuTempElement.style.color = 'var(--bs-primary)'; // Normal - blue
+            }
+        } else {
+            gpuTempElement.textContent = '--';
+            gpuTempElement.style.color = 'var(--bs-primary)';
+        }
+    }
+}
+
+// Update chart axis ranges based on selected time range
+function updateChartTimeRanges(timeRangeHours) {
+    const now = new Date();
+    const startTime = new Date(now.getTime() - (timeRangeHours * 60 * 60 * 1000));
+    
+    const timeRange = {
+        min: startTime,
+        max: now
+    };
+    
+    // Update all chart X-axis ranges
+    [tpsChart, memoryChart, lagChart, cpuChart, playerChart, temperatureChart].forEach((chart) => {
+        if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
+            chart.options.scales.x.min = timeRange.min;
+            chart.options.scales.x.max = timeRange.max;
+            chart.update('none');
+        }
+    });
+}
+
+// Update chart time range for real-time mode (removes fixed bounds for scrolling)
+function updateChartTimeRangeForRealTime(newTime) {
+    if (historicalMode) {
+        // For historical mode, update the sliding window to follow real-time data
+        const timeRangeHours = currentConfig.chart_range || 1;
+        const newStartTime = new Date(newTime.getTime() - (timeRangeHours * 60 * 60 * 1000));
+        
+        [tpsChart, memoryChart, lagChart, cpuChart, playerChart, temperatureChart].forEach((chart) => {
+            if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
+                chart.options.scales.x.min = newStartTime;
+                chart.options.scales.x.max = newTime;
+            }
+        });
+        return;
+    }
+    
+    // Remove fixed min/max to allow Chart.js to handle scrolling naturally
+    [tpsChart, memoryChart, lagChart, cpuChart, playerChart, temperatureChart].forEach((chart) => {
+        if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
+            // Remove fixed bounds - let Chart.js scroll naturally with data limit
+            delete chart.options.scales.x.min;
+            delete chart.options.scales.x.max;
+        }
+    });
+}
+
+
+// Update TPS statistics display
+function updateTpsStats() {
+    if (!tpsChart || !tpsChart.data.datasets[0] || tpsChart.data.datasets[0].data.length === 0) {
+        document.getElementById('tps-min').textContent = '--';
+        document.getElementById('tps-max').textContent = '--';
+        document.getElementById('tps-ave').textContent = '--';
+        return;
+    }
+    
+    const tpsData = tpsChart.data.datasets[0].data;
+    const min = Math.min(...tpsData);
+    const max = Math.max(...tpsData);
+    const sum = tpsData.reduce((a, b) => a + b, 0);
+    const average = sum / tpsData.length;
+    
+    document.getElementById('tps-min').textContent = min.toFixed(1);
+    document.getElementById('tps-max').textContent = max.toFixed(1);
+    document.getElementById('tps-ave').textContent = average.toFixed(1);
+}
+
+// Update Lag Spike statistics display
+function updateLagStats() {
+    if (!lagChart || !lagChart.data.datasets[0] || lagChart.data.datasets[0].data.length === 0) {
+        document.getElementById('lag-min').textContent = '--';
+        document.getElementById('lag-max').textContent = '--';
+        document.getElementById('lag-ave').textContent = '--';
+        return;
+    }
+    
+    const lagData = lagChart.data.datasets[0].data;
+    // Filter out zero values (baseline data points) for meaningful statistics
+    const nonZeroLagData = lagData.filter(value => value > 0);
+    
+    if (nonZeroLagData.length === 0) {
+        document.getElementById('lag-min').textContent = '0';
+        document.getElementById('lag-max').textContent = '0';
+        document.getElementById('lag-ave').textContent = '0';
+        return;
+    }
+    
+    const min = Math.min(...nonZeroLagData);
+    const max = Math.max(...nonZeroLagData);
+    const sum = nonZeroLagData.reduce((a, b) => a + b, 0);
+    const average = sum / nonZeroLagData.length;
+    
+    document.getElementById('lag-min').textContent = Math.round(min);
+    document.getElementById('lag-max').textContent = Math.round(max);
+    document.getElementById('lag-ave').textContent = Math.round(average);
+}
+
+// Update Temperature statistics display
+function updateTemperatureStats() {
+    if (!temperatureChart || !temperatureChart.data.datasets || temperatureChart.data.datasets.length === 0) {
+        document.getElementById('temp-cpu-max').textContent = '--';
+        document.getElementById('temp-gpu-max').textContent = '--';
+        document.getElementById('temp-nvme-max').textContent = '--';
+        return;
+    }
+    
+    // CPU Max
+    const cpuData = temperatureChart.data.datasets[0].data.filter(val => val !== null && val !== undefined);
+    if (cpuData.length > 0) {
+        const cpuMax = Math.max(...cpuData);
+        document.getElementById('temp-cpu-max').textContent = cpuMax.toFixed(1);
+    } else {
+        document.getElementById('temp-cpu-max').textContent = '--';
+    }
+    
+    // GPU Max
+    const gpuData = temperatureChart.data.datasets[1].data.filter(val => val !== null && val !== undefined);
+    if (gpuData.length > 0) {
+        const gpuMax = Math.max(...gpuData);
+        document.getElementById('temp-gpu-max').textContent = gpuMax.toFixed(1);
+    } else {
+        document.getElementById('temp-gpu-max').textContent = '--';
+    }
+    
+    // NVMe Max
+    const nvmeData = temperatureChart.data.datasets[2].data.filter(val => val !== null && val !== undefined);
+    if (nvmeData.length > 0) {
+        const nvmeMax = Math.max(...nvmeData);
+        document.getElementById('temp-nvme-max').textContent = nvmeMax.toFixed(1);
+    } else {
+        document.getElementById('temp-nvme-max').textContent = '--';
+    }
+}
+
+// Update Player Count statistics display
+function updatePlayerStats() {
+    if (!playerChart || !playerChart.data.datasets[0] || playerChart.data.datasets[0].data.length === 0) {
+        document.getElementById('player-max').textContent = '--';
+        return;
+    }
+    
+    const playerData = playerChart.data.datasets[0].data;
+    const max = Math.max(...playerData);
+    
+    document.getElementById('player-max').textContent = max;
 }
 
 // Update charts
-function updateCharts(metrics) {
+function updateCharts(metrics, status = null) {
     const now = new Date();
-    const timeLabel = now.toLocaleTimeString();
 
     // Update TPS chart
     if (metrics.current_tps !== undefined) {
-        tpsChart.data.labels.push(timeLabel);
+        tpsChart.data.labels.push(now);
         tpsChart.data.datasets[0].data.push(metrics.current_tps);
         
-        // Keep last 20 data points
-        if (tpsChart.data.labels.length > 20) {
+        // Keep data points based on time range (15 min = 18 points, 30 min = 36 points, 1hr = 72 points, etc.)
+        const timeRangeHours = currentConfig.chart_range || 1;
+        const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72)); // 72 points per hour (5-second intervals)
+        if (tpsChart.data.labels.length > maxPoints) {
             tpsChart.data.labels.shift();
             tpsChart.data.datasets[0].data.shift();
         }
+        
+        // Update time range to include new data point
+        updateChartTimeRangeForRealTime(now);
+        
         tpsChart.update('none');
+        
+        // Update TPS statistics
+        updateTpsStats();
     }
 
     // Update memory chart with stacked memory data
     if (metrics.system_memory) {
-        memoryChart.data.labels.push(timeLabel);
+        // Update memory chart max scale if system memory info is available
+        if (metrics.system_memory.total_mb && memoryChart) {
+            const newMaxGB = calculateMemoryMax(metrics.system_memory.total_mb);
+            if (newMaxGB !== systemMemoryMaxGB) {
+                systemMemoryMaxGB = newMaxGB;
+                memoryChart.options.scales.y.max = systemMemoryMaxGB * 1024;
+                memoryChart.update('none');
+            }
+        }
+        
+        memoryChart.data.labels.push(now);
         
         // Check if we have detailed memory breakdown
         if (metrics.system_memory.used_mb !== undefined) {
@@ -596,30 +1144,24 @@ function updateCharts(metrics) {
             
             // Simple Linux memory breakdown: used includes buffers+cache, so subtract them for "actual used"
             const actualUsedMB = Math.max(0, totalUsedMB - buffersMB - cacheMB);
+            const buffersAndCacheMB = buffersMB + cacheMB; // Combine buffers and cache like 'free' command
             
-            // Debug logging to verify memory calculations
-            const totalStackedMB = actualUsedMB + buffersMB + cacheMB;
-            console.log(`Linux Memory (MB): Total Used=${totalUsedMB}, Actual Used=${actualUsedMB}, Buffers=${buffersMB}, Cache=${cacheMB}, Stacked Total=${totalStackedMB}`);
-            
-            memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory (excluding buffers/cache)
-            memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers
-            memoryChart.data.datasets[2].data.push(cacheMB);      // Cache
+            memoryChart.data.datasets[0].data.push(actualUsedMB);      // Used memory (excluding buffers/cache)
+            memoryChart.data.datasets[1].data.push(buffersAndCacheMB); // Buffers + Cache combined
         } else {
             // Fallback: use basic memory data and estimate breakdown
             const usedMB = (metrics.system_memory.used_gb || 0) * 1024;
-            const buffersMB = Math.round(usedMB * 0.1); // Estimate 10% for buffers
-            const cacheMB = Math.round(usedMB * 0.2);   // Estimate 20% for cache
-            const actualUsedMB = Math.max(0, usedMB - buffersMB - cacheMB);
+            const buffersAndCacheMB = Math.round(usedMB * 0.3); // Estimate 30% for buffers+cache combined
+            const actualUsedMB = Math.max(0, usedMB - buffersAndCacheMB);
             
-            console.log(`Memory fallback (MB): Total Used=${usedMB}, Actual Used=${actualUsedMB}, Buffers=${buffersMB}, Cache=${cacheMB}`);
-            
-            memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory
-            memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers (estimated)
-            memoryChart.data.datasets[2].data.push(cacheMB);      // Cache (estimated)
+            memoryChart.data.datasets[0].data.push(actualUsedMB);      // Used memory
+            memoryChart.data.datasets[1].data.push(buffersAndCacheMB); // Buffers + Cache (estimated)
         }
         
-        // Keep last 20 data points
-        if (memoryChart.data.labels.length > 20) {
+        // Keep data points based on time range
+        const timeRangeHours = currentConfig.chart_range || 1;
+        const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72));
+        if (memoryChart.data.labels.length > maxPoints) {
             memoryChart.data.labels.shift();
             memoryChart.data.datasets.forEach(dataset => {
                 dataset.data.shift();
@@ -632,13 +1174,50 @@ function updateCharts(metrics) {
     }
 
     // Update lag chart with recent spikes
-    if (metrics.recent_lag_spikes) {
+    if (metrics.recent_lag_spikes && metrics.recent_lag_spikes.length > 0) {
         lagChart.data.labels = metrics.recent_lag_spikes.map(spike => 
-            new Date(spike.timestamp).toLocaleTimeString()
+            new Date(spike.timestamp)
         );
         lagChart.data.datasets[0].data = metrics.recent_lag_spikes.map(spike => spike.duration);
         lagChart.update('none');
+        updateLagStats(); // Update lag statistics
+    } else if (metrics.recent_lag_spikes !== undefined) {
+        // No lag spikes - add a baseline point at 0 to show the chart is working
+        const now = new Date();
+        if (lagChart.data.labels.length === 0) {
+            // Add baseline data points to show time range
+            const timeRangeHours = currentConfig.chart_range || 1;
+            const points = Math.min(5, Math.ceil(timeRangeHours * 12)); // 5 points max
+            for (let i = 0; i < points; i++) {
+                const time = new Date(now.getTime() - ((points - 1 - i) * (timeRangeHours * 60 * 60 * 1000) / points));
+                lagChart.data.labels.push(time);
+                lagChart.data.datasets[0].data.push(0);
+            }
+            lagChart.update('none');
+            updateLagStats(); // Update lag statistics
+        }
     }
+
+    // Update player count chart (use server status, not metrics)
+    let playerCount = 0;
+    if (status && status.players !== undefined) {
+        playerCount = status.players;
+    }
+    
+    playerChart.data.labels.push(now);
+    playerChart.data.datasets[0].data.push(playerCount);
+    
+    // Keep data points based on time range
+    const timeRangeHours = currentConfig.chart_range || 1;
+    const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72));
+    if (playerChart.data.labels.length > maxPoints) {
+        playerChart.data.labels.shift();
+        playerChart.data.datasets[0].data.shift();
+    }
+    playerChart.update('none');
+    
+    // Update player statistics
+    updatePlayerStats();
 }
 
 // Update CPU chart
@@ -648,13 +1227,13 @@ function updateCpuChart(metrics) {
     }
 
     const now = new Date();
-    const timeLabel = now.toLocaleTimeString();
 
     // Initialize datasets if not already done
     if (cpuChart.data.datasets.length === 0) {
         const colors = [
             '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
-            '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'
+            '#FF9F40', '#C9CBCF', '#4BC0C0', '#FF6384', '#36A2EB',
+            '#FFCE56', '#9966FF', '#FF9F40', '#C9CBCF', '#FF6384', '#36A2EB'
         ];
 
         for (let i = 0; i < metrics.cpu_per_core.length; i++) {
@@ -672,7 +1251,7 @@ function updateCpuChart(metrics) {
     }
 
     // Add new time label
-    cpuChart.data.labels.push(timeLabel);
+    cpuChart.data.labels.push(now);
 
     // Add new CPU data for each core
     metrics.cpu_per_core.forEach((coreUsage, index) => {
@@ -681,8 +1260,10 @@ function updateCpuChart(metrics) {
         }
     });
 
-    // Keep last 20 data points
-    if (cpuChart.data.labels.length > 20) {
+    // Keep data points based on time range
+    const timeRangeHours = currentConfig.chart_range || 1;
+    const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72));
+    if (cpuChart.data.labels.length > maxPoints) {
         cpuChart.data.labels.shift();
         cpuChart.data.datasets.forEach(dataset => {
             dataset.data.shift();
@@ -690,6 +1271,113 @@ function updateCpuChart(metrics) {
     }
 
     cpuChart.update('none');
+}
+
+// Update temperature chart
+function updateTemperatureChart(temperatureData) {
+    if (!temperatureData || (!temperatureData.temperatures && !temperatureData.cpu)) {
+        return;
+    }
+
+    const now = new Date();
+    // Handle both old and new data structure formats
+    const temps = temperatureData.temperatures || temperatureData;
+
+    // Add new time label
+    temperatureChart.data.labels.push(now);
+
+    // Ensure all datasets have the same length before adding new data
+    const maxDatasetLength = Math.max(
+        temperatureChart.data.datasets[0].data.length,
+        temperatureChart.data.datasets[1].data.length, 
+        temperatureChart.data.datasets[2].data.length
+    );
+    
+    // Pad shorter datasets with null values to match the longest
+    temperatureChart.data.datasets.forEach((dataset, index) => {
+        while (dataset.data.length < maxDatasetLength) {
+            dataset.data.push(null);
+        }
+    });
+
+    // Add CPU temperature
+    const cpuTemp = temps.cpu !== undefined ? temps.cpu : null;
+    temperatureChart.data.datasets[0].data.push(cpuTemp);
+
+    // Add GPU temperature
+    const gpuTemp = temps.gpu !== undefined ? temps.gpu : null;
+    temperatureChart.data.datasets[1].data.push(gpuTemp);
+
+    // Add NVMe temperature
+    const nvmeTemp = temps.nvme !== undefined ? temps.nvme : null;
+    temperatureChart.data.datasets[2].data.push(nvmeTemp);
+
+    // Keep data points based on time range
+    const timeRangeHours = currentConfig.chart_range || 1;
+    const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72));
+    if (temperatureChart.data.labels.length > maxPoints) {
+        temperatureChart.data.labels.shift();
+        temperatureChart.data.datasets.forEach(dataset => {
+            dataset.data.shift();
+        });
+    }
+
+    temperatureChart.update('none');
+    
+    // Update temperature statistics
+    updateTemperatureStats();
+}
+
+// Update temperature alerts
+function updateTemperatureAlerts(temperatureData) {
+    const container = document.getElementById('temperature-alerts');
+    if (!container) return;
+
+    if (!temperatureData || !temperatureData.alerts || temperatureData.alerts.length === 0) {
+        container.innerHTML = `
+            <div class="text-muted text-center">
+                <i class="fas fa-check-circle text-success"></i> All temperatures normal
+            </div>
+        `;
+        return;
+    }
+
+    const alertsHtml = temperatureData.alerts.map(alert => {
+        let badgeClass = 'bg-secondary';
+        let iconClass = 'fas fa-info-circle';
+        
+        switch(alert.type) {
+            case 'critical':
+                badgeClass = 'bg-danger';
+                iconClass = 'fas fa-exclamation-triangle';
+                break;
+            case 'warning':
+                badgeClass = 'bg-warning text-dark';
+                iconClass = 'fas fa-exclamation-circle';
+                break;
+            default:
+                badgeClass = 'bg-info';
+                iconClass = 'fas fa-info-circle';
+        }
+        
+        return `
+            <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
+                <div>
+                    <div class="d-flex align-items-center">
+                        <span class="badge ${badgeClass} me-2" style="font-size: 0.7em;">
+                            <i class="${iconClass}"></i> ${alert.component}
+                        </span>
+                    </div>
+                    <small class="text-muted">${alert.message}</small>
+                </div>
+                <strong class="text-${alert.type === 'critical' ? 'danger' : alert.type === 'warning' ? 'warning' : 'info'}">
+                    ${alert.temp.toFixed(1)}°C
+                </strong>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = alertsHtml;
 }
 
 // Update Minecraft process summary
@@ -847,7 +1535,7 @@ function updatePerformanceEvents(events) {
                     </div>
                     <small class="text-muted">${event.message}</small>
                 </div>
-                <small class="text-muted">${new Date(event.timestamp).toLocaleTimeString()}</small>
+                <small class="text-muted">${new Date(event.timestamp).toLocaleTimeString('en-GB', { hour12: false })}</small>
             </div>
         `;
     }).join('');
@@ -855,13 +1543,522 @@ function updatePerformanceEvents(events) {
     container.innerHTML = eventsHtml;
 }
 
+// Dynamic update interval management
+function updateRefreshRate() {
+    const newInterval = parseInt(document.getElementById('update-interval').value);
+    const autoRefreshEnabled = document.getElementById('auto-refresh').checked;
+    
+    // Clear existing interval
+    if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+    }
+    
+    // Set new interval if auto-refresh is enabled
+    if (autoRefreshEnabled && !historicalMode) {
+        updateInterval = setInterval(function() {
+            updateMonitoringData();
+        }, newInterval);
+    }
+    
+    currentConfig.update_interval = newInterval;
+    currentConfig.auto_refresh = autoRefreshEnabled;
+    saveSettingsToLocalStorage();
+}
+
+// Load historical data for charts based on current settings
+function loadHistoricalData(hours = null) {
+    const timeRange = hours || parseFloat(document.getElementById('chart-range').value);
+    
+    // EXPLICIT CHECK: Very short ranges (30 minutes or less) - load recent historical data then switch to real-time  
+    if (timeRange <= 0.5) {
+        historicalMode = false;
+        currentConfig.chart_range = timeRange;
+        
+        // Clear current data first
+        clearChartData();
+        
+        // Set proper time range on charts
+        updateChartTimeRanges(timeRange);
+        
+        // Load all historical data in a single bulk request
+        fetch(`/api/monitoring/history/bulk?hours=${timeRange}`)
+            .then(r => r.json())
+            .then(response => {
+                if (response.error) {
+                    throw new Error(response.error);
+                }
+                
+                // Initialize CPU chart with all available cores first
+                initializeCpuChartFromBulkData(response.data);
+                
+                // Process each metric type from the bulk response
+                Object.entries(response.data).forEach(([metric_type, data]) => {
+                    if (data && data.length > 0) {
+                        displayHistoricalMetric(metric_type, data);
+                    }
+                });
+            
+            // Update charts from loaded data
+            updateChartsFromHistoricalData();
+            
+            // Now switch to real-time mode (don't clear data)
+            switchToRealTimeMode(false);
+        })
+        .catch(error => {
+            console.error(`Failed to load ${timeRange}h historical data:`, error);
+            // Fallback to empty real-time mode
+            switchToRealTimeMode(false);
+        });
+        
+        return;
+    }
+    
+    currentConfig.chart_range = timeRange;
+    
+    // Track previous mode
+    wasHistoricalMode = historicalMode;
+    
+    // Use historical mode for ranges 1 hour or more
+    const newHistoricalMode = timeRange >= 1.0; // 1 hour or more = historical mode
+    
+    if (!newHistoricalMode) {
+        if (wasHistoricalMode || historicalMode) {
+            // Coming from historical mode - clear data and switch
+            historicalMode = false;
+            clearChartData();
+            switchToRealTimeMode(false); // Don't clear again
+        } else {
+            // Already in real-time mode - just set the mode, don't clear data
+            historicalMode = false;
+        }
+        return;
+    }
+    
+    // Switching to historical mode - always clear data and load historical
+    historicalMode = true;
+    clearChartData();
+    
+    // Set proper time range on charts
+    updateChartTimeRanges(timeRange);
+    
+    // Load all historical data in a single bulk request
+    fetch(`/api/monitoring/history/bulk?hours=${timeRange}`)
+        .then(r => r.json())
+        .then(response => {
+            if (response.error) {
+                throw new Error(response.error);
+            }
+            
+            // Initialize CPU chart with all available cores first
+            initializeCpuChartFromBulkData(response.data);
+            
+            // Process each metric type from the bulk response
+            Object.entries(response.data).forEach(([metric_type, data]) => {
+                if (data && data.length > 0) {
+                    displayHistoricalMetric(metric_type, data);
+                }
+            });
+            
+            // Update charts
+            updateChartsFromHistoricalData();
+        })
+        .catch(error => {
+            console.error('Failed to load historical data:', error);
+            historicalMode = false;
+        });
+}
+
+// Clear chart data
+function clearChartData() {
+    
+    // Clear historical memory data storage
+    monitoringData.memoryUsed = [];
+    monitoringData.memoryBuffers = [];
+    monitoringData.memoryCache = [];
+    
+    if (tpsChart) {
+        tpsChart.data.labels = [];
+        tpsChart.data.datasets[0].data = [];
+        tpsChart.update('none');
+        updateTpsStats(); // Update stats when data is cleared
+    }
+    
+    if (memoryChart) {
+        memoryChart.data.labels = [];
+        memoryChart.data.datasets.forEach(dataset => {
+            dataset.data = [];
+        });
+        memoryChart.update('none');
+    }
+    
+    if (cpuChart) {
+        cpuChart.data.labels = [];
+        cpuChart.data.datasets.forEach(dataset => {
+            dataset.data = [];
+        });
+        cpuChart.update('none');
+    }
+    
+    if (playerChart) {
+        playerChart.data.labels = [];
+        playerChart.data.datasets[0].data = [];
+        playerChart.update('none');
+        updatePlayerStats(); // Update stats when data is cleared
+    }
+    
+    if (lagChart) {
+        lagChart.data.labels = [];
+        lagChart.data.datasets[0].data = [];
+        lagChart.update('none');
+        updateLagStats(); // Update stats when data is cleared
+    }
+    
+    if (temperatureChart) {
+        temperatureChart.data.labels = [];
+        temperatureChart.data.datasets.forEach(dataset => {
+            dataset.data = [];
+        });
+        temperatureChart.update('none');
+        updateTemperatureStats(); // Update stats when data is cleared
+    }
+}
+
+// Display historical metric data
+function displayHistoricalMetric(metricType, data) {
+    switch(metricType) {
+        case 'system_memory_used_mb':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                // Store the memory data for later processing
+                monitoringData.memoryUsed.push({
+                    timestamp: timestamp,
+                    value: point.value
+                });
+            });
+            break;
+            
+        case 'system_memory_buffers_mb':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                monitoringData.memoryBuffers.push({
+                    timestamp: timestamp,
+                    value: point.value
+                });
+            });
+            break;
+            
+        case 'system_memory_cache_mb':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                monitoringData.memoryCache.push({
+                    timestamp: timestamp,
+                    value: point.value
+                });
+            });
+            break;
+            
+        case 'system_cpu_percent':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                if (tpsChart.data.labels.length === 0 || 
+                    tpsChart.data.labels[tpsChart.data.labels.length - 1].getTime() !== timestamp.getTime()) {
+                    tpsChart.data.labels.push(timestamp);
+                    // Use CPU as proxy for TPS (inverse relationship)
+                    const tpsEstimate = Math.max(15, 20 - (point.value * 0.1));
+                    tpsChart.data.datasets[0].data.push(tpsEstimate);
+                }
+            });
+            updateTpsStats(); // Update stats after loading historical TPS data
+            break;
+            
+        case 'player_count':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                playerChart.data.labels.push(timestamp);
+                playerChart.data.datasets[0].data.push(point.value);
+            });
+            updatePlayerStats(); // Update stats after loading historical player data
+            break;
+            
+        case 'temperature_cpu_celsius':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                // Ensure temperature chart has the time label
+                if (temperatureChart.data.labels.length === 0 || 
+                    temperatureChart.data.labels[temperatureChart.data.labels.length - 1].getTime() !== timestamp.getTime()) {
+                    temperatureChart.data.labels.push(timestamp);
+                }
+                
+                // Find the corresponding label index
+                const labelIndex = temperatureChart.data.labels.findIndex(label => label.getTime() === timestamp.getTime());
+                if (labelIndex !== -1) {
+                    // Ensure the datasets have enough data points
+                    while (temperatureChart.data.datasets[0].data.length <= labelIndex) {
+                        temperatureChart.data.datasets[0].data.push(null);
+                    }
+                    temperatureChart.data.datasets[0].data[labelIndex] = point.value;
+                }
+            });
+            break;
+            
+        case 'temperature_gpu_celsius':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                // Ensure temperature chart has the time label
+                if (temperatureChart.data.labels.length === 0 || 
+                    temperatureChart.data.labels[temperatureChart.data.labels.length - 1].getTime() !== timestamp.getTime()) {
+                    temperatureChart.data.labels.push(timestamp);
+                }
+                
+                // Find the corresponding label index
+                const labelIndex = temperatureChart.data.labels.findIndex(label => label.getTime() === timestamp.getTime());
+                if (labelIndex !== -1) {
+                    // Ensure the datasets have enough data points
+                    while (temperatureChart.data.datasets[1].data.length <= labelIndex) {
+                        temperatureChart.data.datasets[1].data.push(null);
+                    }
+                    temperatureChart.data.datasets[1].data[labelIndex] = point.value;
+                }
+            });
+            break;
+            
+        case 'temperature_nvme_celsius':
+            data.forEach(point => {
+                const timestamp = new Date(point.timestamp);
+                
+                // Ensure temperature chart has the time label
+                if (temperatureChart.data.labels.length === 0 || 
+                    temperatureChart.data.labels[temperatureChart.data.labels.length - 1].getTime() !== timestamp.getTime()) {
+                    temperatureChart.data.labels.push(timestamp);
+                }
+                
+                // Find the corresponding label index
+                const labelIndex = temperatureChart.data.labels.findIndex(label => label.getTime() === timestamp.getTime());
+                if (labelIndex !== -1) {
+                    // Ensure the datasets have enough data points
+                    while (temperatureChart.data.datasets[2].data.length <= labelIndex) {
+                        temperatureChart.data.datasets[2].data.push(null);
+                    }
+                    temperatureChart.data.datasets[2].data[labelIndex] = point.value;
+                }
+            });
+            break;
+        
+        default:
+            // Handle CPU per-core metrics
+            if (metricType.startsWith('system_cpu_core_') && metricType.endsWith('_percent')) {
+                const coreMatch = metricType.match(/system_cpu_core_(\d+)_percent/);
+                if (coreMatch) {
+                    const coreIndex = parseInt(coreMatch[1]);
+                    displayCpuCoreHistoricalData(coreIndex, data);
+                }
+            }
+            break;
+    }
+}
+
+// Initialize CPU chart datasets by scanning bulk historical data for all CPU cores
+function initializeCpuChartFromBulkData(bulkData) {
+    if (cpuChart.data.datasets.length > 0) {
+        return; // Already initialized
+    }
+    
+    // Scan bulk data to find all CPU core metrics
+    const coreIndices = [];
+    Object.keys(bulkData).forEach(metricType => {
+        if (metricType.startsWith('system_cpu_core_') && metricType.endsWith('_percent')) {
+            const coreMatch = metricType.match(/system_cpu_core_(\d+)_percent/);
+            if (coreMatch) {
+                coreIndices.push(parseInt(coreMatch[1]));
+            }
+        }
+    });
+    
+    // If no core data found, use a safe default (shouldn't happen in normal operation)
+    const maxCores = coreIndices.length > 0 ? Math.max(...coreIndices) + 1 : 12;
+    
+    const colors = [
+        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
+        '#FF9F40', '#C9CBCF', '#4BC0C0', '#FF6384', '#36A2EB',
+        '#FFCE56', '#9966FF', '#FF9F40', '#C9CBCF', '#FF6384', '#36A2EB'
+    ];
+    
+    for (let i = 0; i < maxCores; i++) {
+        cpuChart.data.datasets.push({
+            label: `Core ${i + 1}`,
+            data: [],
+            borderColor: colors[i % colors.length],
+            backgroundColor: colors[i % colors.length] + '20',
+            tension: 0.4,
+            fill: false,
+            pointRadius: 2,
+            pointHoverRadius: 4
+        });
+    }
+}
+
+// Display CPU per-core historical data
+function displayCpuCoreHistoricalData(coreIndex, data) {
+    if (!data || data.length === 0) {
+        return;
+    }
+    
+    // CPU chart should already be initialized by initializeCpuChartFromBulkData
+    // If not, create just this core's dataset
+    while (cpuChart.data.datasets.length <= coreIndex) {
+        const colors = [
+            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
+            '#FF9F40', '#C9CBCF', '#4BC0C0', '#FF6384', '#36A2EB',
+            '#FFCE56', '#9966FF', '#FF9F40', '#C9CBCF', '#FF6384', '#36A2EB'
+        ];
+        const i = cpuChart.data.datasets.length;
+        cpuChart.data.datasets.push({
+            label: `Core ${i + 1}`,
+            data: [],
+            borderColor: colors[i % colors.length],
+            backgroundColor: colors[i % colors.length] + '20',
+            tension: 0.4,
+            fill: false,
+            pointRadius: 2,
+            pointHoverRadius: 4
+        });
+    }
+    
+    // Add historical data for this specific core
+    data.forEach((point, index) => {
+        const timestamp = new Date(point.timestamp);
+        
+        // Add time label only once (from first core)
+        if (coreIndex === 0 && index < cpuChart.data.labels.length) {
+            cpuChart.data.labels[index] = timestamp;
+        } else if (coreIndex === 0) {
+            cpuChart.data.labels.push(timestamp);
+        }
+        
+        // Add data point for this core
+        if (cpuChart.data.datasets[coreIndex]) {
+            if (index < cpuChart.data.datasets[coreIndex].data.length) {
+                cpuChart.data.datasets[coreIndex].data[index] = point.value;
+            } else {
+                cpuChart.data.datasets[coreIndex].data.push(point.value);
+            }
+        }
+    });
+}
+
+// Process historical memory data with proper breakdown calculation
+function processHistoricalMemoryData() {
+    // Clear existing memory chart data
+    memoryChart.data.labels = [];
+    memoryChart.data.datasets[0].data = [];
+    memoryChart.data.datasets[1].data = [];
+    
+    // Process each used memory entry and match with buffers/cache by index
+    // Since all three metrics are collected at the same time with same data point count,
+    // we can match them by index instead of exact timestamp
+    monitoringData.memoryUsed.forEach((entry, index) => {
+        const totalUsedMB = entry.value;
+        
+        // Match by index instead of timestamp for more reliable pairing
+        const buffersMB = (index < monitoringData.memoryBuffers.length) ? monitoringData.memoryBuffers[index].value : 0;
+        const cacheMB = (index < monitoringData.memoryCache.length) ? monitoringData.memoryCache[index].value : 0;
+        
+        // Calculate actual used memory (same logic as real-time)
+        const actualUsedMB = Math.max(0, totalUsedMB - buffersMB - cacheMB);
+        const buffersAndCacheMB = buffersMB + cacheMB; // Combine buffers and cache
+        
+        // Add to chart (stacked format - same as real-time)
+        memoryChart.data.labels.push(entry.timestamp);
+        memoryChart.data.datasets[0].data.push(actualUsedMB);      // Used memory (excluding buffers/cache) - RED
+        memoryChart.data.datasets[1].data.push(buffersAndCacheMB); // Buffers + Cache combined - GREEN
+    });
+}
+
+// Update charts from historical data
+function updateChartsFromHistoricalData() {
+    // Process memory data using proper breakdown calculation
+    if (monitoringData.memoryUsed.length > 0) {
+        processHistoricalMemoryData();
+    }
+    
+    if (tpsChart) {
+        tpsChart.update();
+    }
+    if (memoryChart) {
+        memoryChart.update();
+    }
+    if (cpuChart) {
+        cpuChart.update();
+    }
+    if (playerChart) {
+        playerChart.update();
+    }
+    if (temperatureChart) {
+        temperatureChart.update();
+        updateTemperatureStats(); // Update temperature stats from historical data
+    }
+}
+
+// Switch back to real-time mode
+function switchToRealTimeMode(clearData = true) {
+    historicalMode = false;
+    if (clearData) {
+        clearChartData();
+    }
+    resetChartZoom();
+    updateRefreshRate(); // Restart auto-refresh if enabled
+}
+
+// Reset zoom on all charts
+function resetChartZoom() {
+    if (tpsChart) tpsChart.resetZoom();
+    if (memoryChart) memoryChart.resetZoom();
+    if (lagChart) lagChart.resetZoom();
+    if (cpuChart) cpuChart.resetZoom();
+    if (playerChart) playerChart.resetZoom();
+    if (temperatureChart) temperatureChart.resetZoom();
+}
+
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();
-    updateMonitoringData();
     
-    // Update every 5 seconds
-    setInterval(updateMonitoringData, 5000);
+    // Load saved settings from localStorage
+    loadSettingsFromLocalStorage();
+    
+    // Set up event listeners for new controls
+    document.getElementById('update-interval').addEventListener('change', function() {
+        updateRefreshRate();
+    });
+    
+    document.getElementById('auto-refresh').addEventListener('change', function() {
+        updateRefreshRate();
+    });
+    
+    document.getElementById('chart-range').addEventListener('change', function() {
+        saveSettingsToLocalStorage(); // Save UI preference immediately
+        loadHistoricalData(); // Load data based on new time range
+        resetChartZoom(); // Reset zoom when changing time range
+    });
+    
+    // Initial data load based on current dropdown selection (after settings are loaded)
+    setTimeout(() => {
+        const currentRange = parseFloat(document.getElementById('chart-range').value);
+        loadHistoricalData(currentRange);
+    }, 500);
+    
+    // Start initial auto-refresh if enabled (after a delay to ensure settings are loaded)
+    setTimeout(() => {
+        updateRefreshRate();
+    }, 100);
 });
 </script>
 {% endblock %}

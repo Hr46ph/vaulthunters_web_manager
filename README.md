@@ -169,7 +169,15 @@ secret_key = "change-this-to-a-random-secret-key"
 debug = false
 ```
 
-**Important**: The JVM optimization flags are pre-configured with Aikar's flags, which are specifically optimized for Minecraft servers and reduce lag spikes caused by garbage collection.
+**Important**: The web manager includes intelligent Aikar's flags implementation that automatically selects optimized JVM arguments based on your system memory. These flags are specifically designed for Minecraft servers to reduce lag spikes caused by garbage collection.
+
+**Aikar's Flags Configuration:**
+- **Automatic Detection**: The system detects available RAM and applies appropriate heap sizes and optimization flags
+- **Dual Flag Sets**: Uses different optimizations for systems below/above the `large_heap_threshold` (default: 12GB)
+- **Memory Allocation**: Automatically calculates optimal heap sizes (e.g., 6GB heap for 8GB RAM systems)
+- **One-Click Application**: Configuration editor includes a "Apply Aikar's Flags" button for instant setup
+- **Smart Merging**: Preserves existing custom JVM arguments while replacing outdated Aikar flags
+- **Configurable**: Memory thresholds and heap sizes can be customized in `config.toml` under `[memory]` section
 
 4. **Create systemd service** (as your regular user, requires sudo):
 ```bash
