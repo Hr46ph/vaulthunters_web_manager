@@ -70,17 +70,10 @@ def create_flask_config(toml_config: Dict[str, Any]) -> Dict[str, Any]:
         ]),
         'ALLOWED_BACKUP_EXTENSIONS': files_config.get('allowed_backup_extensions', ['.zip', '.tar.gz', '.tar', '.7z']),
         
-        # Metrics
-        'METRICS_COLLECTION_INTERVAL': metrics_config.get('collection_interval', 30),
-        'METRICS_RETENTION_DAYS': metrics_config.get('retention_days', 7),
-        'METRICS_DATABASE_PATH': metrics_config.get('database_path', 'data/metrics.db'),
-        'METRICS_ENABLED': metrics_config.get('enabled', True),
-        'METRICS_COLLECT_SYSTEM_MEMORY': metrics_config.get('collect_system_memory', True),
-        'METRICS_COLLECT_SYSTEM_CPU': metrics_config.get('collect_system_cpu', True),
-        'METRICS_COLLECT_SYSTEM_LOAD': metrics_config.get('collect_system_load', True),
-        'METRICS_COLLECT_JAVA_PROCESS': metrics_config.get('collect_java_process', True),
-        'METRICS_COLLECT_SERVER_TPS': metrics_config.get('collect_server_tps', True),
-        'METRICS_COLLECT_PLAYER_COUNT': metrics_config.get('collect_player_count', True)
+        # Metrics - hardcoded settings (monitoring is a secondary feature)
+        'METRICS_DATABASE_PATH': 'data/metrics.db',
+        'METRICS_ENABLED': True,
+        'METRICS_RETENTION_DAYS': 3
     }
 
 class Config:

@@ -120,6 +120,8 @@
                     <div class="col-md-4">
                         <label for="chart-range" class="form-label">Chart Time Range</label>
                         <select class="form-select form-select-sm" id="chart-range">
+                            <option value="0.0167">1 minute</option>
+                            <option value="0.0833">5 minutes</option>
                             <option value="0.25">15 minutes</option>
                             <option value="0.5">30 minutes</option>
                             <option value="1" selected>1 hour</option>
@@ -127,7 +129,7 @@
                             <option value="6">6 hours</option>
                             <option value="12">12 hours</option>
                             <option value="24">24 hours</option>
-                            <option value="168">1 week</option>
+                            <option value="72">3 days</option>
                         </select>
                     </div>
                     <div class="col-md-4">
@@ -138,7 +140,7 @@
                             </label>
                         </div>
                         <small class="text-muted">
-                            <i class="fas fa-mouse-pointer"></i> Mouse wheel to zoom charts
+                <i class="fas fa-clock"></i> Use time range dropdown for detail
                         </small>
                     </div>
                 </div>
@@ -280,9 +282,9 @@
     </div>
 </div>
 
-<!-- Charts Row 3 - Temperature Chart -->
+<!-- Charts Row 3 - Temperature and Player Count Charts -->
 <div class="row mb-4">
-    <div class="col-md-8">
+    <div class="col-md-6">
         <div class="card">
             <div class="card-header">
                 <h6><i class="fas fa-thermometer-half"></i> Hardware Temperature</h6>
@@ -299,11 +301,7 @@
             </div>
         </div>
     </div>
-</div>
-
-<!-- Player Count Chart -->
-<div class="row">
-    <div class="col-md-12">
+    <div class="col-md-6">
         <div class="card">
             <div class="card-header">
                 <h6><i class="fas fa-users"></i> Player Count History</h6>
@@ -311,6 +309,9 @@
             <div class="card-body">
                 <div class="chart-container">
                     <canvas id="player-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted">Max Players: <span id="player-max" class="fw-bold">--</span></small>
                 </div>
             </div>
         </div>
@@ -322,7 +323,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script>
 // Monitoring page specific JavaScript
 let tpsChart, memoryChart, lagChart, cpuChart, playerChart, temperatureChart;
@@ -348,6 +348,17 @@ let currentConfig = {
 let historicalMode = false;
 let wasHistoricalMode = false; // Track previous mode
 let updateInterval = null; // Store the setInterval ID for dynamic updates
+
+// System configuration
+let systemMemoryMaxGB = 64;  // Default, will be updated dynamically
+
+// Calculate system memory max rounded to nearest power of 2
+function calculateMemoryMax(totalMemoryMB) {
+    const totalGB = totalMemoryMB / 1024;
+    // Find next power of 2 (e.g., 30.5GB -> 32GB, 62.4GB -> 64GB)
+    const powerOf2 = Math.pow(2, Math.ceil(Math.log2(totalGB)));
+    return powerOf2;
+}
 
 // Local storage functions for auto-save
 function saveSettingsToLocalStorage() {
@@ -434,21 +445,6 @@ function initializeCharts() {
                 legend: {
                     display: false
                 },
-                zoom: {
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                        },
-                        pinch: {
-                            enabled: true
-                        },
-                        mode: 'x',
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: 'x',
-                    }
-                }
             }
         }
     });
@@ -484,6 +480,7 @@ function initializeCharts() {
             scales: {
                 y: {
                     beginAtZero: true,
+                    max: systemMemoryMaxGB * 1024, // Will be updated dynamically
                     stacked: true,
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
@@ -531,21 +528,6 @@ function initializeCharts() {
                         }
                     }
                 },
-                zoom: {
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                        },
-                        pinch: {
-                            enabled: true
-                        },
-                        mode: 'x',
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: 'x',
-                    }
-                }
             },
             interaction: {
                 intersect: false,
@@ -613,21 +595,6 @@ function initializeCharts() {
                 legend: {
                     display: false
                 },
-                zoom: {
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                        },
-                        pinch: {
-                            enabled: true
-                        },
-                        mode: 'x',
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: 'x',
-                    }
-                }
             }
         }
     });
@@ -693,21 +660,6 @@ function initializeCharts() {
                         }
                     }
                 },
-                zoom: {
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                        },
-                        pinch: {
-                            enabled: true
-                        },
-                        mode: 'x',
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: 'x',
-                    }
-                }
             },
             interaction: {
                 intersect: false,
@@ -768,21 +720,6 @@ function initializeCharts() {
                 legend: {
                     display: false
                 },
-                zoom: {
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                        },
-                        pinch: {
-                            enabled: true
-                        },
-                        mode: 'x',
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: 'x',
-                    }
-                }
             }
         }
     });
@@ -879,21 +816,6 @@ function initializeCharts() {
                         }
                     }
                 },
-                zoom: {
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                        },
-                        pinch: {
-                            enabled: true
-                        },
-                        mode: 'x',
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: 'x',
-                    }
-                }
             },
             interaction: {
                 intersect: false,
@@ -957,7 +879,9 @@ function updateMetricCards(metrics, status) {
     const memoryElement = document.getElementById('memory-usage');
     if (memoryElement) {
         if (metrics.system_memory && metrics.system_memory.total_gb > 0) {
-            memoryElement.textContent = `${metrics.system_memory.used_gb}GB / ${metrics.system_memory.total_gb}GB`;
+            // Use same rounding logic as chart: round total to nearest power of 2
+            const roundedTotalGB = calculateMemoryMax(metrics.system_memory.total_mb || (metrics.system_memory.total_gb * 1024));
+            memoryElement.textContent = `${metrics.system_memory.used_gb}GB / ${roundedTotalGB}GB`;
         } else {
             memoryElement.textContent = '--';
         }
@@ -1158,6 +1082,19 @@ function updateTemperatureStats() {
     }
 }
 
+// Update Player Count statistics display
+function updatePlayerStats() {
+    if (!playerChart || !playerChart.data.datasets[0] || playerChart.data.datasets[0].data.length === 0) {
+        document.getElementById('player-max').textContent = '--';
+        return;
+    }
+    
+    const playerData = playerChart.data.datasets[0].data;
+    const max = Math.max(...playerData);
+    
+    document.getElementById('player-max').textContent = max;
+}
+
 // Update charts
 function updateCharts(metrics, status = null) {
     const now = new Date();
@@ -1186,6 +1123,16 @@ function updateCharts(metrics, status = null) {
 
     // Update memory chart with stacked memory data
     if (metrics.system_memory) {
+        // Update memory chart max scale if system memory info is available
+        if (metrics.system_memory.total_mb && memoryChart) {
+            const newMaxGB = calculateMemoryMax(metrics.system_memory.total_mb);
+            if (newMaxGB !== systemMemoryMaxGB) {
+                systemMemoryMaxGB = newMaxGB;
+                memoryChart.options.scales.y.max = systemMemoryMaxGB * 1024;
+                memoryChart.update('none');
+            }
+        }
+        
         memoryChart.data.labels.push(now);
         
         // Check if we have detailed memory breakdown
@@ -1268,6 +1215,9 @@ function updateCharts(metrics, status = null) {
         playerChart.data.datasets[0].data.shift();
     }
     playerChart.update('none');
+    
+    // Update player statistics
+    updatePlayerStats();
 }
 
 // Update CPU chart
@@ -1282,7 +1232,8 @@ function updateCpuChart(metrics) {
     if (cpuChart.data.datasets.length === 0) {
         const colors = [
             '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
-            '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'
+            '#FF9F40', '#C9CBCF', '#4BC0C0', '#FF6384', '#36A2EB',
+            '#FFCE56', '#9966FF', '#FF9F40', '#C9CBCF', '#FF6384', '#36A2EB'
         ];
 
         for (let i = 0; i < metrics.cpu_per_core.length; i++) {
@@ -1619,7 +1570,7 @@ function updateRefreshRate() {
 function loadHistoricalData(hours = null) {
     const timeRange = hours || parseFloat(document.getElementById('chart-range').value);
     
-    // EXPLICIT CHECK: 15 and 30 minutes (0.5 hours or less) - load recent historical data then switch to real-time
+    // EXPLICIT CHECK: Very short ranges (30 minutes or less) - load recent historical data then switch to real-time  
     if (timeRange <= 0.5) {
         historicalMode = false;
         currentConfig.chart_range = timeRange;
@@ -1630,47 +1581,23 @@ function loadHistoricalData(hours = null) {
         // Set proper time range on charts
         updateChartTimeRanges(timeRange);
         
-        // Load historical data for the selected time range
-        const metrics = ['system_memory_used_mb', 'system_memory_buffers_mb', 'system_memory_cache_mb', 'system_cpu_percent', 'system_load_1min', 'player_count', 'temperature_cpu_celsius', 'temperature_gpu_celsius', 'temperature_nvme_celsius'];
-        
-        // Also load CPU per-core data
-        const cpuCorePromises = [];
-        for (let i = 0; i < 16; i++) { // Support up to 16 CPU cores
-            cpuCorePromises.push(
-                fetch(`/api/monitoring/history/system_cpu_core_${i}_percent?hours=${timeRange}`)
-                    .then(r => r.json())
-                    .then(response => {
-                        // Handle both formats: direct data array or wrapped response
-                        const data = response.data || response;
-                        return { metric_type: `system_cpu_core_${i}_percent`, data };
-                    })
-                    .catch(() => null) // Ignore cores that don't exist
-            );
-        }
-        
-        Promise.all([
-            ...metrics.map(metric => 
-                fetch(`/api/monitoring/history/${metric}?hours=${timeRange}`)
-                    .then(r => r.json())
-                    .then(response => {
-                        // Handle both formats: direct data array or wrapped response
-                        const data = response.data || response;
-                        return { metric_type: metric, data };
-                    })
-                    .catch(error => {
-                        console.error(`📡 Failed to fetch ${metric}:`, error);
-                        return null;
-                    })
-            ),
-            ...cpuCorePromises
-        ])
-        .then(results => {
-            // Process historical data
-            results.forEach(result => {
-                if (result && result.data && result.data.length > 0) {
-                    displayHistoricalMetric(result.metric_type, result.data);
+        // Load all historical data in a single bulk request
+        fetch(`/api/monitoring/history/bulk?hours=${timeRange}`)
+            .then(r => r.json())
+            .then(response => {
+                if (response.error) {
+                    throw new Error(response.error);
                 }
-            });
+                
+                // Initialize CPU chart with all available cores first
+                initializeCpuChartFromBulkData(response.data);
+                
+                // Process each metric type from the bulk response
+                Object.entries(response.data).forEach(([metric_type, data]) => {
+                    if (data && data.length > 0) {
+                        displayHistoricalMetric(metric_type, data);
+                    }
+                });
             
             // Update charts from loaded data
             updateChartsFromHistoricalData();
@@ -1715,41 +1642,31 @@ function loadHistoricalData(hours = null) {
     // Set proper time range on charts
     updateChartTimeRanges(timeRange);
     
-    // Load historical data for each metric type
-    const metrics = ['system_memory_used_mb', 'system_memory_buffers_mb', 'system_memory_cache_mb', 'system_cpu_percent', 'system_load_1min', 'player_count', 'temperature_cpu_celsius', 'temperature_gpu_celsius', 'temperature_nvme_celsius'];
-    
-    // Also load CPU per-core data
-    const cpuCorePromises = [];
-    for (let i = 0; i < 16; i++) { // Support up to 16 CPU cores
-        cpuCorePromises.push(
-            fetch(`/api/monitoring/history/system_cpu_core_${i}_percent?hours=${timeRange}`)
-                .then(r => r.json())
-                .catch(() => null) // Ignore cores that don't exist
-        );
-    }
-    
-    Promise.all([
-        ...metrics.map(metric => 
-            fetch(`/api/monitoring/history/${metric}?hours=${timeRange}`)
-                .then(r => r.json())
-        ),
-        ...cpuCorePromises
-    ])
-    .then(results => {
-        // Process and display historical data
-        results.forEach(result => {
-            if (result.data && result.data.length > 0) {
-                displayHistoricalMetric(result.metric_type, result.data);
+    // Load all historical data in a single bulk request
+    fetch(`/api/monitoring/history/bulk?hours=${timeRange}`)
+        .then(r => r.json())
+        .then(response => {
+            if (response.error) {
+                throw new Error(response.error);
             }
+            
+            // Initialize CPU chart with all available cores first
+            initializeCpuChartFromBulkData(response.data);
+            
+            // Process each metric type from the bulk response
+            Object.entries(response.data).forEach(([metric_type, data]) => {
+                if (data && data.length > 0) {
+                    displayHistoricalMetric(metric_type, data);
+                }
+            });
+            
+            // Update charts
+            updateChartsFromHistoricalData();
+        })
+        .catch(error => {
+            console.error('Failed to load historical data:', error);
+            historicalMode = false;
         });
-        
-        // Update charts
-        updateChartsFromHistoricalData();
-    })
-    .catch(error => {
-        console.error('Failed to load historical data:', error);
-        historicalMode = false;
-    });
 }
 
 // Clear chart data
@@ -1787,6 +1704,7 @@ function clearChartData() {
         playerChart.data.labels = [];
         playerChart.data.datasets[0].data = [];
         playerChart.update('none');
+        updatePlayerStats(); // Update stats when data is cleared
     }
     
     if (lagChart) {
@@ -1865,6 +1783,7 @@ function displayHistoricalMetric(metricType, data) {
                 playerChart.data.labels.push(timestamp);
                 playerChart.data.datasets[0].data.push(point.value);
             });
+            updatePlayerStats(); // Update stats after loading historical player data
             break;
             
         case 'temperature_cpu_celsius':
@@ -1946,33 +1865,71 @@ function displayHistoricalMetric(metricType, data) {
     }
 }
 
+// Initialize CPU chart datasets by scanning bulk historical data for all CPU cores
+function initializeCpuChartFromBulkData(bulkData) {
+    if (cpuChart.data.datasets.length > 0) {
+        return; // Already initialized
+    }
+    
+    // Scan bulk data to find all CPU core metrics
+    const coreIndices = [];
+    Object.keys(bulkData).forEach(metricType => {
+        if (metricType.startsWith('system_cpu_core_') && metricType.endsWith('_percent')) {
+            const coreMatch = metricType.match(/system_cpu_core_(\d+)_percent/);
+            if (coreMatch) {
+                coreIndices.push(parseInt(coreMatch[1]));
+            }
+        }
+    });
+    
+    // If no core data found, use a safe default (shouldn't happen in normal operation)
+    const maxCores = coreIndices.length > 0 ? Math.max(...coreIndices) + 1 : 12;
+    
+    const colors = [
+        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
+        '#FF9F40', '#C9CBCF', '#4BC0C0', '#FF6384', '#36A2EB',
+        '#FFCE56', '#9966FF', '#FF9F40', '#C9CBCF', '#FF6384', '#36A2EB'
+    ];
+    
+    for (let i = 0; i < maxCores; i++) {
+        cpuChart.data.datasets.push({
+            label: `Core ${i + 1}`,
+            data: [],
+            borderColor: colors[i % colors.length],
+            backgroundColor: colors[i % colors.length] + '20',
+            tension: 0.4,
+            fill: false,
+            pointRadius: 2,
+            pointHoverRadius: 4
+        });
+    }
+}
+
 // Display CPU per-core historical data
 function displayCpuCoreHistoricalData(coreIndex, data) {
     if (!data || data.length === 0) {
         return;
     }
     
-    // Initialize CPU chart datasets if needed
-    if (cpuChart.data.datasets.length === 0) {
+    // CPU chart should already be initialized by initializeCpuChartFromBulkData
+    // If not, create just this core's dataset
+    while (cpuChart.data.datasets.length <= coreIndex) {
         const colors = [
             '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
-            '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'
+            '#FF9F40', '#C9CBCF', '#4BC0C0', '#FF6384', '#36A2EB',
+            '#FFCE56', '#9966FF', '#FF9F40', '#C9CBCF', '#FF6384', '#36A2EB'
         ];
-        
-        // Create datasets for detected cores
-        const maxCores = Math.max(coreIndex + 1, 8); // At least 8 cores
-        for (let i = 0; i < maxCores; i++) {
-            cpuChart.data.datasets.push({
-                label: `Core ${i + 1}`,
-                data: [],
-                borderColor: colors[i % colors.length],
-                backgroundColor: colors[i % colors.length] + '20',
-                tension: 0.4,
-                fill: false,
-                pointRadius: 2,
-                pointHoverRadius: 4
-            });
-        }
+        const i = cpuChart.data.datasets.length;
+        cpuChart.data.datasets.push({
+            label: `Core ${i + 1}`,
+            data: [],
+            borderColor: colors[i % colors.length],
+            backgroundColor: colors[i % colors.length] + '20',
+            tension: 0.4,
+            fill: false,
+            pointRadius: 2,
+            pointHoverRadius: 4
+        });
     }
     
     // Add historical data for this specific core

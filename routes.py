@@ -459,19 +459,28 @@ def monitoring_metrics():
     
     # Get real CPU data (carefully, non-blocking)
     cpu_system_avg = 15.5  # Default
-    cpu_count = 8  # Default
-    cpu_per_core = [12.1, 18.3, 14.7, 16.9, 13.2, 19.8, 11.5, 20.1]  # Default
+    cpu_count = 4  # Safe default if detection fails
+    cpu_per_core = []  # Will be populated based on actual detection
     
     try:
         import psutil
+        # Always get actual core count first
+        cpu_count = psutil.cpu_count()
+        
         # Non-blocking calls (interval=None means use cached data from previous call)
         cpu_system_avg = psutil.cpu_percent(interval=None)
         cpu_per_core = psutil.cpu_percent(percpu=True, interval=None)
-        cpu_count = psutil.cpu_count()
         
-        current_app.logger.info(f'Real CPU: {cpu_count} cores, avg: {cpu_system_avg}%, per-core: {cpu_per_core}')
+        # Ensure per-core list matches actual core count
+        if len(cpu_per_core) != cpu_count:
+            current_app.logger.warning(f'Core count mismatch: detected {cpu_count} but got {len(cpu_per_core)} usage values')
+            cpu_per_core = [cpu_system_avg] * cpu_count  # Use average for all cores as fallback
+        
+        current_app.logger.info(f'Real CPU: {cpu_count} cores, avg: {cpu_system_avg}%, per-core samples: {len(cpu_per_core)}')
     except Exception as e:
         current_app.logger.warning(f'CPU monitoring failed, using defaults: {e}')
+        # Create default per-core data based on detected or fallback core count
+        cpu_per_core = [cpu_system_avg] * cpu_count
     
     # Get performance events (simplified to avoid blocking)
     events = [{
@@ -567,7 +576,7 @@ def get_metric_history(metric_type):
         
         # Get time range parameter (default to 1 hour)
         hours = request.args.get('hours', 1, type=float)
-        if hours <= 0 or hours > 168:  # Limit to 1 week max
+        if hours <= 0 or hours > 72:  # Limit to 3 days max
             hours = 1
         
         # Get historical data
@@ -590,6 +599,39 @@ def get_metric_history(metric_type):
             'data': []
         }), 500
 
+@main_bp.route('/api/monitoring/history/bulk')
+def get_bulk_metric_history():
+    """Get historical data for all metrics in a single query"""
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        # Get time range parameter (default to 1 hour)
+        hours = request.args.get('hours', 1, type=float)
+        if hours <= 0 or hours > 72:  # Limit to 3 days max
+            hours = 1
+        
+        # Get all historical data in one query
+        bulk_history = metrics_storage.get_bulk_metrics(hours=hours)
+        
+        # Count total data points and analyze sampling efficiency
+        total_points = sum(len(metric_data) for metric_data in bulk_history.values())
+        avg_points_per_metric = total_points / len(bulk_history) if bulk_history else 0
+        current_app.logger.info(f'Retrieved {total_points} total points ({avg_points_per_metric:.0f} avg/metric) across {len(bulk_history)} metrics over {hours}h - 300-sample optimization active')
+        
+        return jsonify({
+            'hours': hours,
+            'metric_count': len(bulk_history),
+            'total_data_points': total_points,
+            'data': bulk_history
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Failed to get bulk metric history: {e}')
+        return jsonify({
+            'error': 'Failed to retrieve bulk metric history',
+            'data': {}
+        }), 500
+
 @main_bp.route('/api/monitoring/config', methods=['GET', 'POST'])
 def monitoring_config():
     """Get or update monitoring configuration"""
@@ -597,9 +639,12 @@ def monitoring_config():
         from services.metrics_storage import metrics_storage
         
         if request.method == 'GET':
-            # Return current configuration
+            # Return current configuration (collection_interval is read-only from config.toml)
+            config_interval = current_app.config.get('METRICS_COLLECTION_INTERVAL', 5)
+            actual_interval = max(3, min(10, config_interval))  # Apply same bounds as metrics collection
             config = {
-                'collection_interval': current_app.config.get('METRICS_COLLECTION_INTERVAL', 30),
+                'collection_interval': actual_interval,
+                'collection_interval_source': 'config.toml (read-only)',
                 'retention_days': current_app.config.get('METRICS_RETENTION_DAYS', 7),
                 'enabled': current_app.config.get('METRICS_ENABLED', True),
                 'collect_system_memory': current_app.config.get('METRICS_COLLECT_SYSTEM_MEMORY', True),
@@ -617,9 +662,14 @@ def monitoring_config():
             if not data:
                 return jsonify({'error': 'No data provided'}), 400
             
-            # Validate and store configuration
-            valid_keys = ['collection_interval', 'retention_days', 'enabled']
+            # Validate and store configuration (collection_interval is read-only from config.toml)
+            valid_keys = ['retention_days', 'enabled']  # Removed collection_interval
             updated_keys = []
+            
+            # Warn if someone tries to change collection_interval
+            if 'collection_interval' in data:
+                current_app.logger.warning('Attempt to change collection_interval via API ignored - use config.toml instead')
+            
             for key in valid_keys:
                 if key in data:
                     metrics_storage.set_config_value(key, data[key])

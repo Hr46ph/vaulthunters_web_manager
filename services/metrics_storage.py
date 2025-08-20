@@ -144,6 +144,104 @@ class MetricsStorage:
             self._log_error(f'Failed to retrieve metrics {metric_type}: {e}')
             return []
     
+    def get_bulk_metrics(self, hours: int = 1) -> Dict[str, List[Dict]]:
+        """Retrieve all metrics within the specified time range with metric-specific 300-sample optimization"""
+        start_time = datetime.now() - timedelta(hours=hours)
+        
+        # Metric collection intervals (from _collection_worker hardcoded values)
+        METRIC_INTERVALS = {
+            # TPS/Lag metrics: 3-second collection
+            'tps_lag_metrics': ['server_tps', 'server_tps_overworld', 'server_tps_nether', 'server_tps_end'],
+            # CPU/Temperature metrics: 5-second collection  
+            'cpu_temp_metrics': ['system_cpu_percent', 'system_load_1min', 'system_load_5min', 'system_load_15min', 
+                               'temperature_cpu_celsius', 'temperature_gpu_celsius', 'temperature_nvme_celsius'],
+            # Memory/Player metrics: 10-second collection
+            'memory_player_metrics': ['system_memory_used_mb', 'system_memory_percent', 'system_swap_used_mb', 
+                                    'java_memory_mb', 'java_cpu_percent', 'player_count']
+        }
+        
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Get all metric types in the time range
+                cursor.execute('''
+                    SELECT DISTINCT metric_type FROM metrics 
+                    WHERE timestamp >= ?
+                ''', (start_time,))
+                
+                available_metrics = [row[0] for row in cursor.fetchall()]
+                results = {}
+                
+                for metric_type in available_metrics:
+                    # Determine collection interval for this metric type
+                    collection_interval = self._get_metric_collection_interval(metric_type, METRIC_INTERVALS)
+                    
+                    # Calculate sampling strategy for 300-sample target
+                    sampling_strategy = self._calculate_sampling_strategy(hours, collection_interval)
+                    
+                    if sampling_strategy['skip_rows'] <= 1:
+                        # No sampling needed - return all data
+                        cursor.execute('''
+                            SELECT timestamp, value FROM metrics
+                            WHERE metric_type = ? AND timestamp >= ?
+                            ORDER BY timestamp ASC
+                        ''', (metric_type, start_time))
+                    else:
+                        # Apply row-based sampling to get ~300 samples
+                        cursor.execute('''
+                            SELECT timestamp, value FROM (
+                                SELECT timestamp, value, 
+                                       ROW_NUMBER() OVER (ORDER BY timestamp ASC) as row_num
+                                FROM metrics
+                                WHERE metric_type = ? AND timestamp >= ?
+                            ) WHERE (row_num - 1) % ? = 0
+                            ORDER BY timestamp ASC
+                        ''', (metric_type, start_time, sampling_strategy['skip_rows']))
+                    
+                    # Store results for this metric type
+                    results[metric_type] = []
+                    for row in cursor.fetchall():
+                        timestamp_str, value = row
+                        results[metric_type].append({
+                            'timestamp': timestamp_str,
+                            'value': round(value, 2) if value is not None else None
+                        })
+                
+                return results
+        except Exception as e:
+            self._log_error(f'Failed to retrieve bulk metrics: {e}')
+            return {}
+    
+    def _get_metric_collection_interval(self, metric_type: str, metric_intervals: Dict) -> int:
+        """Determine collection interval for a metric type"""
+        for interval_type, metrics in metric_intervals.items():
+            if metric_type in metrics or any(metric_type.startswith(m) for m in metrics):
+                if interval_type == 'tps_lag_metrics':
+                    return 3  # TPS/Lag: 3 seconds
+                elif interval_type == 'cpu_temp_metrics':
+                    return 5  # CPU/Temperature: 5 seconds 
+                elif interval_type == 'memory_player_metrics':
+                    return 10  # Memory/Player: 10 seconds
+        
+        # Default to 10 seconds for unknown metrics
+        return 10
+    
+    def _calculate_sampling_strategy(self, hours: int, collection_interval: int) -> Dict:
+        """Calculate sampling strategy to achieve ~300 samples per metric"""
+        # Calculate expected raw data points
+        total_seconds = hours * 3600
+        expected_points = total_seconds // collection_interval
+        
+        # Target 300 samples maximum
+        if expected_points <= 300:
+            return {'skip_rows': 1, 'expected_samples': expected_points}
+        else:
+            # Calculate skip_rows to get as close to 300 as possible
+            skip_rows = max(1, round(expected_points / 300))
+            expected_samples = expected_points // skip_rows
+            return {'skip_rows': skip_rows, 'expected_samples': expected_samples}
+    
     def get_latest_metric(self, metric_type: str) -> Optional[Dict]:
         """Get the most recent metric of a specific type"""
         try:
@@ -172,8 +270,8 @@ class MetricsStorage:
             return None
     
     def cleanup_old_metrics(self):
-        """Remove metrics older than the retention period"""
-        retention_days = self.app.config.get('METRICS_RETENTION_DAYS', 7)
+        """Remove metrics older than 3 days (hardcoded retention)"""
+        retention_days = 3  # Hardcoded 3-day retention for server management tool
         cutoff_date = datetime.now() - timedelta(days=retention_days)
         
         with self._lock:
@@ -478,30 +576,214 @@ class MetricsStorage:
         except Exception as e:
             self._log_error(f'Failed to collect system metrics: {e}')
     
+    def collect_cpu_and_temperature_metrics(self):
+        """Collect CPU and temperature metrics (5-second interval)"""
+        try:
+            # System CPU
+            cpu_percent = psutil.cpu_percent(interval=None)
+            self.store_metric('system_cpu_percent', cpu_percent)
+            
+            # Per-core CPU usage
+            cpu_per_core = psutil.cpu_percent(percpu=True, interval=None)
+            for i, core_usage in enumerate(cpu_per_core):
+                self.store_metric(f'system_cpu_core_{i}_percent', core_usage)
+            
+            # System load
+            try:
+                load_avg = os.getloadavg()
+                self.store_metric('system_load_1min', load_avg[0])
+                self.store_metric('system_load_5min', load_avg[1])
+                self.store_metric('system_load_15min', load_avg[2])
+            except (OSError, AttributeError):
+                pass  # getloadavg not available on all platforms
+            
+            # Hardware temperature monitoring
+            try:
+                from services.temperature_monitor import get_temperature_monitor
+                temp_monitor = get_temperature_monitor()
+                readings = temp_monitor.get_temperature_readings()
+                
+                if readings.get('status') == 'success':
+                    # Store CPU temperature
+                    if readings.get('cpu'):
+                        self.store_metric('temperature_cpu_celsius', readings['cpu']['current'], {
+                            'sensor': readings['cpu']['sensor'],
+                            'label': readings['cpu']['label'],
+                            'high_threshold': readings['cpu']['high'],
+                            'critical_threshold': readings['cpu']['critical']
+                        })
+                    
+                    # Store GPU temperature
+                    if readings.get('gpu'):
+                        self.store_metric('temperature_gpu_celsius', readings['gpu']['current'], {
+                            'sensor': readings['gpu']['sensor'],
+                            'label': readings['gpu']['label'],
+                            'high_threshold': readings['gpu']['high'],
+                            'critical_threshold': readings['gpu']['critical']
+                        })
+                    
+                    # Store NVMe temperature (composite and individual sensors)
+                    if readings.get('nvme', {}).get('composite'):
+                        self.store_metric('temperature_nvme_celsius', readings['nvme']['composite']['current'], {
+                            'sensor': 'nvme_composite',
+                            'label': readings['nvme']['composite']['label'],
+                            'high_threshold': readings['nvme']['composite']['high'],
+                            'critical_threshold': readings['nvme']['composite']['critical']
+                        })
+                    
+                    # Additional NVMe sensor readings
+                    if readings.get('nvme', {}).get('sensors'):
+                        for i, sensor in enumerate(readings['nvme']['sensors'], 1):
+                            self.store_metric(f'temperature_nvme_sensor{i}_celsius', sensor['current'], {
+                                'sensor': sensor['sensor'],
+                                'label': sensor['label']
+                            })
+            except Exception as e:
+                self._log_warning(f'Failed to collect temperature metrics: {e}')
+        
+        except Exception as e:
+            self._log_error(f'Failed to collect CPU and temperature metrics: {e}')
+    
+    def collect_memory_and_player_metrics(self):
+        """Collect memory and player count metrics (10-second interval)"""
+        try:
+            # System memory
+            memory = psutil.virtual_memory()
+            self.store_metric('system_memory_used_mb', memory.used / (1024**2))
+            self.store_metric('system_memory_percent', memory.percent)
+            
+            # Store detailed memory breakdown if available
+            if hasattr(memory, 'buffers') and hasattr(memory, 'cached'):
+                self.store_metric('system_memory_buffers_mb', memory.buffers / (1024**2))
+                self.store_metric('system_memory_cache_mb', memory.cached / (1024**2))
+            
+            # Swap memory
+            swap = psutil.swap_memory()
+            self.store_metric('system_swap_used_mb', swap.used / (1024**2))
+            self.store_metric('system_swap_percent', swap.percent)
+            
+            # Java process metrics
+            try:
+                from services.system_control import SystemControlService
+                system_control = SystemControlService()
+                status = system_control.get_server_status()
+                
+                if status.get('running'):
+                    if status.get('memory_usage'):
+                        self.store_metric('java_memory_mb', status['memory_usage'])
+                    if status.get('cpu_usage'):
+                        self.store_metric('java_cpu_percent', status['cpu_usage'])
+                    if status.get('pid'):
+                        self.store_metric('java_pid', status['pid'])
+            except Exception as e:
+                self._log_warning(f'Failed to collect Java process metrics: {e}')
+            
+            # Player count from server status
+            try:
+                from services.system_control import SystemControlService
+                system_control = SystemControlService()
+                status = system_control.get_server_status()
+                
+                if status.get('running') and status.get('players') is not None:
+                    player_count = status.get('players', 0)
+                    max_players = status.get('max_players', 20)
+                    self.store_metric('player_count', player_count, {
+                        'source': 'mcstatus',
+                        'max_players': max_players,
+                        'server_running': True
+                    })
+                else:
+                    # Server is not running or player data unavailable
+                    self.store_metric('player_count', 0, {
+                        'source': 'server_offline',
+                        'server_running': False
+                    })
+            except Exception as e:
+                self._log_warning(f'Failed to collect player count: {e}')
+                # Store 0 with error info on failure
+                self.store_metric('player_count', 0, {
+                    'source': 'error',
+                    'error': str(e)
+                })
+        
+        except Exception as e:
+            self._log_error(f'Failed to collect memory and player metrics: {e}')
+    
+    def collect_tps_and_lag_metrics(self):
+        """Collect TPS and lag spike metrics (3-second interval)"""
+        try:
+            # Server TPS via RCON
+            try:
+                tps_data = self._collect_server_tps_safe()
+                if tps_data:
+                    self.store_metric('server_tps', tps_data['overall_tps'], {
+                        'source': 'rcon_forge_tps',
+                        'dimensions': tps_data['dimensions']
+                    })
+                    
+                    # Store individual dimension TPS
+                    for dim_name, dim_data in tps_data['dimensions'].items():
+                        self.store_metric(f'server_tps_{dim_name}', dim_data['tps'], {
+                            'source': 'rcon_forge_tps',
+                            'dimension': dim_name,
+                            'mean_tick_time': dim_data['mean_tick_time']
+                        })
+                else:
+                    # Fallback to placeholder when RCON fails
+                    self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_failed'})
+            except Exception as e:
+                self._log_warning(f'Failed to collect server TPS via RCON: {e}')
+                # Store placeholder on any error to keep metrics consistent
+                self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_error'})
+        
+        except Exception as e:
+            self._log_error(f'Failed to collect TPS and lag metrics: {e}')
+    
     def _collection_worker(self):
-        """Background thread worker for metric collection"""
+        """Background thread worker for metric collection with staggered intervals per metric type"""
+        # Hardcoded collection intervals (in seconds)
+        COLLECTION_INTERVALS = {
+            # High volatility - CPU and temperature metrics (5s)
+            'cpu_temp_interval': 5,
+            # Moderate change - Memory and player count (10s) 
+            'memory_player_interval': 10,
+            # Critical performance - TPS and lag spikes (3s)
+            'tps_lag_interval': 3
+        }
+        
+        last_collection = {
+            'cpu_temp': 0,
+            'memory_player': 0, 
+            'tps_lag': 0
+        }
+        
         while not self.stop_collection:
             try:
                 with self.app.app_context():
-                    # Check for updated collection interval from database
-                    stored_interval = self.get_config_value('collection_interval')
-                    if stored_interval:
-                        interval = stored_interval
-                    else:
-                        interval = self.app.config.get('METRICS_COLLECTION_INTERVAL', 30)
+                    current_time = time.time()
                     
-                    self.collect_system_metrics()
+                    # Check if it's time to collect each metric group
+                    if current_time - last_collection['cpu_temp'] >= COLLECTION_INTERVALS['cpu_temp_interval']:
+                        self.collect_cpu_and_temperature_metrics()
+                        last_collection['cpu_temp'] = current_time
                     
-                    # Cleanup old metrics every hour
-                    if int(time.time()) % 3600 < interval:
+                    if current_time - last_collection['memory_player'] >= COLLECTION_INTERVALS['memory_player_interval']:
+                        self.collect_memory_and_player_metrics()
+                        last_collection['memory_player'] = current_time
+                    
+                    if current_time - last_collection['tps_lag'] >= COLLECTION_INTERVALS['tps_lag_interval']:
+                        self.collect_tps_and_lag_metrics()
+                        last_collection['tps_lag'] = current_time
+                    
+                    # Cleanup old metrics every hour (check every 60 seconds)
+                    if int(current_time) % 3600 < 60:
                         self.cleanup_old_metrics()
                 
             except Exception as e:
                 self._log_error(f'Error in metrics collection: {e}')
-                interval = self.app.config.get('METRICS_COLLECTION_INTERVAL', 30)  # Fallback interval on error
             
-            # Sleep for the configured interval
-            time.sleep(interval)
+            # Sleep for 1 second (shortest interval check)
+            time.sleep(1)
     
     def start_collection(self):
         """Start the background metrics collection thread"""
