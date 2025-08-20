@@ -193,16 +193,16 @@
     </div>
     <div class="col-md-2">
         <div class="metric-card text-center">
-            <div class="metric-label">CPU Temp</div>
-            <div class="metric-value" id="cpu-temp">--</div>
-            <small class="text-muted">°C</small>
+            <div class="metric-label">Java Process CPU</div>
+            <div class="metric-value" id="minecraft-cpu">--</div>
+            <small class="text-muted">minecraft server</small>
         </div>
     </div>
     <div class="col-md-2">
         <div class="metric-card text-center">
-            <div class="metric-label">GPU Temp</div>
-            <div class="metric-value" id="gpu-temp">--</div>
-            <small class="text-muted">°C</small>
+            <div class="metric-label">Java Process RSS</div>
+            <div class="metric-value" id="minecraft-memory">--</div>
+            <small class="text-muted">resident memory</small>
         </div>
     </div>
 </div>
@@ -212,16 +212,14 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h6><i class="fas fa-tachometer-alt"></i> TPS History</h6>
+                <h6><i class="fas fa-microchip"></i> CPU Usage Per Core</h6>
             </div>
             <div class="card-body">
                 <div class="chart-container">
-                    <canvas id="tps-chart"></canvas>
+                    <canvas id="cpu-chart"></canvas>
                 </div>
                 <div class="text-center mt-2">
-                    <small class="text-muted me-3">Min: <span id="tps-min" class="fw-bold">--</span></small>
-                    <small class="text-muted me-3">Max: <span id="tps-max" class="fw-bold">--</span></small>
-                    <small class="text-muted">Ave: <span id="tps-ave" class="fw-bold">--</span></small>
+                    <small class="text-muted">System CPU: <span id="system-cpu" class="fw-bold">--</span>%</small>
                 </div>
             </div>
         </div>
@@ -244,39 +242,38 @@
     </div>
 </div>
 
-<!-- Charts Row 2 - CPU Chart -->
+<!-- Charts Row 2 - TPS and Lag History -->
 <div class="row mb-4">
-    <div class="col-md-8">
+    <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h6><i class="fas fa-microchip"></i> CPU Usage Per Core</h6>
+                <h6><i class="fas fa-tachometer-alt"></i> TPS History</h6>
             </div>
             <div class="card-body">
                 <div class="chart-container">
-                    <canvas id="cpu-chart"></canvas>
+                    <canvas id="tps-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted me-3">Min: <span id="tps-min" class="fw-bold">--</span></small>
+                    <small class="text-muted me-3">Max: <span id="tps-max" class="fw-bold">--</span></small>
+                    <small class="text-muted">Ave: <span id="tps-ave" class="fw-bold">--</span></small>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h6><i class="fas fa-server"></i> Minecraft Process</h6>
+                <h6><i class="fas fa-exclamation-triangle"></i> Lag Spike History</h6>
             </div>
             <div class="card-body">
-                <div class="d-flex flex-column justify-content-center" style="min-height: 300px;">
-                    <div class="text-center mb-4">
-                        <div class="metric-label">Process CPU</div>
-                        <div class="metric-value" id="minecraft-cpu">--</div>
-                    </div>
-                    <div class="text-center mb-4">
-                        <div class="metric-label">Process Memory</div>
-                        <div class="metric-value" id="minecraft-memory">--</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="metric-label">Process PID</div>
-                        <div class="metric-value" id="minecraft-pid">--</div>
-                    </div>
+                <div class="chart-container">
+                    <canvas id="lag-chart"></canvas>
+                </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted me-3">Min: <span id="lag-min" class="fw-bold">--</span>ms</small>
+                    <small class="text-muted me-3">Max: <span id="lag-max" class="fw-bold">--</span>ms</small>
+                    <small class="text-muted">Ave: <span id="lag-ave" class="fw-bold">--</span>ms</small>
                 </div>
             </div>
         </div>
@@ -294,40 +291,19 @@
                 <div class="chart-container">
                     <canvas id="temperature-chart"></canvas>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-exclamation-triangle"></i> Temperature Alerts</h6>
-            </div>
-            <div class="card-body">
-                <div id="temperature-alerts" style="max-height: 300px; overflow-y: auto;">
-                    <div class="text-muted text-center">
-                        <i class="fas fa-check-circle text-success"></i> All temperatures normal
-                    </div>
+                <div class="text-center mt-2">
+                    <small class="text-muted me-3">CPU Max: <span id="temp-cpu-max" class="fw-bold">--</span>°C</small>
+                    <small class="text-muted me-3">GPU Max: <span id="temp-gpu-max" class="fw-bold">--</span>°C</small>
+                    <small class="text-muted">NVMe Max: <span id="temp-nvme-max" class="fw-bold">--</span>°C</small>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Lag Spike Analysis and Player Count -->
+<!-- Player Count Chart -->
 <div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-exclamation-triangle"></i> Lag Spike History</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="lag-chart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
+    <div class="col-md-12">
         <div class="card">
             <div class="card-header">
                 <h6><i class="fas fa-users"></i> Player Count History</h6>
@@ -493,15 +469,7 @@ function initializeCharts() {
                     fill: true
                 },
                 {
-                    label: 'Buffers',
-                    data: [],
-                    borderColor: '#fd7e14',
-                    backgroundColor: 'rgba(253, 126, 20, 0.7)',
-                    tension: 0.1,
-                    fill: true
-                },
-                {
-                    label: 'Cache',
+                    label: 'Buffers/Cache',
                     data: [],
                     borderColor: '#198754',
                     backgroundColor: 'rgba(25, 135, 84, 0.7)',
@@ -827,7 +795,7 @@ function initializeCharts() {
             labels: [],
             datasets: [
                 {
-                    label: 'CPU (Tctl)',
+                    label: 'CPU',
                     data: [],
                     borderColor: '#dc3545',
                     backgroundColor: 'rgba(220, 53, 69, 0.1)',
@@ -837,7 +805,7 @@ function initializeCharts() {
                     pointHoverRadius: 4
                 },
                 {
-                    label: 'GPU (edge)',
+                    label: 'GPU',
                     data: [],
                     borderColor: '#198754',
                     backgroundColor: 'rgba(25, 135, 84, 0.1)',
@@ -847,7 +815,7 @@ function initializeCharts() {
                     pointHoverRadius: 4
                 },
                 {
-                    label: 'NVMe (Composite)',
+                    label: 'NVMe',
                     data: [],
                     borderColor: '#fd7e14',
                     backgroundColor: 'rgba(253, 126, 20, 0.1)',
@@ -864,8 +832,7 @@ function initializeCharts() {
             scales: {
                 y: {
                     beginAtZero: false,
-                    min: 20,
-                    max: 100,
+                    grace: '10%', // Add 10% padding above and below data range
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     },
@@ -1005,6 +972,16 @@ function updateMetricCards(metrics, status) {
         }
     }
     
+    // Update system CPU
+    const systemCpuElement = document.getElementById('system-cpu');
+    if (systemCpuElement) {
+        if (metrics.cpu_system_avg !== undefined) {
+            systemCpuElement.textContent = metrics.cpu_system_avg.toFixed(1);
+        } else {
+            systemCpuElement.textContent = '--';
+        }
+    }
+    
     // Update temperature cards
     const cpuTempElement = document.getElementById('cpu-temp');
     if (cpuTempElement) {
@@ -1114,6 +1091,73 @@ function updateTpsStats() {
     document.getElementById('tps-ave').textContent = average.toFixed(1);
 }
 
+// Update Lag Spike statistics display
+function updateLagStats() {
+    if (!lagChart || !lagChart.data.datasets[0] || lagChart.data.datasets[0].data.length === 0) {
+        document.getElementById('lag-min').textContent = '--';
+        document.getElementById('lag-max').textContent = '--';
+        document.getElementById('lag-ave').textContent = '--';
+        return;
+    }
+    
+    const lagData = lagChart.data.datasets[0].data;
+    // Filter out zero values (baseline data points) for meaningful statistics
+    const nonZeroLagData = lagData.filter(value => value > 0);
+    
+    if (nonZeroLagData.length === 0) {
+        document.getElementById('lag-min').textContent = '0';
+        document.getElementById('lag-max').textContent = '0';
+        document.getElementById('lag-ave').textContent = '0';
+        return;
+    }
+    
+    const min = Math.min(...nonZeroLagData);
+    const max = Math.max(...nonZeroLagData);
+    const sum = nonZeroLagData.reduce((a, b) => a + b, 0);
+    const average = sum / nonZeroLagData.length;
+    
+    document.getElementById('lag-min').textContent = Math.round(min);
+    document.getElementById('lag-max').textContent = Math.round(max);
+    document.getElementById('lag-ave').textContent = Math.round(average);
+}
+
+// Update Temperature statistics display
+function updateTemperatureStats() {
+    if (!temperatureChart || !temperatureChart.data.datasets || temperatureChart.data.datasets.length === 0) {
+        document.getElementById('temp-cpu-max').textContent = '--';
+        document.getElementById('temp-gpu-max').textContent = '--';
+        document.getElementById('temp-nvme-max').textContent = '--';
+        return;
+    }
+    
+    // CPU Max
+    const cpuData = temperatureChart.data.datasets[0].data.filter(val => val !== null && val !== undefined);
+    if (cpuData.length > 0) {
+        const cpuMax = Math.max(...cpuData);
+        document.getElementById('temp-cpu-max').textContent = cpuMax.toFixed(1);
+    } else {
+        document.getElementById('temp-cpu-max').textContent = '--';
+    }
+    
+    // GPU Max
+    const gpuData = temperatureChart.data.datasets[1].data.filter(val => val !== null && val !== undefined);
+    if (gpuData.length > 0) {
+        const gpuMax = Math.max(...gpuData);
+        document.getElementById('temp-gpu-max').textContent = gpuMax.toFixed(1);
+    } else {
+        document.getElementById('temp-gpu-max').textContent = '--';
+    }
+    
+    // NVMe Max
+    const nvmeData = temperatureChart.data.datasets[2].data.filter(val => val !== null && val !== undefined);
+    if (nvmeData.length > 0) {
+        const nvmeMax = Math.max(...nvmeData);
+        document.getElementById('temp-nvme-max').textContent = nvmeMax.toFixed(1);
+    } else {
+        document.getElementById('temp-nvme-max').textContent = '--';
+    }
+}
+
 // Update charts
 function updateCharts(metrics, status = null) {
     const now = new Date();
@@ -1153,20 +1197,18 @@ function updateCharts(metrics, status = null) {
             
             // Simple Linux memory breakdown: used includes buffers+cache, so subtract them for "actual used"
             const actualUsedMB = Math.max(0, totalUsedMB - buffersMB - cacheMB);
+            const buffersAndCacheMB = buffersMB + cacheMB; // Combine buffers and cache like 'free' command
             
-            memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory (excluding buffers/cache)
-            memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers
-            memoryChart.data.datasets[2].data.push(cacheMB);      // Cache
+            memoryChart.data.datasets[0].data.push(actualUsedMB);      // Used memory (excluding buffers/cache)
+            memoryChart.data.datasets[1].data.push(buffersAndCacheMB); // Buffers + Cache combined
         } else {
             // Fallback: use basic memory data and estimate breakdown
             const usedMB = (metrics.system_memory.used_gb || 0) * 1024;
-            const buffersMB = Math.round(usedMB * 0.1); // Estimate 10% for buffers
-            const cacheMB = Math.round(usedMB * 0.2);   // Estimate 20% for cache
-            const actualUsedMB = Math.max(0, usedMB - buffersMB - cacheMB);
+            const buffersAndCacheMB = Math.round(usedMB * 0.3); // Estimate 30% for buffers+cache combined
+            const actualUsedMB = Math.max(0, usedMB - buffersAndCacheMB);
             
-            memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory
-            memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers (estimated)
-            memoryChart.data.datasets[2].data.push(cacheMB);      // Cache (estimated)
+            memoryChart.data.datasets[0].data.push(actualUsedMB);      // Used memory
+            memoryChart.data.datasets[1].data.push(buffersAndCacheMB); // Buffers + Cache (estimated)
         }
         
         // Keep data points based on time range
@@ -1191,6 +1233,7 @@ function updateCharts(metrics, status = null) {
         );
         lagChart.data.datasets[0].data = metrics.recent_lag_spikes.map(spike => spike.duration);
         lagChart.update('none');
+        updateLagStats(); // Update lag statistics
     } else if (metrics.recent_lag_spikes !== undefined) {
         // No lag spikes - add a baseline point at 0 to show the chart is working
         const now = new Date();
@@ -1204,6 +1247,7 @@ function updateCharts(metrics, status = null) {
                 lagChart.data.datasets[0].data.push(0);
             }
             lagChart.update('none');
+            updateLagStats(); // Update lag statistics
         }
     }
 
@@ -1280,15 +1324,30 @@ function updateCpuChart(metrics) {
 
 // Update temperature chart
 function updateTemperatureChart(temperatureData) {
-    if (!temperatureData || !temperatureData.temperatures) {
+    if (!temperatureData || (!temperatureData.temperatures && !temperatureData.cpu)) {
         return;
     }
 
     const now = new Date();
-    const temps = temperatureData.temperatures;
+    // Handle both old and new data structure formats
+    const temps = temperatureData.temperatures || temperatureData;
 
     // Add new time label
     temperatureChart.data.labels.push(now);
+
+    // Ensure all datasets have the same length before adding new data
+    const maxDatasetLength = Math.max(
+        temperatureChart.data.datasets[0].data.length,
+        temperatureChart.data.datasets[1].data.length, 
+        temperatureChart.data.datasets[2].data.length
+    );
+    
+    // Pad shorter datasets with null values to match the longest
+    temperatureChart.data.datasets.forEach((dataset, index) => {
+        while (dataset.data.length < maxDatasetLength) {
+            dataset.data.push(null);
+        }
+    });
 
     // Add CPU temperature
     const cpuTemp = temps.cpu !== undefined ? temps.cpu : null;
@@ -1313,6 +1372,9 @@ function updateTemperatureChart(temperatureData) {
     }
 
     temperatureChart.update('none');
+    
+    // Update temperature statistics
+    updateTemperatureStats();
 }
 
 // Update temperature alerts
@@ -1731,6 +1793,7 @@ function clearChartData() {
         lagChart.data.labels = [];
         lagChart.data.datasets[0].data = [];
         lagChart.update('none');
+        updateLagStats(); // Update stats when data is cleared
     }
     
     if (temperatureChart) {
@@ -1739,6 +1802,7 @@ function clearChartData() {
             dataset.data = [];
         });
         temperatureChart.update('none');
+        updateTemperatureStats(); // Update stats when data is cleared
     }
 }
 
@@ -1829,6 +1893,12 @@ function displayHistoricalMetric(metricType, data) {
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
                 
+                // Ensure temperature chart has the time label
+                if (temperatureChart.data.labels.length === 0 || 
+                    temperatureChart.data.labels[temperatureChart.data.labels.length - 1].getTime() !== timestamp.getTime()) {
+                    temperatureChart.data.labels.push(timestamp);
+                }
+                
                 // Find the corresponding label index
                 const labelIndex = temperatureChart.data.labels.findIndex(label => label.getTime() === timestamp.getTime());
                 if (labelIndex !== -1) {
@@ -1844,6 +1914,12 @@ function displayHistoricalMetric(metricType, data) {
         case 'temperature_nvme_celsius':
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
+                
+                // Ensure temperature chart has the time label
+                if (temperatureChart.data.labels.length === 0 || 
+                    temperatureChart.data.labels[temperatureChart.data.labels.length - 1].getTime() !== timestamp.getTime()) {
+                    temperatureChart.data.labels.push(timestamp);
+                }
                 
                 // Find the corresponding label index
                 const labelIndex = temperatureChart.data.labels.findIndex(label => label.getTime() === timestamp.getTime());
@@ -1927,7 +2003,6 @@ function processHistoricalMemoryData() {
     memoryChart.data.labels = [];
     memoryChart.data.datasets[0].data = [];
     memoryChart.data.datasets[1].data = [];
-    memoryChart.data.datasets[2].data = [];
     
     // Process each used memory entry and match with buffers/cache by index
     // Since all three metrics are collected at the same time with same data point count,
@@ -1941,12 +2016,12 @@ function processHistoricalMemoryData() {
         
         // Calculate actual used memory (same logic as real-time)
         const actualUsedMB = Math.max(0, totalUsedMB - buffersMB - cacheMB);
+        const buffersAndCacheMB = buffersMB + cacheMB; // Combine buffers and cache
         
         // Add to chart (stacked format - same as real-time)
         memoryChart.data.labels.push(entry.timestamp);
-        memoryChart.data.datasets[0].data.push(actualUsedMB); // Used memory (excluding buffers/cache) - RED
-        memoryChart.data.datasets[1].data.push(buffersMB);    // Buffers - ORANGE
-        memoryChart.data.datasets[2].data.push(cacheMB);      // Cache - GREEN
+        memoryChart.data.datasets[0].data.push(actualUsedMB);      // Used memory (excluding buffers/cache) - RED
+        memoryChart.data.datasets[1].data.push(buffersAndCacheMB); // Buffers + Cache combined - GREEN
     });
 }
 
@@ -1971,6 +2046,7 @@ function updateChartsFromHistoricalData() {
     }
     if (temperatureChart) {
         temperatureChart.update();
+        updateTemperatureStats(); // Update temperature stats from historical data
     }
 }
 
