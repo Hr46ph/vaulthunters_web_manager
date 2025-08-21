@@ -293,15 +293,15 @@ class MetricsStorage:
         """Safely collect server TPS data via RCON without blocking the metrics thread"""
         try:
             # Get server configuration for RCON connection
-            server_host = self.app.config.get('SERVER_HOST', 'localhost')
-            rcon_password = self.app.config.get('RCON_PASSWORD')
+            server_host = self.app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
             
-            if not rcon_password:
-                return None
-            
-            # Get RCON port from server.properties or config
+            # Get RCON port and password from server.properties
             rcon_port = self._get_rcon_port()
             if not rcon_port:
+                return None
+            
+            rcon_password = self._get_rcon_password()
+            if not rcon_password:
                 return None
             
             # Create isolated RCON client with very short timeout for metrics collection
@@ -330,7 +330,7 @@ class MetricsStorage:
                 return int(config_rcon_port)
             
             # Try reading from server.properties
-            server_path = self.app.config.get('SERVER_PATH')
+            server_path = self.app.config.get('MINECRAFT_SERVER_PATH')
             if server_path:
                 props_file = os.path.join(server_path, 'server.properties')
                 if os.path.exists(props_file):
@@ -338,6 +338,29 @@ class MetricsStorage:
                         for line in f:
                             if line.startswith('rcon.port='):
                                 return int(line.split('=')[1].strip())
+            
+            return None
+        except Exception:
+            return None
+    
+    def _get_rcon_password(self) -> Optional[str]:
+        """Get RCON password from server.properties"""
+        try:
+            # Try config first (though it's usually not stored there for security)
+            config_password = self.app.config.get('RCON_PASSWORD')
+            if config_password:
+                return config_password
+            
+            # Read from server.properties
+            server_path = self.app.config.get('MINECRAFT_SERVER_PATH')
+            if server_path:
+                props_file = os.path.join(server_path, 'server.properties')
+                if os.path.exists(props_file):
+                    with open(props_file, 'r') as f:
+                        for line in f:
+                            if line.startswith('rcon.password='):
+                                password = line.split('=', 1)[1].strip()
+                                return password if password else None
             
             return None
         except Exception:
@@ -351,6 +374,7 @@ class MetricsStorage:
         try:
             dimensions = {}
             overall_tps = 20.0  # Default fallback
+            overall_tick_time = 50.0  # Default fallback (50ms = 20 TPS)
             
             lines = response.split('\n')
             for line in lines:
@@ -359,8 +383,8 @@ class MetricsStorage:
                     continue
                 
                 # Look for dimension TPS lines like:
-                # "Dim  0 (minecraft:overworld): Mean tick time: 47.778 ms. Mean TPS: 20.000"
-                # "Overall: Mean tick time: 47.778 ms. Mean TPS: 20.000"
+                # "Dim minecraft:overworld (minecraft:overworld): Mean tick time: 0.654 ms. Mean TPS: 20.000"
+                # "Overall: Mean tick time: 0.896 ms. Mean TPS: 20.000"
                 
                 if 'Mean tick time:' in line and 'Mean TPS:' in line:
                     try:
@@ -373,19 +397,22 @@ class MetricsStorage:
                         
                         if line.startswith('Overall:'):
                             overall_tps = tps
+                            overall_tick_time = tick_time
                         elif line.startswith('Dim '):
-                            # Extract dimension info from "Dim  0 (minecraft:overworld): Mean tick time..."
-                            if '(' in line and ')' in line:
-                                # Extract the part between parentheses
-                                paren_start = line.index('(')
-                                paren_end = line.index(')')
-                                dim_name = line[paren_start+1:paren_end]
-                                # Clean dimension name
-                                dim_name = dim_name.replace('minecraft:', '').replace('the_vault:', '').replace(':', '_')
-                                dimensions[dim_name] = {
-                                    'tps': tps,
-                                    'mean_tick_time': tick_time
-                                }
+                            # Extract dimension info from "Dim minecraft:overworld (minecraft:overworld): Mean tick time..."
+                            # Use the FIRST part (before parentheses) as the unique dimension identifier
+                            if ':' in line and '(' in line:
+                                # Extract the dimension name before parentheses
+                                # Format: "Dim minecraft:overworld (minecraft:overworld): Mean tick time..."
+                                dim_part = line.split('(')[0].strip()  # "Dim minecraft:overworld"
+                                if dim_part.startswith('Dim '):
+                                    dim_name = dim_part[4:].strip()  # Remove "Dim " prefix
+                                    # Clean dimension name but preserve uniqueness
+                                    dim_name = dim_name.replace('minecraft:', '').replace('the_vault:', '').replace('ae2:', '').replace(':', '_')
+                                    dimensions[dim_name] = {
+                                        'tps': tps,
+                                        'mean_tick_time': tick_time
+                                    }
                     except (ValueError, IndexError) as e:
                         self._log_warning(f'Failed to parse TPS line "{line}": {e}')
                         continue
@@ -402,6 +429,7 @@ class MetricsStorage:
             if found_tps_data:
                 return {
                     'overall_tps': overall_tps,
+                    'overall_tick_time': overall_tick_time,
                     'dimensions': dimensions
                 }
             
@@ -718,7 +746,13 @@ class MetricsStorage:
                 if tps_data:
                     self.store_metric('server_tps', tps_data['overall_tps'], {
                         'source': 'rcon_forge_tps',
-                        'dimensions': tps_data['dimensions']
+                        'dimensions': tps_data['dimensions'],
+                        'overall_tick_time': tps_data['overall_tick_time']
+                    })
+                    
+                    # Store overall mean tick time as separate metric for charting
+                    self.store_metric('server_tick_time', tps_data['overall_tick_time'], {
+                        'source': 'rcon_forge_tps'
                     })
                     
                     # Store individual dimension TPS

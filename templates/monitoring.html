@@ -209,109 +209,149 @@
     </div>
 </div>
 
-<!-- Charts Row 1 -->
+<!-- Monitoring Tabs -->
 <div class="row mb-4">
-    <div class="col-md-6">
+    <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h6><i class="fas fa-microchip"></i> CPU Usage Per Core</h6>
+                <ul class="nav nav-tabs card-header-tabs" id="monitoringTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="true">
+                            <i class="fas fa-chart-area"></i> Overview
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="game-performance-tab" data-bs-toggle="tab" data-bs-target="#game-performance" type="button" role="tab" aria-controls="game-performance" aria-selected="false">
+                            <i class="fas fa-gamepad"></i> Game Performance
+                        </button>
+                    </li>
+                </ul>
             </div>
             <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="cpu-chart"></canvas>
-                </div>
-                <div class="text-center mt-2">
-                    <small class="text-muted">System CPU: <span id="system-cpu" class="fw-bold">--</span>%</small>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-memory"></i> System Memory Usage</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="memory-chart"></canvas>
-                </div>
-                <div class="text-center mt-2">
-                    <small class="text-muted me-3">Swap Used: <span id="swap-used" class="fw-bold">--</span></small>
-                    <small class="text-muted">Swap Free: <span id="swap-free" class="fw-bold">--</span></small>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+                <div class="tab-content" id="monitoringTabContent">
+                    
+                    <!-- Overview Tab -->
+                    <div class="tab-pane fade show active" id="overview" role="tabpanel" aria-labelledby="overview-tab">
+                        
+                        <!-- Overview Row 1: CPU and Memory -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6><i class="fas fa-microchip"></i> CPU Usage Per Core</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="cpu-chart"></canvas>
+                                        </div>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted">System CPU: <span id="system-cpu" class="fw-bold">--</span>%</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6><i class="fas fa-memory"></i> System Memory Usage</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="memory-chart"></canvas>
+                                        </div>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted me-3">Swap Used: <span id="swap-used" class="fw-bold">--</span></small>
+                                            <small class="text-muted">Swap Free: <span id="swap-free" class="fw-bold">--</span></small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-<!-- Charts Row 2 - TPS and Lag History -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-tachometer-alt"></i> TPS History</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="tps-chart"></canvas>
-                </div>
-                <div class="text-center mt-2">
-                    <small class="text-muted me-3">Min: <span id="tps-min" class="fw-bold">--</span></small>
-                    <small class="text-muted me-3">Max: <span id="tps-max" class="fw-bold">--</span></small>
-                    <small class="text-muted">Ave: <span id="tps-ave" class="fw-bold">--</span></small>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-exclamation-triangle"></i> Lag Spike History</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="lag-chart"></canvas>
-                </div>
-                <div class="text-center mt-2">
-                    <small class="text-muted me-3">Min: <span id="lag-min" class="fw-bold">--</span>ms</small>
-                    <small class="text-muted me-3">Max: <span id="lag-max" class="fw-bold">--</span>ms</small>
-                    <small class="text-muted">Ave: <span id="lag-ave" class="fw-bold">--</span>ms</small>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+                        <!-- Overview Row 2: Overall TPS and Temperature -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6><i class="fas fa-tachometer-alt"></i> Overall TPS History</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="tps-chart"></canvas>
+                                        </div>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted me-3">Avg TPS: <span id="tps-ave" class="fw-bold">--</span></small>
+                                            <small class="text-muted">Avg Tick Time: <span id="tick-time-ave" class="fw-bold">--</span>ms</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6><i class="fas fa-thermometer-half"></i> Hardware Temperature</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="temperature-chart"></canvas>
+                                        </div>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted me-3">CPU Max: <span id="temp-cpu-max" class="fw-bold">--</span>°C</small>
+                                            <small class="text-muted me-3">GPU Max: <span id="temp-gpu-max" class="fw-bold">--</span>°C</small>
+                                            <small class="text-muted">NVMe Max: <span id="temp-nvme-max" class="fw-bold">--</span>°C</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
 
-<!-- Charts Row 3 - Temperature and Player Count Charts -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-thermometer-half"></i> Hardware Temperature</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="temperature-chart"></canvas>
-                </div>
-                <div class="text-center mt-2">
-                    <small class="text-muted me-3">CPU Max: <span id="temp-cpu-max" class="fw-bold">--</span>°C</small>
-                    <small class="text-muted me-3">GPU Max: <span id="temp-gpu-max" class="fw-bold">--</span>°C</small>
-                    <small class="text-muted">NVMe Max: <span id="temp-nvme-max" class="fw-bold">--</span>°C</small>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-users"></i> Player Count History</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="player-chart"></canvas>
-                </div>
-                <div class="text-center mt-2">
-                    <small class="text-muted">Max Players: <span id="player-max" class="fw-bold">--</span></small>
+                    <!-- Game Performance Tab -->
+                    <div class="tab-pane fade" id="game-performance" role="tabpanel" aria-labelledby="game-performance-tab">
+                        
+                        <!-- Dimension TPS Charts Container -->
+                        <div id="dimension-charts-container">
+                            <!-- Dimension charts will be dynamically created here -->
+                        </div>
+
+                        <!-- Game Performance Row: Lag Spikes and Player Count -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6><i class="fas fa-exclamation-triangle"></i> Lag Spike History</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="lag-chart"></canvas>
+                                        </div>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted me-3">Min: <span id="lag-min" class="fw-bold">--</span>ms</small>
+                                            <small class="text-muted me-3">Max: <span id="lag-max" class="fw-bold">--</span>ms</small>
+                                            <small class="text-muted">Ave: <span id="lag-ave" class="fw-bold">--</span>ms</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6><i class="fas fa-users"></i> Player Count History</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="player-chart"></canvas>
+                                        </div>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted">Max Players: <span id="player-max" class="fw-bold">--</span></small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
                 </div>
             </div>
         </div>
@@ -326,6 +366,9 @@
 <script>
 // Monitoring page specific JavaScript
 let tpsChart, memoryChart, lagChart, cpuChart, playerChart, temperatureChart;
+let dimensionCharts = {}; // Container for dimension-specific TPS charts
+let availableDimensions = []; // Will be populated from API data
+let dimensionChartsInitialized = false; // Track if dimension charts have been created
 let monitoringData = {
     tps: [],
     memory: [],
@@ -400,30 +443,72 @@ function loadSettingsFromLocalStorage() {
 
 // Initialize charts
 function initializeCharts() {
-    // TPS Chart
+    // TPS Chart - Dual Y-axis for TPS and Tick Time
     const tpsCtx = document.getElementById('tps-chart').getContext('2d');
     tpsChart = new Chart(tpsCtx, {
         type: 'line',
         data: {
             labels: [],
-            datasets: [{
-                label: 'TPS',
-                data: [],
-                borderColor: '#198754',
-                backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
+            datasets: [
+                {
+                    label: 'TPS',
+                    data: [],
+                    borderColor: '#198754',
+                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y-tps',
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                },
+                {
+                    label: 'Tick Time (ms)',
+                    data: [],
+                    borderColor: '#fd7e14',
+                    backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y-ticktime',
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: {
+                'y-tps': {
+                    type: 'linear',
+                    position: 'left',
                     beginAtZero: true,
                     max: 20,
                     grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
+                        color: 'rgba(25, 135, 84, 0.2)'
+                    },
+                    ticks: {
+                        color: '#198754'
+                    },
+                    title: {
+                        display: true,
+                        text: 'TPS',
+                        color: '#198754'
+                    }
+                },
+                'y-ticktime': {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: {
+                        display: false // Don't display grid for secondary axis
+                    },
+                    ticks: {
+                        color: '#fd7e14'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Tick Time (ms)',
+                        color: '#fd7e14'
                     }
                 },
                 x: {
@@ -443,8 +528,34 @@ function initializeCharts() {
             },
             plugins: {
                 legend: {
-                    display: false
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 15,
+                        font: {
+                            size: 11
+                        },
+                        boxWidth: 8,
+                        boxHeight: 8
+                    }
                 },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            if (context.datasetIndex === 0) {
+                                return 'TPS: ' + context.parsed.y.toFixed(1);
+                            } else {
+                                return 'Tick Time: ' + context.parsed.y.toFixed(2) + 'ms';
+                            }
+                        }
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
             }
         }
     });
@@ -825,6 +936,346 @@ function initializeCharts() {
     });
 }
 
+// Dimension Chart Management
+function createDimensionChart(dimensionName, displayName) {
+    const chartId = `dimension-chart-${dimensionName}`;
+    const canvasId = `${chartId}-canvas`;
+    
+    // Create chart HTML
+    const chartHtml = `
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-globe"></i> ${displayName} TPS</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="${canvasId}"></canvas>
+                    </div>
+                    <div class="text-center mt-2">
+                        <small class="text-muted me-3">Avg TPS: <span id="${chartId}-tps-ave" class="fw-bold">--</span></small>
+                        <small class="text-muted">Avg Tick Time: <span id="${chartId}-tick-time-ave" class="fw-bold">--</span>ms</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return { chartHtml, canvasId, chartId };
+}
+
+function initializeDimensionChart(dimensionName, canvasId) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    // Dimension-specific colors
+    const colors = {
+        'overworld': { main: '#4CAF50', tick: '#8BC34A' },
+        'the_nether': { main: '#F44336', tick: '#E57373' },
+        'the_end': { main: '#9C27B0', tick: '#BA68C8' },
+        'vault': { main: '#2196F3', tick: '#64B5F6' },
+        'arena': { main: '#FF9800', tick: '#FFB74D' },
+        'spatial_storage': { main: '#607D8B', tick: '#90A4AE' },
+        'the_other_side': { main: '#795548', tick: '#A1887F' }
+    };
+    
+    const colorScheme = colors[dimensionName] || { main: '#198754', tick: '#fd7e14' };
+    
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'TPS',
+                    data: [],
+                    borderColor: colorScheme.main,
+                    backgroundColor: colorScheme.main.replace(')', ', 0.1)').replace('rgb', 'rgba'),
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y-tps',
+                    pointRadius: 1,
+                    pointHoverRadius: 3
+                },
+                {
+                    label: 'Tick Time (ms)',
+                    data: [],
+                    borderColor: colorScheme.tick,
+                    backgroundColor: colorScheme.tick.replace(')', ', 0.1)').replace('rgb', 'rgba'),
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y-ticktime',
+                    pointRadius: 1,
+                    pointHoverRadius: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                'y-tps': {
+                    type: 'linear',
+                    position: 'left',
+                    beginAtZero: true,
+                    max: 20,
+                    grid: {
+                        color: colorScheme.main.replace(')', ', 0.2)').replace('rgb', 'rgba')
+                    },
+                    ticks: {
+                        color: colorScheme.main,
+                        font: { size: 10 }
+                    },
+                    title: {
+                        display: true,
+                        text: 'TPS',
+                        color: colorScheme.main,
+                        font: { size: 10 }
+                    }
+                },
+                'y-ticktime': {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: colorScheme.tick,
+                        font: { size: 10 }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Tick Time (ms)',
+                        color: colorScheme.tick,
+                        font: { size: 10 }
+                    }
+                },
+                x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        },
+                        unit: 'minute'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        font: { size: 9 }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 10,
+                        font: { size: 9 },
+                        boxWidth: 6,
+                        boxHeight: 6
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            if (context.datasetIndex === 0) {
+                                return 'TPS: ' + context.parsed.y.toFixed(1);
+                            } else {
+                                return 'Tick Time: ' + context.parsed.y.toFixed(2) + 'ms';
+                            }
+                        }
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+}
+
+function createDimensionCharts(dimensions) {
+    const container = document.getElementById('dimension-charts-container');
+    if (!container) return;
+    
+    // Clear existing charts
+    container.innerHTML = '';
+    dimensionCharts = {};
+    
+    if (!dimensions || dimensions.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted p-4"><i class="fas fa-info-circle"></i> No dimension data available</div>';
+        return;
+    }
+    
+    // Dimension display names
+    const dimensionNames = {
+        'overworld': 'Overworld',
+        'the_nether': 'The Nether', 
+        'the_end': 'The End',
+        'vault': 'Vault',
+        'arena': 'Arena',
+        'spatial_storage': 'AE2 Spatial Storage',
+        'the_other_side': 'The Other Side'
+    };
+    
+    let chartsHtml = '<div class="row">';
+    const chartConfigs = [];
+    
+    dimensions.forEach(dimension => {
+        const displayName = dimensionNames[dimension] || dimension.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const config = createDimensionChart(dimension, displayName);
+        chartConfigs.push({ dimension, ...config });
+        chartsHtml += config.chartHtml;
+    });
+    
+    chartsHtml += '</div>';
+    container.innerHTML = chartsHtml;
+    
+    // Initialize charts after DOM is updated
+    setTimeout(() => {
+        chartConfigs.forEach(config => {
+            try {
+                dimensionCharts[config.dimension] = initializeDimensionChart(config.dimension, config.canvasId);
+                console.log(`✅ Initialized dimension chart for ${config.dimension}`);
+            } catch (error) {
+                console.error(`❌ Failed to initialize chart for ${config.dimension}:`, error);
+            }
+        });
+    }, 100);
+}
+
+function initializeDimensionChartsFromData(metrics) {
+    console.log('🚀 initializeDimensionChartsFromData called with metrics:', Object.keys(metrics));
+    
+    // Extract available dimensions from current metrics API response
+    const detectedDimensions = [];
+    
+    // Check for dimension-specific TPS properties in the API response
+    Object.keys(metrics).forEach(key => {
+        if (key.startsWith('current_tps_')) {
+            const dimension = key.replace('current_tps_', '');
+            if (!detectedDimensions.includes(dimension)) {
+                detectedDimensions.push(dimension);
+                console.log(`✅ Detected dimension from API: ${dimension}`);
+            }
+        }
+    });
+    
+    console.log(`📊 Total dimensions detected from API: ${detectedDimensions.length}`, detectedDimensions);
+    
+    // If no dimensions detected from API, fetch from database
+    if (detectedDimensions.length === 0) {
+        console.log('⚠️ No dimensions detected from API, will fetch from database...');
+        fetch('/api/monitoring/dimensions')
+            .then(r => {
+                console.log('📡 Dimensions API response status:', r.status);
+                return r.json();
+            })
+            .then(data => {
+                console.log('📡 Dimensions API response data:', data);
+                if (data.dimensions && data.dimensions.length > 0) {
+                    console.log('🎯 Detected dimensions from database:', data.dimensions);
+                    availableDimensions = data.dimensions;
+                    createDimensionCharts(data.dimensions);
+                    dimensionChartsInitialized = true;
+                } else {
+                    console.log('❌ No dimensions found in database either');
+                }
+            })
+            .catch(error => {
+                console.error('❌ Failed to fetch dimensions from database:', error);
+            });
+        return;
+    }
+    
+    console.log('🎯 Detected dimensions for charts:', detectedDimensions);
+    
+    availableDimensions = detectedDimensions;
+    createDimensionCharts(detectedDimensions);
+    dimensionChartsInitialized = true;
+}
+
+function updateDimensionCharts(metrics) {
+    if (!dimensionChartsInitialized || Object.keys(dimensionCharts).length === 0) {
+        return;
+    }
+    
+    const now = new Date();
+    
+    // Update each dimension chart
+    Object.keys(dimensionCharts).forEach(dimension => {
+        const chart = dimensionCharts[dimension];
+        if (!chart) return;
+        
+        let tpsValue = null;
+        let tickTimeValue = null;
+        
+        // ONLY use real dimension-specific values from API - NO FALLBACKS
+        if (metrics[`current_tps_${dimension}`] !== undefined) {
+            tpsValue = metrics[`current_tps_${dimension}`];
+        }
+        if (metrics[`current_tick_time_${dimension}`] !== undefined) {
+            tickTimeValue = metrics[`current_tick_time_${dimension}`];
+        }
+        
+        // Only update chart if we have REAL data for this dimension
+        if (tpsValue !== null && tickTimeValue !== null) {
+            chart.data.labels.push(now);
+            chart.data.datasets[0].data.push(tpsValue);
+            chart.data.datasets[1].data.push(tickTimeValue);
+            
+            // Keep data points limited
+            const maxPoints = Math.max(20, Math.ceil((currentConfig.chart_range || 1) * 72));
+            if (chart.data.labels.length > maxPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+                chart.data.datasets[1].data.shift();
+            }
+            
+            chart.update('none');
+            updateDimensionStats(dimension, chart);
+        }
+        // If no real data: charts remain empty (no update) - user will see empty charts indicating missing data
+    });
+}
+
+function updateDimensionStats(dimension, chart) {
+    const chartId = `dimension-chart-${dimension}`;
+    
+    // Update TPS average
+    if (chart.data.datasets[0] && chart.data.datasets[0].data.length > 0) {
+        const tpsData = chart.data.datasets[0].data.filter(val => val !== null && val !== undefined);
+        if (tpsData.length > 0) {
+            const tpsSum = tpsData.reduce((a, b) => a + b, 0);
+            const tpsAverage = tpsSum / tpsData.length;
+            const tpsElement = document.getElementById(`${chartId}-tps-ave`);
+            if (tpsElement) {
+                tpsElement.textContent = tpsAverage.toFixed(1);
+            }
+        }
+    }
+    
+    // Update tick time average
+    if (chart.data.datasets[1] && chart.data.datasets[1].data.length > 0) {
+        const tickTimeData = chart.data.datasets[1].data.filter(val => val !== null && val !== undefined);
+        if (tickTimeData.length > 0) {
+            const tickTimeSum = tickTimeData.reduce((a, b) => a + b, 0);
+            const tickTimeAverage = tickTimeSum / tickTimeData.length;
+            const tickTimeElement = document.getElementById(`${chartId}-tick-time-ave`);
+            if (tickTimeElement) {
+                tickTimeElement.textContent = tickTimeAverage.toFixed(2);
+            }
+        }
+    }
+}
+
 // Update monitoring data
 function updateMonitoringData() {
     Promise.all([
@@ -849,6 +1300,14 @@ function updateMonitoringData() {
         
         // Update Minecraft process summary
         updateMinecraftSummary(status);
+        
+        // Initialize dimension charts if needed (only once)
+        if (!dimensionChartsInitialized) {
+            initializeDimensionChartsFromData(metrics);
+        }
+        
+        // Update dimension charts with current data
+        updateDimensionCharts(metrics);
         
         updateHealthStatus(status, metrics);
         updatePerformanceEvents(metrics.events || []);
@@ -997,22 +1456,33 @@ function updateChartTimeRangeForRealTime(newTime) {
 
 // Update TPS statistics display
 function updateTpsStats() {
-    if (!tpsChart || !tpsChart.data.datasets[0] || tpsChart.data.datasets[0].data.length === 0) {
-        document.getElementById('tps-min').textContent = '--';
-        document.getElementById('tps-max').textContent = '--';
+    // Update TPS average
+    if (tpsChart && tpsChart.data.datasets[0] && tpsChart.data.datasets[0].data.length > 0) {
+        const tpsData = tpsChart.data.datasets[0].data.filter(val => val !== null && val !== undefined);
+        if (tpsData.length > 0) {
+            const sum = tpsData.reduce((a, b) => a + b, 0);
+            const average = sum / tpsData.length;
+            document.getElementById('tps-ave').textContent = average.toFixed(1);
+        } else {
+            document.getElementById('tps-ave').textContent = '--';
+        }
+    } else {
         document.getElementById('tps-ave').textContent = '--';
-        return;
     }
     
-    const tpsData = tpsChart.data.datasets[0].data;
-    const min = Math.min(...tpsData);
-    const max = Math.max(...tpsData);
-    const sum = tpsData.reduce((a, b) => a + b, 0);
-    const average = sum / tpsData.length;
-    
-    document.getElementById('tps-min').textContent = min.toFixed(1);
-    document.getElementById('tps-max').textContent = max.toFixed(1);
-    document.getElementById('tps-ave').textContent = average.toFixed(1);
+    // Update tick time average
+    if (tpsChart && tpsChart.data.datasets[1] && tpsChart.data.datasets[1].data.length > 0) {
+        const tickTimeData = tpsChart.data.datasets[1].data.filter(val => val !== null && val !== undefined);
+        if (tickTimeData.length > 0) {
+            const sum = tickTimeData.reduce((a, b) => a + b, 0);
+            const average = sum / tickTimeData.length;
+            document.getElementById('tick-time-ave').textContent = average.toFixed(2);
+        } else {
+            document.getElementById('tick-time-ave').textContent = '--';
+        }
+    } else {
+        document.getElementById('tick-time-ave').textContent = '--';
+    }
 }
 
 // Update Lag Spike statistics display
@@ -1099,10 +1569,23 @@ function updatePlayerStats() {
 function updateCharts(metrics, status = null) {
     const now = new Date();
 
-    // Update TPS chart
-    if (metrics.current_tps !== undefined) {
+    // Update TPS chart (both TPS and tick time)
+    if (metrics.current_tps !== undefined || metrics.current_tick_time !== undefined) {
         tpsChart.data.labels.push(now);
-        tpsChart.data.datasets[0].data.push(metrics.current_tps);
+        
+        // Add TPS data
+        if (metrics.current_tps !== undefined) {
+            tpsChart.data.datasets[0].data.push(metrics.current_tps);
+        } else {
+            tpsChart.data.datasets[0].data.push(null);
+        }
+        
+        // Add tick time data
+        if (metrics.current_tick_time !== undefined) {
+            tpsChart.data.datasets[1].data.push(metrics.current_tick_time);
+        } else {
+            tpsChart.data.datasets[1].data.push(null);
+        }
         
         // Keep data points based on time range (15 min = 18 points, 30 min = 36 points, 1hr = 72 points, etc.)
         const timeRangeHours = currentConfig.chart_range || 1;
@@ -1110,6 +1593,7 @@ function updateCharts(metrics, status = null) {
         if (tpsChart.data.labels.length > maxPoints) {
             tpsChart.data.labels.shift();
             tpsChart.data.datasets[0].data.shift();
+            tpsChart.data.datasets[1].data.shift();
         }
         
         // Update time range to include new data point
@@ -1680,6 +2164,7 @@ function clearChartData() {
     if (tpsChart) {
         tpsChart.data.labels = [];
         tpsChart.data.datasets[0].data = [];
+        tpsChart.data.datasets[1].data = [];
         tpsChart.update('none');
         updateTpsStats(); // Update stats when data is cleared
     }
@@ -1722,6 +2207,18 @@ function clearChartData() {
         temperatureChart.update('none');
         updateTemperatureStats(); // Update stats when data is cleared
     }
+    
+    // Clear dimension charts
+    Object.keys(dimensionCharts).forEach(dimension => {
+        const chart = dimensionCharts[dimension];
+        if (chart) {
+            chart.data.labels = [];
+            chart.data.datasets[0].data = [];
+            chart.data.datasets[1].data = [];
+            chart.update('none');
+            updateDimensionStats(dimension, chart);
+        }
+    });
 }
 
 // Display historical metric data
@@ -1761,19 +2258,57 @@ function displayHistoricalMetric(metricType, data) {
             });
             break;
             
-        case 'system_cpu_percent':
+        case 'server_tps':
             data.forEach(point => {
                 const timestamp = new Date(point.timestamp);
                 
                 if (tpsChart.data.labels.length === 0 || 
                     tpsChart.data.labels[tpsChart.data.labels.length - 1].getTime() !== timestamp.getTime()) {
                     tpsChart.data.labels.push(timestamp);
-                    // Use CPU as proxy for TPS (inverse relationship)
-                    const tpsEstimate = Math.max(15, 20 - (point.value * 0.1));
-                    tpsChart.data.datasets[0].data.push(tpsEstimate);
+                    // Use real TPS data for first dataset
+                    tpsChart.data.datasets[0].data.push(point.value);
+                    // Initialize tick time dataset with null (will be filled by server_tick_time case)
+                    if (tpsChart.data.datasets[1].data.length < tpsChart.data.datasets[0].data.length) {
+                        tpsChart.data.datasets[1].data.push(null);
+                    }
                 }
             });
             updateTpsStats(); // Update stats after loading historical TPS data
+            break;
+            
+        case 'server_tick_time':
+            data.forEach((point, index) => {
+                const timestamp = new Date(point.timestamp);
+                
+                // Find corresponding time label index or add if needed
+                let labelIndex = tpsChart.data.labels.findIndex(label => 
+                    label.getTime() === timestamp.getTime()
+                );
+                
+                if (labelIndex === -1) {
+                    // Add new time label if not found
+                    tpsChart.data.labels.push(timestamp);
+                    labelIndex = tpsChart.data.labels.length - 1;
+                    // Ensure TPS dataset has corresponding entry
+                    while (tpsChart.data.datasets[0].data.length <= labelIndex) {
+                        tpsChart.data.datasets[0].data.push(null);
+                    }
+                }
+                
+                // Ensure tick time dataset has enough entries
+                while (tpsChart.data.datasets[1].data.length <= labelIndex) {
+                    tpsChart.data.datasets[1].data.push(null);
+                }
+                
+                // Add tick time data
+                tpsChart.data.datasets[1].data[labelIndex] = point.value;
+            });
+            updateTpsStats(); // Update stats after loading tick time data
+            break;
+            
+        case 'system_cpu_percent':
+            // CPU data is now only used for CPU chart, not TPS estimation
+            // TPS data is handled separately in the 'server_tps' case above
             break;
             
         case 'player_count':
@@ -2025,6 +2560,13 @@ function resetChartZoom() {
     if (cpuChart) cpuChart.resetZoom();
     if (playerChart) playerChart.resetZoom();
     if (temperatureChart) temperatureChart.resetZoom();
+    
+    // Reset zoom on dimension charts
+    Object.values(dimensionCharts).forEach(chart => {
+        if (chart && chart.resetZoom) {
+            chart.resetZoom();
+        }
+    });
 }
 
 // Initialize when page loads

@@ -550,9 +550,81 @@ def monitoring_metrics():
             'error': str(e)
         }
     
+    # Get real TPS and tick time data from metrics storage
+    current_tps = 20.0  # Default fallback
+    current_tick_time = 50.0  # Default fallback (50ms = 20 TPS)
+    try:
+        from services.metrics_storage import metrics_storage
+        latest_tps = metrics_storage.get_latest_metric('server_tps')
+        latest_tick_time = metrics_storage.get_latest_metric('server_tick_time')
+        
+        if latest_tps and latest_tps.get('value') is not None:
+            # Only use real data if it's not a placeholder
+            metadata = latest_tps.get('metadata', {})
+            if metadata.get('source') != 'placeholder_rcon_failed' and metadata.get('source') != 'placeholder_rcon_error':
+                current_tps = latest_tps['value']
+                # Try to get tick time from TPS metadata first
+                if metadata.get('overall_tick_time') is not None:
+                    current_tick_time = metadata['overall_tick_time']
+                current_app.logger.info(f'Using real TPS data: {current_tps} TPS, {current_tick_time}ms (source: {metadata.get("source", "unknown")})')
+            else:
+                current_app.logger.info(f'Ignoring placeholder TPS data, using fallback: {current_tps}')
+        
+        # Use separate tick time metric if available
+        if latest_tick_time and latest_tick_time.get('value') is not None:
+            tick_metadata = latest_tick_time.get('metadata', {})
+            if tick_metadata.get('source') != 'placeholder_rcon_failed':
+                current_tick_time = latest_tick_time['value']
+        
+        if latest_tps is None and latest_tick_time is None:
+            current_app.logger.info(f'No TPS/tick time data available, using fallback: {current_tps} TPS, {current_tick_time}ms')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get real TPS/tick time data: {e}')
+    
+    # Get dimension-specific TPS data
+    dimension_tps_data = {}
+    dimension_tick_time_data = {}
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        # Get all available dimensions from database dynamically
+        query = """
+        SELECT DISTINCT 
+            REPLACE(metric_type, 'server_tps_', '') as dimension_name
+        FROM metrics 
+        WHERE metric_type LIKE 'server_tps_%' 
+          AND json_extract(metadata, '$.source') = 'rcon_forge_tps'
+        ORDER BY dimension_name
+        """
+        
+        import sqlite3
+        dimensions = []
+        with sqlite3.connect(metrics_storage.db_path) as conn:
+            cursor = conn.execute(query)
+            for row in cursor.fetchall():
+                dimensions.append(row[0])
+        
+        current_app.logger.info(f'Found dimensions for API: {dimensions}')
+        
+        for dimension in dimensions:
+            # Get latest TPS for this dimension
+            latest_dim_tps = metrics_storage.get_latest_metric(f'server_tps_{dimension}')
+            if latest_dim_tps and latest_dim_tps.get('value') is not None:
+                metadata = latest_dim_tps.get('metadata', {})
+                if metadata.get('source') == 'rcon_forge_tps':
+                    dimension_tps_data[f'current_tps_{dimension}'] = latest_dim_tps['value']
+                    # Get tick time from metadata
+                    if metadata.get('mean_tick_time') is not None:
+                        dimension_tick_time_data[f'current_tick_time_{dimension}'] = metadata['mean_tick_time']
+        
+        current_app.logger.info(f'Retrieved dimension data: {len(dimension_tps_data)} dimensions with TPS data')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get dimension TPS data: {e}')
+    
     # Return mixed real and test data
     test_metrics = {
-        'current_tps': 20.0,  # Still mock for now
+        'current_tps': current_tps,  # Now using real TPS data when available
+        'current_tick_time': current_tick_time,  # Real tick time data
         'lag_spikes_5min': 0,
         'system_memory': detailed_memory,  # Enhanced memory data
         'system_load': system_load,  # Real system load
@@ -566,7 +638,49 @@ def monitoring_metrics():
         'temperatures': temperature_data  # Real temperature data
     }
     
+    # Add dimension-specific TPS and tick time data
+    test_metrics.update(dimension_tps_data)
+    test_metrics.update(dimension_tick_time_data)
+    
     return jsonify(test_metrics)
+
+@main_bp.route('/api/monitoring/dimensions')
+def get_available_dimensions():
+    """Get list of available dimensions from database"""
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        # Query database for all dimension TPS metrics
+        query = """
+        SELECT DISTINCT 
+            REPLACE(metric_type, 'server_tps_', '') as dimension_name
+        FROM metrics 
+        WHERE metric_type LIKE 'server_tps_%' 
+          AND json_extract(metadata, '$.source') = 'rcon_forge_tps'
+        ORDER BY dimension_name
+        """
+        
+        import sqlite3
+        dimensions = []
+        with sqlite3.connect(metrics_storage.db_path) as conn:
+            cursor = conn.execute(query)
+            for row in cursor.fetchall():
+                dimensions.append(row[0])
+        
+        current_app.logger.info(f'Found {len(dimensions)} dimensions in database: {dimensions}')
+        
+        return jsonify({
+            'dimensions': dimensions,
+            'count': len(dimensions)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Failed to get dimensions from database: {e}')
+        return jsonify({
+            'error': str(e),
+            'dimensions': [],
+            'count': 0
+        }), 500
 
 @main_bp.route('/api/monitoring/history/<metric_type>')
 def get_metric_history(metric_type):
