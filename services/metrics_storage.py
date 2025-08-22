@@ -150,8 +150,8 @@ class MetricsStorage:
         
         # Metric collection intervals (from _collection_worker hardcoded values)
         METRIC_INTERVALS = {
-            # TPS/Lag metrics: 3-second collection
-            'tps_lag_metrics': ['server_tps', 'server_tps_overworld', 'server_tps_nether', 'server_tps_end'],
+            # TPS/Lag metrics: 3-second collection (includes all server_tps_* dimension metrics)
+            'tps_lag_metrics': ['server_tps', 'server_tick_time'],
             # CPU/Temperature metrics: 5-second collection  
             'cpu_temp_metrics': ['system_cpu_percent', 'system_load_1min', 'system_load_5min', 'system_load_15min', 
                                'temperature_cpu_celsius', 'temperature_gpu_celsius', 'temperature_nvme_celsius'],
@@ -181,32 +181,65 @@ class MetricsStorage:
                     sampling_strategy = self._calculate_sampling_strategy(hours, collection_interval)
                     
                     if sampling_strategy['skip_rows'] <= 1:
-                        # No sampling needed - return all data
-                        cursor.execute('''
-                            SELECT timestamp, value FROM metrics
-                            WHERE metric_type = ? AND timestamp >= ?
-                            ORDER BY timestamp ASC
-                        ''', (metric_type, start_time))
-                    else:
-                        # Apply row-based sampling to get ~300 samples
-                        cursor.execute('''
-                            SELECT timestamp, value FROM (
-                                SELECT timestamp, value, 
-                                       ROW_NUMBER() OVER (ORDER BY timestamp ASC) as row_num
-                                FROM metrics
+                        # No sampling needed - return all data (include metadata for dimension TPS metrics)
+                        if metric_type.startswith('server_tps_'):
+                            cursor.execute('''
+                                SELECT timestamp, value, metadata FROM metrics
                                 WHERE metric_type = ? AND timestamp >= ?
-                            ) WHERE (row_num - 1) % ? = 0
-                            ORDER BY timestamp ASC
-                        ''', (metric_type, start_time, sampling_strategy['skip_rows']))
+                                ORDER BY timestamp ASC
+                            ''', (metric_type, start_time))
+                        else:
+                            cursor.execute('''
+                                SELECT timestamp, value FROM metrics
+                                WHERE metric_type = ? AND timestamp >= ?
+                                ORDER BY timestamp ASC
+                            ''', (metric_type, start_time))
+                    else:
+                        # Apply row-based sampling to get ~300 samples (include metadata for dimension TPS metrics)
+                        if metric_type.startswith('server_tps_'):
+                            cursor.execute('''
+                                SELECT timestamp, value, metadata FROM (
+                                    SELECT timestamp, value, metadata,
+                                           ROW_NUMBER() OVER (ORDER BY timestamp ASC) as row_num
+                                    FROM metrics
+                                    WHERE metric_type = ? AND timestamp >= ?
+                                ) WHERE (row_num - 1) % ? = 0
+                                ORDER BY timestamp ASC
+                            ''', (metric_type, start_time, sampling_strategy['skip_rows']))
+                        else:
+                            cursor.execute('''
+                                SELECT timestamp, value FROM (
+                                    SELECT timestamp, value, 
+                                           ROW_NUMBER() OVER (ORDER BY timestamp ASC) as row_num
+                                    FROM metrics
+                                    WHERE metric_type = ? AND timestamp >= ?
+                                ) WHERE (row_num - 1) % ? = 0
+                                ORDER BY timestamp ASC
+                            ''', (metric_type, start_time, sampling_strategy['skip_rows']))
                     
                     # Store results for this metric type
                     results[metric_type] = []
                     for row in cursor.fetchall():
-                        timestamp_str, value = row
-                        results[metric_type].append({
-                            'timestamp': timestamp_str,
-                            'value': round(value, 2) if value is not None else None
-                        })
+                        if metric_type.startswith('server_tps_') and len(row) == 3:
+                            # Include metadata for dimension TPS metrics
+                            timestamp_str, value, metadata_str = row
+                            try:
+                                import json
+                                metadata = json.loads(metadata_str) if metadata_str else {}
+                            except:
+                                metadata = {}
+                            results[metric_type].append({
+                                'timestamp': timestamp_str,
+                                'value': round(value, 2) if value is not None else None,
+                                'metadata': metadata
+                            })
+                        else:
+                            # Standard metrics without metadata
+                            timestamp_str, value = row
+                            results[metric_type].append({
+                                'timestamp': timestamp_str,
+                                'value': round(value, 2) if value is not None else None
+                            })
                 
                 return results
         except Exception as e:
@@ -215,6 +248,10 @@ class MetricsStorage:
     
     def _get_metric_collection_interval(self, metric_type: str, metric_intervals: Dict) -> int:
         """Determine collection interval for a metric type"""
+        # Special handling for dynamic dimension TPS metrics (server_tps_*)
+        if metric_type.startswith('server_tps_'):
+            return 3  # All dimension TPS metrics: 3 seconds
+            
         for interval_type, metrics in metric_intervals.items():
             if metric_type in metrics or any(metric_type.startswith(m) for m in metrics):
                 if interval_type == 'tps_lag_metrics':

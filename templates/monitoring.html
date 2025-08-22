@@ -1425,6 +1425,15 @@ function updateChartTimeRanges(timeRangeHours) {
             chart.update('none');
         }
     });
+    
+    // Update dimension charts time ranges
+    Object.values(dimensionCharts).forEach((chart) => {
+        if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
+            chart.options.scales.x.min = timeRange.min;
+            chart.options.scales.x.max = timeRange.max;
+            chart.update('none');
+        }
+    });
 }
 
 // Update chart time range for real-time mode (removes fixed bounds for scrolling)
@@ -1440,6 +1449,14 @@ function updateChartTimeRangeForRealTime(newTime) {
                 chart.options.scales.x.max = newTime;
             }
         });
+        
+        // Update dimension charts time ranges for historical mode
+        Object.values(dimensionCharts).forEach((chart) => {
+            if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
+                chart.options.scales.x.min = newStartTime;
+                chart.options.scales.x.max = newTime;
+            }
+        });
         return;
     }
     
@@ -1447,6 +1464,14 @@ function updateChartTimeRangeForRealTime(newTime) {
     [tpsChart, memoryChart, lagChart, cpuChart, playerChart, temperatureChart].forEach((chart) => {
         if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
             // Remove fixed bounds - let Chart.js scroll naturally with data limit
+            delete chart.options.scales.x.min;
+            delete chart.options.scales.x.max;
+        }
+    });
+    
+    // Remove fixed bounds from dimension charts for real-time mode
+    Object.values(dimensionCharts).forEach((chart) => {
+        if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
             delete chart.options.scales.x.min;
             delete chart.options.scales.x.max;
         }
@@ -2066,24 +2091,34 @@ function loadHistoricalData(hours = null) {
         updateChartTimeRanges(timeRange);
         
         // Load all historical data in a single bulk request
+        console.log(`🔍 Loading historical data for timeRange: ${timeRange}h`);
         fetch(`/api/monitoring/history/bulk?hours=${timeRange}`)
             .then(r => r.json())
-            .then(response => {
+            .then(async response => {
+                console.log('📡 Bulk API response received:', response);
                 if (response.error) {
                     throw new Error(response.error);
                 }
                 
+                console.log('📊 Available metric types in bulk data:', Object.keys(response.data));
+                
                 // Initialize CPU chart with all available cores first
                 initializeCpuChartFromBulkData(response.data);
+                
+                // Initialize dimension charts from bulk data
+                console.log('🚀 About to initialize dimension charts from bulk data...');
+                await initializeDimensionChartsFromBulkData(response.data);
                 
                 // Process each metric type from the bulk response
                 Object.entries(response.data).forEach(([metric_type, data]) => {
                     if (data && data.length > 0) {
+                        console.log(`📈 Processing metric: ${metric_type} (${data.length} data points)`);
                         displayHistoricalMetric(metric_type, data);
                     }
                 });
             
             // Update charts from loaded data
+            console.log('🔄 Updating charts from historical data...');
             updateChartsFromHistoricalData();
             
             // Now switch to real-time mode (don't clear data)
@@ -2127,24 +2162,34 @@ function loadHistoricalData(hours = null) {
     updateChartTimeRanges(timeRange);
     
     // Load all historical data in a single bulk request
+    console.log(`🔍 Loading historical data for timeRange: ${timeRange}h (historical mode)`);
     fetch(`/api/monitoring/history/bulk?hours=${timeRange}`)
         .then(r => r.json())
-        .then(response => {
+        .then(async response => {
+            console.log('📡 Bulk API response received (historical):', response);
             if (response.error) {
                 throw new Error(response.error);
             }
             
+            console.log('📊 Available metric types in bulk data (historical):', Object.keys(response.data));
+            
             // Initialize CPU chart with all available cores first
             initializeCpuChartFromBulkData(response.data);
+            
+            // Initialize dimension charts from bulk data
+            console.log('🚀 About to initialize dimension charts from bulk data (historical)...');
+            await initializeDimensionChartsFromBulkData(response.data);
             
             // Process each metric type from the bulk response
             Object.entries(response.data).forEach(([metric_type, data]) => {
                 if (data && data.length > 0) {
+                    console.log(`📈 Processing metric (historical): ${metric_type} (${data.length} data points)`);
                     displayHistoricalMetric(metric_type, data);
                 }
             });
             
             // Update charts
+            console.log('🔄 Updating charts from historical data (historical)...');
             updateChartsFromHistoricalData();
         })
         .catch(error => {
@@ -2155,6 +2200,7 @@ function loadHistoricalData(hours = null) {
 
 // Clear chart data
 function clearChartData() {
+    console.log('🧹 clearChartData called, dimensionChartsInitialized before:', dimensionChartsInitialized);
     
     // Clear historical memory data storage
     monitoringData.memoryUsed = [];
@@ -2219,6 +2265,10 @@ function clearChartData() {
             updateDimensionStats(dimension, chart);
         }
     });
+    
+    // Reset dimension charts initialization flag so they can be re-initialized with historical data
+    dimensionChartsInitialized = false;
+    console.log('🧹 clearChartData completed, dimensionChartsInitialized after:', dimensionChartsInitialized);
 }
 
 // Display historical metric data
@@ -2396,6 +2446,33 @@ function displayHistoricalMetric(metricType, data) {
                     displayCpuCoreHistoricalData(coreIndex, data);
                 }
             }
+            // Handle dimension-specific TPS metrics (stored as server_tps_{dimension})
+            else if (metricType.startsWith('server_tps_')) {
+                const dimension = metricType.replace('server_tps_', '');
+                console.log(`🎯 Processing dimension TPS metric: ${metricType} for dimension: ${dimension}`);
+                console.log(`🎯 Dimension chart exists: ${!!dimensionCharts[dimension]}`);
+                if (dimensionCharts[dimension]) {
+                    data.forEach(point => {
+                        const timestamp = new Date(point.timestamp);
+                        
+                        if (dimensionCharts[dimension].data.labels.length === 0 || 
+                            dimensionCharts[dimension].data.labels[dimensionCharts[dimension].data.labels.length - 1].getTime() !== timestamp.getTime()) {
+                            dimensionCharts[dimension].data.labels.push(timestamp);
+                            // Use real TPS data for first dataset
+                            dimensionCharts[dimension].data.datasets[0].data.push(point.value);
+                            
+                            // Extract tick time from metadata if available
+                            let tickTimeValue = null;
+                            if (point.metadata && point.metadata.mean_tick_time !== undefined) {
+                                tickTimeValue = point.metadata.mean_tick_time;
+                            }
+                            
+                            // Add tick time data to second dataset
+                            dimensionCharts[dimension].data.datasets[1].data.push(tickTimeValue);
+                        }
+                    });
+                }
+            }
             break;
     }
 }
@@ -2489,6 +2566,109 @@ function displayCpuCoreHistoricalData(coreIndex, data) {
     });
 }
 
+// Initialize dimension charts from bulk historical data
+async function initializeDimensionChartsFromBulkData(bulkData) {
+    console.log('🔧 initializeDimensionChartsFromBulkData called, dimensionChartsInitialized:', dimensionChartsInitialized);
+    if (dimensionChartsInitialized) {
+        console.log('⚠️ Dimension charts already initialized, skipping...');
+        return; // Already initialized
+    }
+    
+    console.log('🔍 Scanning bulk data for dimension metrics...');
+    console.log('🔍 Bulk data keys:', Object.keys(bulkData));
+    
+    // Scan bulk data to find all dimension-specific metrics
+    const detectedDimensions = [];
+    Object.keys(bulkData).forEach(metricType => {
+        if (metricType.startsWith('server_tps_')) {
+            const dimension = metricType.replace('server_tps_', '');
+            if (!detectedDimensions.includes(dimension)) {
+                detectedDimensions.push(dimension);
+                console.log(`✅ Detected dimension from bulk data: ${dimension}`);
+            }
+        }
+    });
+    
+    console.log(`📊 Total dimensions detected from bulk data: ${detectedDimensions.length}`, detectedDimensions);
+    
+    if (detectedDimensions.length > 0) {
+        console.log('🎯 Initializing dimension charts from bulk data:', detectedDimensions);
+        availableDimensions = detectedDimensions;
+        await createDimensionChartsSync(detectedDimensions);
+        dimensionChartsInitialized = true;
+        console.log('✅ Dimension charts creation completed synchronously');
+    } else {
+        // Fallback: try to fetch dimensions from the API endpoint
+        console.log('⚠️ No dimensions detected from bulk data, trying API fallback...');
+        try {
+            const response = await fetch('/api/monitoring/dimensions');
+            const data = await response.json();
+            if (data.dimensions && data.dimensions.length > 0) {
+                console.log('🎯 Detected dimensions from API fallback:', data.dimensions);
+                availableDimensions = data.dimensions;
+                await createDimensionChartsSync(data.dimensions);
+                dimensionChartsInitialized = true;
+            }
+        } catch (error) {
+            console.error('❌ Failed to fetch dimensions from API:', error);
+        }
+    }
+}
+
+// Synchronous version of createDimensionCharts for historical data loading
+function createDimensionChartsSync(dimensions) {
+    const container = document.getElementById('dimension-charts-container');
+    if (!container) {
+        console.error('❌ Dimension charts container not found');
+        return;
+    }
+    
+    // Clear existing charts
+    container.innerHTML = '';
+    dimensionCharts = {};
+    
+    if (!dimensions || dimensions.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted p-4"><i class="fas fa-info-circle"></i> No dimension data available</div>';
+        return;
+    }
+    
+    // Dimension display names
+    const dimensionNames = {
+        'overworld': 'Overworld',
+        'the_nether': 'The Nether', 
+        'the_end': 'The End',
+        'vault': 'Vault',
+        'arena': 'Arena',
+        'spatial_storage': 'AE2 Spatial Storage',
+        'the_other_side': 'The Other Side'
+    };
+    
+    let chartsHtml = '<div class="row">';
+    const chartConfigs = [];
+    
+    dimensions.forEach(dimension => {
+        const displayName = dimensionNames[dimension] || dimension.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const config = createDimensionChart(dimension, displayName);
+        chartConfigs.push({ dimension, ...config });
+        chartsHtml += config.chartHtml;
+    });
+    
+    chartsHtml += '</div>';
+    container.innerHTML = chartsHtml;
+    
+    // Initialize charts synchronously (no setTimeout)
+    chartConfigs.forEach(config => {
+        try {
+            dimensionCharts[config.dimension] = initializeDimensionChart(config.dimension, config.canvasId);
+            console.log(`✅ Initialized dimension chart for ${config.dimension} (sync)`);
+        } catch (error) {
+            console.error(`❌ Failed to initialize chart for ${config.dimension}:`, error);
+        }
+    });
+    
+    console.log(`🎯 Synchronous chart creation completed. Charts created: ${Object.keys(dimensionCharts).length}`);
+}
+
 // Process historical memory data with proper breakdown calculation
 function processHistoricalMemoryData() {
     // Clear existing memory chart data
@@ -2540,6 +2720,15 @@ function updateChartsFromHistoricalData() {
         temperatureChart.update();
         updateTemperatureStats(); // Update temperature stats from historical data
     }
+    
+    // Update dimension charts from historical data
+    Object.keys(dimensionCharts).forEach(dimension => {
+        const chart = dimensionCharts[dimension];
+        if (chart) {
+            chart.update();
+            updateDimensionStats(dimension, chart);
+        }
+    });
 }
 
 // Switch back to real-time mode
@@ -2554,12 +2743,12 @@ function switchToRealTimeMode(clearData = true) {
 
 // Reset zoom on all charts
 function resetChartZoom() {
-    if (tpsChart) tpsChart.resetZoom();
-    if (memoryChart) memoryChart.resetZoom();
-    if (lagChart) lagChart.resetZoom();
-    if (cpuChart) cpuChart.resetZoom();
-    if (playerChart) playerChart.resetZoom();
-    if (temperatureChart) temperatureChart.resetZoom();
+    if (tpsChart && tpsChart.resetZoom) tpsChart.resetZoom();
+    if (memoryChart && memoryChart.resetZoom) memoryChart.resetZoom();
+    if (lagChart && lagChart.resetZoom) lagChart.resetZoom();
+    if (cpuChart && cpuChart.resetZoom) cpuChart.resetZoom();
+    if (playerChart && playerChart.resetZoom) playerChart.resetZoom();
+    if (temperatureChart && temperatureChart.resetZoom) temperatureChart.resetZoom();
     
     // Reset zoom on dimension charts
     Object.values(dimensionCharts).forEach(chart => {
