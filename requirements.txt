@@ -11,3 +11,4 @@ psutil==5.9.6
 mcstatus==11.0.0
 mcrcon==0.7.0
 toml==0.10.2
+watchdog==3.0.0

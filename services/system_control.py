@@ -123,9 +123,27 @@ class SystemControlService:
                         server_ready = True
                         status_info['players'] = query_status.players.online
                         status_info['max_players'] = query_status.players.max
+                        
+                        # Collect player names from mcstatus
+                        player_names = []
+                        if query_status.players.sample:
+                            for player in query_status.players.sample:
+                                player_names.append(player.name)
+                        
+                        # Try query method for more complete player list (if available)
+                        try:
+                            query_result = server.query()
+                            if hasattr(query_result.players, 'names') and query_result.players.names:
+                                player_names = query_result.players.names  # More complete list
+                        except:
+                            pass  # Query not available, use sample
+                        
+                        status_info['player_names'] = player_names
                         status_info['server_ready'] = True
                         status_info['status'] = 'running'
-                        self.logger.info(f"mcstatus connected successfully - {query_status.players.online}/{query_status.players.max} players")
+                        
+                        player_list_str = ", ".join(player_names) if player_names else "none"
+                        self.logger.info(f"mcstatus connected successfully - {query_status.players.online}/{query_status.players.max} players ({player_list_str})")
                         
                 except Exception as e:
                     last_error = e

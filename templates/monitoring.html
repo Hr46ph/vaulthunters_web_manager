@@ -344,7 +344,7 @@
                                             <canvas id="player-chart"></canvas>
                                         </div>
                                         <div class="text-center mt-2">
-                                            <small class="text-muted">Max Players: <span id="player-max" class="fw-bold">--</span></small>
+                                            <small class="text-muted">Current: <span id="player-current" class="fw-bold">--</span> / Max: <span id="player-max" class="fw-bold">--</span></small>
                                         </div>
                                     </div>
                                 </div>
@@ -435,7 +435,7 @@ function loadSettingsFromLocalStorage() {
             
             return settings;
         } catch (e) {
-            console.error('❌ Failed to parse saved settings:', e);
+            console.error('Failed to parse saved settings:', e);
         }
     }
     return null;
@@ -1143,16 +1143,14 @@ function createDimensionCharts(dimensions) {
         chartConfigs.forEach(config => {
             try {
                 dimensionCharts[config.dimension] = initializeDimensionChart(config.dimension, config.canvasId);
-                console.log(`✅ Initialized dimension chart for ${config.dimension}`);
             } catch (error) {
-                console.error(`❌ Failed to initialize chart for ${config.dimension}:`, error);
+                console.error(`Failed to initialize chart for ${config.dimension}:`, error);
             }
         });
     }, 100);
 }
 
 function initializeDimensionChartsFromData(metrics) {
-    console.log('🚀 initializeDimensionChartsFromData called with metrics:', Object.keys(metrics));
     
     // Extract available dimensions from current metrics API response
     const detectedDimensions = [];
@@ -1163,39 +1161,31 @@ function initializeDimensionChartsFromData(metrics) {
             const dimension = key.replace('current_tps_', '');
             if (!detectedDimensions.includes(dimension)) {
                 detectedDimensions.push(dimension);
-                console.log(`✅ Detected dimension from API: ${dimension}`);
             }
         }
     });
     
-    console.log(`📊 Total dimensions detected from API: ${detectedDimensions.length}`, detectedDimensions);
     
     // If no dimensions detected from API, fetch from database
     if (detectedDimensions.length === 0) {
-        console.log('⚠️ No dimensions detected from API, will fetch from database...');
         fetch('/api/monitoring/dimensions')
             .then(r => {
-                console.log('📡 Dimensions API response status:', r.status);
                 return r.json();
             })
             .then(data => {
-                console.log('📡 Dimensions API response data:', data);
                 if (data.dimensions && data.dimensions.length > 0) {
-                    console.log('🎯 Detected dimensions from database:', data.dimensions);
                     availableDimensions = data.dimensions;
                     createDimensionCharts(data.dimensions);
                     dimensionChartsInitialized = true;
                 } else {
-                    console.log('❌ No dimensions found in database either');
                 }
             })
             .catch(error => {
-                console.error('❌ Failed to fetch dimensions from database:', error);
+                console.error('Failed to fetch dimensions from database:', error);
             });
         return;
     }
     
-    console.log('🎯 Detected dimensions for charts:', detectedDimensions);
     
     availableDimensions = detectedDimensions;
     createDimensionCharts(detectedDimensions);
@@ -1278,11 +1268,13 @@ function updateDimensionStats(dimension, chart) {
 
 // Update monitoring data
 function updateMonitoringData() {
+    console.log('updateMonitoringData called at', new Date().toLocaleTimeString());
     Promise.all([
         fetch('/api/monitoring/metrics').then(r => r.json()),
         fetch('/server/status').then(r => r.json())
     ])
     .then(([metrics, status]) => {
+        console.log('Data received - metrics:', !!metrics, 'status:', !!status);
         
         updateMetricCards(metrics, status);
         updateCharts(metrics, status);
@@ -1404,6 +1396,103 @@ function updateMetricCards(metrics, status) {
             gpuTempElement.textContent = '--';
             gpuTempElement.style.color = 'var(--bs-primary)';
         }
+    }
+    
+    // Update server health status indicators
+    updateServerHealthStatus(metrics, status);
+}
+
+// Update server health status indicators
+function updateServerHealthStatus(metrics, status) {
+    // Server Process Status
+    const serverStatusBadge = document.getElementById('server-status-badge');
+    const serverStatusIndicator = document.getElementById('server-status-indicator');
+    
+    if (serverStatusBadge && serverStatusIndicator) {
+        if (status && status.running) {
+            // Server is running
+            serverStatusBadge.textContent = 'Running';
+            serverStatusBadge.className = 'badge bg-success ms-auto';
+            serverStatusIndicator.className = 'status-indicator status-good';
+        } else if (metrics.java_memory_mb > 0) {
+            // Java process exists but server might be starting
+            serverStatusBadge.textContent = 'Starting';
+            serverStatusBadge.className = 'badge bg-warning ms-auto';
+            serverStatusIndicator.className = 'status-indicator status-warning';
+        } else {
+            // Server is stopped
+            serverStatusBadge.textContent = 'Stopped';
+            serverStatusBadge.className = 'badge bg-danger ms-auto';
+            serverStatusIndicator.className = 'status-indicator status-danger';
+        }
+    }
+    
+    // RCON Connection Status
+    const rconStatusBadge = document.getElementById('rcon-status-badge');
+    const rconStatusIndicator = document.getElementById('rcon-status-indicator');
+    
+    if (rconStatusBadge && rconStatusIndicator) {
+        if (metrics.rcon_status === 'connected') {
+            rconStatusBadge.textContent = 'Connected';
+            rconStatusBadge.className = 'badge bg-success ms-auto';
+            rconStatusIndicator.className = 'status-indicator status-good';
+        } else if (metrics.rcon_status === 'error') {
+            rconStatusBadge.textContent = 'Error';
+            rconStatusBadge.className = 'badge bg-danger ms-auto';
+            rconStatusIndicator.className = 'status-indicator status-danger';
+        } else {
+            rconStatusBadge.textContent = 'Disconnected';
+            rconStatusBadge.className = 'badge bg-warning ms-auto';
+            rconStatusIndicator.className = 'status-indicator status-warning';
+        }
+    }
+    
+    // Performance Status (based on TPS and tick time)
+    const performanceStatusBadge = document.getElementById('performance-status-badge');
+    const performanceStatusIndicator = document.getElementById('performance-status-indicator');
+    
+    if (performanceStatusBadge && performanceStatusIndicator) {
+        const tps = metrics.current_tps || 0;
+        const tickTime = metrics.current_tick_time || 0;
+        
+        if (tps >= 19.5 && tickTime <= 10) {
+            // Excellent performance
+            performanceStatusBadge.textContent = 'Excellent';
+            performanceStatusBadge.className = 'badge bg-success ms-auto';
+            performanceStatusIndicator.className = 'status-indicator status-good';
+        } else if (tps >= 18 && tickTime <= 25) {
+            // Good performance
+            performanceStatusBadge.textContent = 'Good';
+            performanceStatusBadge.className = 'badge bg-success ms-auto';
+            performanceStatusIndicator.className = 'status-indicator status-good';
+        } else if (tps >= 15 && tickTime <= 50) {
+            // Fair performance
+            performanceStatusBadge.textContent = 'Fair';
+            performanceStatusBadge.className = 'badge bg-warning ms-auto';
+            performanceStatusIndicator.className = 'status-indicator status-warning';
+        } else if (tps > 0) {
+            // Poor performance
+            performanceStatusBadge.textContent = 'Poor';
+            performanceStatusBadge.className = 'badge bg-danger ms-auto';
+            performanceStatusIndicator.className = 'status-indicator status-danger';
+        } else {
+            // No data
+            performanceStatusBadge.textContent = 'Unknown';
+            performanceStatusBadge.className = 'badge bg-secondary ms-auto';
+            performanceStatusIndicator.className = 'status-indicator status-unknown';
+        }
+    }
+    
+    // Disk Space Status (if available in metrics)
+    const diskStatusBadge = document.getElementById('disk-status-badge');
+    const diskStatusIndicator = document.getElementById('disk-status-indicator');
+    
+    if (diskStatusBadge && diskStatusIndicator) {
+        // For now, show as good since we don't have disk metrics in the API yet
+        // This can be enhanced later when disk space monitoring is added
+        diskStatusBadge.textContent = 'Good';
+        diskStatusBadge.className = 'badge bg-success ms-auto';
+        diskStatusIndicator.className = 'status-indicator status-good';
     }
 }
 
@@ -1580,13 +1669,16 @@ function updateTemperatureStats() {
 // Update Player Count statistics display
 function updatePlayerStats() {
     if (!playerChart || !playerChart.data.datasets[0] || playerChart.data.datasets[0].data.length === 0) {
+        document.getElementById('player-current').textContent = '--';
         document.getElementById('player-max').textContent = '--';
         return;
     }
     
     const playerData = playerChart.data.datasets[0].data;
     const max = Math.max(...playerData);
+    const current = playerData[playerData.length - 1] || 0; // Get most recent value
     
+    document.getElementById('player-current').textContent = current;
     document.getElementById('player-max').textContent = max;
 }
 
@@ -1724,6 +1816,9 @@ function updateCharts(metrics, status = null) {
         playerChart.data.datasets[0].data.shift();
     }
     playerChart.update('none');
+    
+    // Update current player count immediately
+    document.getElementById('player-current').textContent = playerCount;
     
     // Update player statistics
     updatePlayerStats();
@@ -2091,41 +2186,35 @@ function loadHistoricalData(hours = null) {
         updateChartTimeRanges(timeRange);
         
         // Load all historical data in a single bulk request
-        console.log(`🔍 Loading historical data for timeRange: ${timeRange}h`);
         fetch(`/api/monitoring/history/bulk?hours=${timeRange}`)
             .then(r => r.json())
             .then(async response => {
-                console.log('📡 Bulk API response received:', response);
                 if (response.error) {
                     throw new Error(response.error);
                 }
                 
-                console.log('📊 Available metric types in bulk data:', Object.keys(response.data));
                 
                 // Initialize CPU chart with all available cores first
                 initializeCpuChartFromBulkData(response.data);
                 
                 // Initialize dimension charts from bulk data
-                console.log('🚀 About to initialize dimension charts from bulk data...');
                 await initializeDimensionChartsFromBulkData(response.data);
                 
                 // Process each metric type from the bulk response
                 Object.entries(response.data).forEach(([metric_type, data]) => {
                     if (data && data.length > 0) {
-                        console.log(`📈 Processing metric: ${metric_type} (${data.length} data points)`);
                         displayHistoricalMetric(metric_type, data);
                     }
                 });
             
             // Update charts from loaded data
-            console.log('🔄 Updating charts from historical data...');
             updateChartsFromHistoricalData();
             
             // Now switch to real-time mode (don't clear data)
             switchToRealTimeMode(false);
         })
         .catch(error => {
-            console.error(`Failed to load ${timeRange}h historical data:`, error);
+            console.error('Failed to load historical data:', error);
             // Fallback to empty real-time mode
             switchToRealTimeMode(false);
         });
@@ -2162,34 +2251,28 @@ function loadHistoricalData(hours = null) {
     updateChartTimeRanges(timeRange);
     
     // Load all historical data in a single bulk request
-    console.log(`🔍 Loading historical data for timeRange: ${timeRange}h (historical mode)`);
     fetch(`/api/monitoring/history/bulk?hours=${timeRange}`)
         .then(r => r.json())
         .then(async response => {
-            console.log('📡 Bulk API response received (historical):', response);
             if (response.error) {
                 throw new Error(response.error);
             }
             
-            console.log('📊 Available metric types in bulk data (historical):', Object.keys(response.data));
             
             // Initialize CPU chart with all available cores first
             initializeCpuChartFromBulkData(response.data);
             
             // Initialize dimension charts from bulk data
-            console.log('🚀 About to initialize dimension charts from bulk data (historical)...');
             await initializeDimensionChartsFromBulkData(response.data);
             
             // Process each metric type from the bulk response
             Object.entries(response.data).forEach(([metric_type, data]) => {
                 if (data && data.length > 0) {
-                    console.log(`📈 Processing metric (historical): ${metric_type} (${data.length} data points)`);
                     displayHistoricalMetric(metric_type, data);
                 }
             });
             
             // Update charts
-            console.log('🔄 Updating charts from historical data (historical)...');
             updateChartsFromHistoricalData();
         })
         .catch(error => {
@@ -2200,7 +2283,6 @@ function loadHistoricalData(hours = null) {
 
 // Clear chart data
 function clearChartData() {
-    console.log('🧹 clearChartData called, dimensionChartsInitialized before:', dimensionChartsInitialized);
     
     // Clear historical memory data storage
     monitoringData.memoryUsed = [];
@@ -2268,7 +2350,6 @@ function clearChartData() {
     
     // Reset dimension charts initialization flag so they can be re-initialized with historical data
     dimensionChartsInitialized = false;
-    console.log('🧹 clearChartData completed, dimensionChartsInitialized after:', dimensionChartsInitialized);
 }
 
 // Display historical metric data
@@ -2449,8 +2530,6 @@ function displayHistoricalMetric(metricType, data) {
             // Handle dimension-specific TPS metrics (stored as server_tps_{dimension})
             else if (metricType.startsWith('server_tps_')) {
                 const dimension = metricType.replace('server_tps_', '');
-                console.log(`🎯 Processing dimension TPS metric: ${metricType} for dimension: ${dimension}`);
-                console.log(`🎯 Dimension chart exists: ${!!dimensionCharts[dimension]}`);
                 if (dimensionCharts[dimension]) {
                     data.forEach(point => {
                         const timestamp = new Date(point.timestamp);
@@ -2568,14 +2647,10 @@ function displayCpuCoreHistoricalData(coreIndex, data) {
 
 // Initialize dimension charts from bulk historical data
 async function initializeDimensionChartsFromBulkData(bulkData) {
-    console.log('🔧 initializeDimensionChartsFromBulkData called, dimensionChartsInitialized:', dimensionChartsInitialized);
     if (dimensionChartsInitialized) {
-        console.log('⚠️ Dimension charts already initialized, skipping...');
         return; // Already initialized
     }
     
-    console.log('🔍 Scanning bulk data for dimension metrics...');
-    console.log('🔍 Bulk data keys:', Object.keys(bulkData));
     
     // Scan bulk data to find all dimension-specific metrics
     const detectedDimensions = [];
@@ -2584,33 +2659,27 @@ async function initializeDimensionChartsFromBulkData(bulkData) {
             const dimension = metricType.replace('server_tps_', '');
             if (!detectedDimensions.includes(dimension)) {
                 detectedDimensions.push(dimension);
-                console.log(`✅ Detected dimension from bulk data: ${dimension}`);
             }
         }
     });
     
-    console.log(`📊 Total dimensions detected from bulk data: ${detectedDimensions.length}`, detectedDimensions);
     
     if (detectedDimensions.length > 0) {
-        console.log('🎯 Initializing dimension charts from bulk data:', detectedDimensions);
         availableDimensions = detectedDimensions;
         await createDimensionChartsSync(detectedDimensions);
         dimensionChartsInitialized = true;
-        console.log('✅ Dimension charts creation completed synchronously');
     } else {
         // Fallback: try to fetch dimensions from the API endpoint
-        console.log('⚠️ No dimensions detected from bulk data, trying API fallback...');
         try {
             const response = await fetch('/api/monitoring/dimensions');
             const data = await response.json();
             if (data.dimensions && data.dimensions.length > 0) {
-                console.log('🎯 Detected dimensions from API fallback:', data.dimensions);
                 availableDimensions = data.dimensions;
                 await createDimensionChartsSync(data.dimensions);
                 dimensionChartsInitialized = true;
             }
         } catch (error) {
-            console.error('❌ Failed to fetch dimensions from API:', error);
+            console.error('Failed to fetch dimensions from API:', error);
         }
     }
 }
@@ -2619,7 +2688,7 @@ async function initializeDimensionChartsFromBulkData(bulkData) {
 function createDimensionChartsSync(dimensions) {
     const container = document.getElementById('dimension-charts-container');
     if (!container) {
-        console.error('❌ Dimension charts container not found');
+        console.error('Dimension charts container not found');
         return;
     }
     
@@ -2660,13 +2729,11 @@ function createDimensionChartsSync(dimensions) {
     chartConfigs.forEach(config => {
         try {
             dimensionCharts[config.dimension] = initializeDimensionChart(config.dimension, config.canvasId);
-            console.log(`✅ Initialized dimension chart for ${config.dimension} (sync)`);
         } catch (error) {
-            console.error(`❌ Failed to initialize chart for ${config.dimension}:`, error);
+            console.error(`Failed to initialize chart for ${config.dimension}:`, error);
         }
     });
     
-    console.log(`🎯 Synchronous chart creation completed. Charts created: ${Object.keys(dimensionCharts).length}`);
 }
 
 // Process historical memory data with proper breakdown calculation
@@ -2790,6 +2857,12 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         updateRefreshRate();
     }, 100);
+    
+    // Force an immediate update to ensure data loads
+    setTimeout(() => {
+        console.log('Forcing initial update...');
+        updateMonitoringData();
+    }, 1000);
 });
 </script>
 {% endblock %}

@@ -16,6 +16,7 @@ import logging
 import subprocess
 import json
 import time
+import sqlite3
 from datetime import datetime
 
 def _execute_rcon_server_control(action):
@@ -521,16 +522,90 @@ def monitoring_metrics():
         current_app.logger.warning(f'Failed to get detailed memory: {e}')
         detailed_memory = system_memory  # Fallback to basic memory
     
-    # Get Java process memory (if server is running)
+    # Get Java process memory and basic server status (optimized)
     java_memory_mb = 0
+    player_data = {'count': 0, 'max': 20, 'names': []}
     try:
         system_control = SystemControlService()
-        status = system_control.get_server_status()
-        if status.get('running') and status.get('memory_usage'):
-            java_memory_mb = status['memory_usage']
-        current_app.logger.info(f'Java memory: {java_memory_mb}MB')
+        minecraft_proc = system_control._get_minecraft_process()
+        
+        if minecraft_proc and minecraft_proc.is_running():
+            # Get process memory
+            try:
+                proc_info = minecraft_proc.as_dict(attrs=['memory_info'])
+                if proc_info['memory_info']:
+                    java_memory_mb = round(proc_info['memory_info'].rss / 1024 / 1024)
+            except Exception:
+                pass
+            
+            # Quick server status check (skip expensive query() call)
+            try:
+                from mcstatus import JavaServer
+                server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+                server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
+                
+                server = JavaServer(server_host, server_port)
+                # Only use status() which is faster than query()
+                query_status = server.status()
+                if query_status:
+                    player_data['count'] = query_status.players.online
+                    player_data['max'] = query_status.players.max
+                    # Get sample player names (limited list, but fast)
+                    if query_status.players.sample:
+                        player_data['names'] = [p.name for p in query_status.players.sample]
+            except Exception:
+                pass  # Server not responding, use defaults
+                
+        current_app.logger.info(f'Java memory: {java_memory_mb}MB, Players: {player_data["count"]}/{player_data["max"]}')
     except Exception as e:
-        current_app.logger.warning(f'Failed to get Java memory: {e}')
+        current_app.logger.warning(f'Failed to get server status: {e}')
+    
+    # Get simplified player status (optimized for API performance)
+    player_status_data = {'online_players': [], 'offline_players': [], 'unique_players': [], 'total_online': 0}
+    try:
+        from services.metrics_storage import metrics_storage
+        import sqlite3
+        
+        # Optimized query to get only unique players with their latest session
+        with sqlite3.connect(metrics_storage.db_path) as conn:
+            cursor = conn.cursor()
+            # Get latest session for each unique player
+            cursor.execute('''
+                SELECT username, login_time, logout_time, is_online
+                FROM players p1
+                WHERE login_time = (
+                    SELECT MAX(login_time) 
+                    FROM players p2 
+                    WHERE p2.username = p1.username
+                )
+                ORDER BY login_time DESC
+                LIMIT 50
+            ''')
+            
+            unique_players = []
+            total_online = 0
+            for row in cursor.fetchall():
+                username, login_time_str, logout_time_str, is_online = row
+                player_info = {
+                    'username': username,
+                    'login_time': login_time_str,
+                    'logout_time': logout_time_str,
+                    'is_online': bool(is_online)
+                }
+                unique_players.append(player_info)
+                if is_online:
+                    total_online += 1
+            
+            player_status_data = {
+                'online_players': [p for p in unique_players if p['is_online']],
+                'offline_players': [p for p in unique_players if not p['is_online']],
+                'unique_players': unique_players,
+                'total_online': total_online
+            }
+        
+        current_app.logger.info(f'Player status (optimized): {player_status_data["total_online"]} online, {len(player_status_data["unique_players"])} unique players')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get player status: {e}')
     
     # Get hardware temperature data
     temperature_data = {}
@@ -581,13 +656,14 @@ def monitoring_metrics():
     except Exception as e:
         current_app.logger.warning(f'Failed to get real TPS/tick time data: {e}')
     
-    # Get dimension-specific TPS data
+    # Get dimension-specific TPS data (dynamic discovery with optimized query)
     dimension_tps_data = {}
     dimension_tick_time_data = {}
     try:
         from services.metrics_storage import metrics_storage
+        import sqlite3
         
-        # Get all available dimensions from database dynamically
+        # Get all available dimensions from database (optimized with indexes)
         query = """
         SELECT DISTINCT 
             REPLACE(metric_type, 'server_tps_', '') as dimension_name
@@ -597,7 +673,6 @@ def monitoring_metrics():
         ORDER BY dimension_name
         """
         
-        import sqlite3
         dimensions = []
         with sqlite3.connect(metrics_storage.db_path) as conn:
             cursor = conn.execute(query)
@@ -621,6 +696,22 @@ def monitoring_metrics():
     except Exception as e:
         current_app.logger.warning(f'Failed to get dimension TPS data: {e}')
     
+    # Get RCON status (with timeout for performance)
+    rcon_status = 'unknown'
+    try:
+        from services.server_properties import ServerPropertiesParser
+        
+        # Get RCON details from server.properties (fast file read)
+        server_props = ServerPropertiesParser()
+        if server_props.load_properties() and server_props.is_rcon_enabled():
+            rcon_status = 'configured'  # Assume working if configured
+        else:
+            rcon_status = 'disabled'  # RCON not enabled
+        current_app.logger.info(f'RCON status: {rcon_status}')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to check RCON config: {e}')
+        rcon_status = 'error'
+    
     # Return mixed real and test data
     test_metrics = {
         'current_tps': current_tps,  # Now using real TPS data when available
@@ -629,9 +720,13 @@ def monitoring_metrics():
         'system_memory': detailed_memory,  # Enhanced memory data
         'system_load': system_load,  # Real system load
         'java_memory_mb': java_memory_mb,  # Real Java memory
+        'players': player_data['count'],  # Player count for status
+        'max_players': player_data['max'],  # Max players
+        'player_names': player_data['names'],  # List of player names
+        'player_status': player_status_data,  # Detailed player login/logout data
         'recent_lag_spikes': [],
         'events': events,  # Real events
-        'rcon_status': 'connected',
+        'rcon_status': rcon_status,  # Real RCON status
         'cpu_system_avg': cpu_system_avg,  # Real CPU average
         'cpu_count': cpu_count,  # Real CPU count
         'cpu_per_core': cpu_per_core,  # Real per-core data
@@ -1763,6 +1858,157 @@ def console_disconnect():
         return jsonify({
             'success': False,
             'error': str(e)
+        }), 500
+
+@main_bp.route('/api/player/<username>/history')
+def get_player_history(username):
+    """Get detailed login/logout history for a specific player"""
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        # Get all sessions for this player
+        with sqlite3.connect(metrics_storage.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT login_time, logout_time, is_online
+                FROM players 
+                WHERE username = ?
+                ORDER BY login_time DESC
+            ''', (username,))
+            
+            sessions = []
+            total_playtime_seconds = 0
+            
+            for row in cursor.fetchall():
+                login_time_str, logout_time_str, is_online = row
+                
+                login_time = datetime.fromisoformat(login_time_str) if login_time_str else None
+                logout_time = datetime.fromisoformat(logout_time_str) if logout_time_str else None
+                
+                # Calculate session duration
+                session_duration = 0
+                if login_time:
+                    if logout_time:
+                        # Completed session
+                        session_duration = (logout_time - login_time).total_seconds()
+                    elif is_online:
+                        # Currently online session
+                        session_duration = (datetime.now() - login_time).total_seconds()
+                
+                total_playtime_seconds += session_duration
+                
+                # Format times for display
+                login_display = login_time.strftime('%Y-%m-%d %H:%M:%S') if login_time else 'Unknown'
+                logout_display = logout_time.strftime('%Y-%m-%d %H:%M:%S') if logout_time else ('Still online' if is_online else 'Unknown')
+                
+                # Format session duration
+                hours = int(session_duration // 3600)
+                minutes = int((session_duration % 3600) // 60)
+                seconds = int(session_duration % 60)
+                
+                if hours > 0:
+                    duration_display = f"{hours}h {minutes}m {seconds}s"
+                elif minutes > 0:
+                    duration_display = f"{minutes}m {seconds}s"
+                else:
+                    duration_display = f"{seconds}s"
+                
+                sessions.append({
+                    'login_time': login_display,
+                    'logout_time': logout_display,
+                    'is_online': bool(is_online),
+                    'duration': duration_display,
+                    'duration_seconds': session_duration
+                })
+            
+            # Format total playtime
+            total_hours = int(total_playtime_seconds // 3600)
+            total_minutes = int((total_playtime_seconds % 3600) // 60)
+            total_seconds = int(total_playtime_seconds % 60)
+            
+            if total_hours > 0:
+                total_playtime_display = f"{total_hours}h {total_minutes}m {total_seconds}s"
+            elif total_minutes > 0:
+                total_playtime_display = f"{total_minutes}m {total_seconds}s"
+            else:
+                total_playtime_display = f"{total_seconds}s"
+            
+            return jsonify({
+                'username': username,
+                'total_sessions': len(sessions),
+                'total_playtime': total_playtime_display,
+                'total_playtime_seconds': total_playtime_seconds,
+                'sessions': sessions
+            })
+            
+    except Exception as e:
+        current_app.logger.error(f'Failed to get player history for {username}: {e}')
+        return jsonify({
+            'error': 'Failed to retrieve player history',
+            'username': username,
+            'sessions': []
+        }), 500
+
+@main_bp.route('/api/player/<username>/deaths')
+def get_player_deaths(username):
+    """Get vault death history for a specific player"""
+    try:
+        from services.metrics_storage import metrics_storage
+        
+        # Get all deaths for this player
+        with sqlite3.connect(metrics_storage.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT death_time, death_cause, death_method
+                FROM player_deaths 
+                WHERE username = ?
+                ORDER BY death_time DESC
+            ''', (username,))
+            
+            deaths = []
+            method_counts = {}
+            cause_counts = {}
+            
+            for row in cursor.fetchall():
+                death_time_str, death_cause, death_method = row
+                
+                # Format death time for display
+                try:
+                    death_time = datetime.fromisoformat(death_time_str)
+                    death_display = death_time.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    death_display = death_time_str
+                
+                deaths.append({
+                    'death_time': death_display,
+                    'death_cause': death_cause or 'Unknown',
+                    'death_method': death_method or 'Unknown'
+                })
+                
+                # Count death methods and causes
+                method = death_method or 'Unknown'
+                cause = death_cause or 'Unknown'
+                method_counts[method] = method_counts.get(method, 0) + 1
+                cause_counts[cause] = cause_counts.get(cause, 0) + 1
+            
+            # Get most common death method
+            most_common_method = max(method_counts, key=method_counts.get) if method_counts else 'None'
+            
+            return jsonify({
+                'username': username,
+                'total_deaths': len(deaths),
+                'deaths': deaths,
+                'method_counts': method_counts,
+                'cause_counts': cause_counts,
+                'most_common_method': most_common_method
+            })
+            
+    except Exception as e:
+        current_app.logger.error(f'Failed to get player deaths for {username}: {e}')
+        return jsonify({
+            'error': 'Failed to retrieve player deaths',
+            'username': username,
+            'deaths': []
         }), 500
 
 @main_bp.route('/health')

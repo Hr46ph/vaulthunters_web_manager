@@ -124,7 +124,7 @@
         </div>
         
         <div class="row mt-4">
-            <div class="col-12">
+            <div class="col-md-8">
                 <div class="card">
                     <div class="card-header">
                         <h6><i class="fas fa-terminal"></i> Server Console</h6>
@@ -173,6 +173,47 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Player List Card -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="fas fa-users"></i> Players Online <span id="player-count-badge" class="badge bg-primary ms-2">0</span></h6>
+                        <div class="form-check form-check-sm">
+                            <input class="form-check-input" type="checkbox" id="show-offline-checkbox" onchange="updatePlayerList()">
+                            <label class="form-check-label text-muted small" for="show-offline-checkbox">
+                                Show offline
+                            </label>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="player-list-container" style="min-height: 400px;">
+                            <!-- Player list will be populated here -->
+                            <div id="no-players-message" class="text-center text-muted py-4">
+                                <i class="fas fa-user-slash fa-3x mb-3"></i>
+                                <p>No players online</p>
+                            </div>
+                            <ul id="player-list" class="list-group list-group-flush" style="display: none;">
+                                <!-- Players will be added dynamically -->
+                            </ul>
+                        </div>
+                        
+                        <!-- Player Statistics -->
+                        <div class="mt-3 pt-3 border-top">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <small class="text-muted">Online</small>
+                                    <div id="current-players" class="fw-bold">0</div>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Max</small>
+                                    <div id="max-players" class="fw-bold">20</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 {% endblock %}
 
@@ -209,6 +250,146 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" id="confirmModalOK">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player Details Modal -->
+    <div class="modal fade" id="playerDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-user"></i> 
+                        <span id="playerModalUsername">Player</span> Details
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="playerModalLoading" class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                        <p>Loading player history...</p>
+                    </div>
+                    
+                    <div id="playerModalContent" style="display: none;">
+                        <!-- Player Statistics -->
+                        <div class="row mb-4">
+                            <div class="col-md-4 text-center">
+                                <div class="card bg-primary text-white">
+                                    <div class="card-body">
+                                        <h5 class="card-title mb-1">Total Playtime</h5>
+                                        <h3 id="playerTotalPlaytime">0h 0m</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <div class="card bg-success text-white">
+                                    <div class="card-body">
+                                        <h5 class="card-title mb-1">Total Sessions</h5>
+                                        <h3 id="playerTotalSessions">0</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <div class="card bg-info text-white">
+                                    <div class="card-body">
+                                        <h5 class="card-title mb-1">Status</h5>
+                                        <h3 id="playerCurrentStatus">
+                                            <i class="fas fa-circle" style="font-size: 0.8em;"></i>
+                                            <span id="playerStatusText">Unknown</span>
+                                        </h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="mb-3 text-center">
+                            <button type="button" class="btn btn-outline-primary active" id="sessionHistoryBtn" onclick="showSessionHistory()">
+                                <i class="fas fa-history"></i> Session History
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" id="deathHistoryBtn" onclick="showDeathHistory()">
+                                <i class="fas fa-skull"></i> Deaths
+                            </button>
+                        </div>
+
+                        <!-- Session History -->
+                        <div class="card" id="sessionHistoryCard">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-history"></i> Session History
+                                </h6>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                    <table class="table table-sm mb-0">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>Login Time</th>
+                                                <th>Logout Time</th>
+                                                <th>Duration</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="playerSessionsList">
+                                            <!-- Sessions will be populated here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Death History -->
+                        <div class="card" id="deathHistoryCard" style="display: none;">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-skull"></i> Deaths
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <!-- Death Statistics -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <div class="text-center">
+                                            <h5 class="text-danger mb-1">Total Deaths</h5>
+                                            <h3 id="playerTotalDeaths" class="text-danger">0</h3>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="text-center">
+                                            <h5 class="text-warning mb-1">Most Common</h5>
+                                            <h6 id="playerMostCommonDeath" class="text-warning">None</h6>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Death List -->
+                                <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                    <table class="table table-sm mb-0">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>Death Time</th>
+                                                <th>Method</th>
+                                                <th>Cause</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="playerDeathsList">
+                                            <!-- Deaths will be populated here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="playerModalError" style="display: none;" class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-3"></i>
+                        <p id="playerModalErrorText">Failed to load player data</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>

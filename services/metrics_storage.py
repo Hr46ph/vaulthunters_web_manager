@@ -6,10 +6,54 @@ import threading
 import time
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from flask import current_app, has_app_context
 import psutil
+
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    WATCHDOG_AVAILABLE = True
+except ImportError:
+    WATCHDOG_AVAILABLE = False
+
+class LogFileEventHandler(FileSystemEventHandler):
+    """Handle filesystem events for log file monitoring"""
+    
+    def __init__(self, metrics_storage):
+        super().__init__()
+        self.metrics_storage = metrics_storage
+        self._logger = logging.getLogger(__name__ + '.LogFileEventHandler')
+    
+    def on_modified(self, event):
+        """Called when a file is modified"""
+        if event.is_directory:
+            return
+            
+        filename = os.path.basename(event.src_path)
+        
+        # Only process latest.log modifications
+        if filename == 'latest.log':
+            try:
+                self._logger.debug(f'Log file modified: {event.src_path}')
+                self.metrics_storage._process_new_log_lines()
+            except Exception as e:
+                self._logger.error(f'Error processing log file modification: {e}')
+    
+    def on_moved(self, event):
+        """Called when a file is moved/renamed (handles log rotation)"""
+        if event.is_directory:
+            return
+            
+        dest_filename = os.path.basename(event.dest_path)
+        
+        # Log rotation: latest.log -> latest-2025-08-22-1.log
+        if dest_filename == 'latest.log':
+            self._logger.info('Log file rotation detected, resetting position')
+            self.metrics_storage.log_file_position = 0
+            self.metrics_storage._save_log_position()
 
 class MetricsStorage:
     """SQLite-based metrics storage service"""
@@ -21,6 +65,74 @@ class MetricsStorage:
         self.stop_collection = False
         self._lock = threading.Lock()
         self._logger = logging.getLogger(__name__)
+        
+        # File watching for real-time log monitoring
+        self.file_observer = None
+        self.log_file_position = 0
+        self.last_log_check = 0
+        self.watchdog_enabled = False
+        
+        # Patterns for parsing log events
+        self.join_pattern = re.compile(
+            r'\[(\d{2}[A-Za-z]{3}\d{4} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2})\] '
+            r'\[Server thread/INFO\] \[(?:net\.minecraft\.server\.dedicated\.DedicatedServer|minecraft/DedicatedServer)/?\]: '
+            r'(.+?) joined the game'
+        )
+        
+        self.leave_pattern = re.compile(
+            r'\[(\d{2}[A-Za-z]{3}\d{4} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2})\] '
+            r'\[Server thread/INFO\] \[(?:net\.minecraft\.server\.dedicated\.DedicatedServer|minecraft/DedicatedServer)/?\]: '
+            r'(.+?) left the game'
+        )
+        
+        # Multiple death patterns for different death types
+        self.death_patterns = [
+            # Vault deaths (VaultHunters specific)
+            re.compile(
+                r'\[(\d{2}[A-Za-z]{3}\d{4} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2})\] '
+                r'\[Server thread/INFO\] \[(?:net\.minecraft\.server\.dedicated\.DedicatedServer|minecraft/DedicatedServer)/?\]: '
+                r'(.+?) was defeated in a (.+? Vault)\.'
+            ),
+            # Player vs entity/mob deaths
+            re.compile(
+                r'\[(\d{2}[A-Za-z]{3}\d{4} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2})\] '
+                r'\[Server thread/INFO\] \[(?:net\.minecraft\.server\.dedicated\.DedicatedServer|minecraft/DedicatedServer)/?\]: '
+                r'(.+?) was slain by (.+?)(?:\s|$)'
+            ),
+            # Fall damage
+            re.compile(
+                r'\[(\d{2}[A-Za-z]{3}\d{4} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2})\] '
+                r'\[Server thread/INFO\] \[(?:net\.minecraft\.server\.dedicated\.DedicatedServer|minecraft/DedicatedServer)/?\]: '
+                r'(.+?) fell from a high place'
+            ),
+            # Explosion deaths
+            re.compile(
+                r'\[(\d{2}[A-Za-z]{3}\d{4} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2})\] '
+                r'\[Server thread/INFO\] \[(?:net\.minecraft\.server\.dedicated\.DedicatedServer|minecraft/DedicatedServer)/?\]: '
+                r'(.+?) was blown up by (.+?)(?:\s|$)'
+            ),
+            # Fire/lava deaths
+            re.compile(
+                r'\[(\d{2}[A-Za-z]{3}\d{4} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2})\] '
+                r'\[Server thread/INFO\] \[(?:net\.minecraft\.server\.dedicated\.DedicatedServer|minecraft/DedicatedServer)/?\]: '
+                r'(.+?) burned to death'
+            ),
+            # Suffocation
+            re.compile(
+                r'\[(\d{2}[A-Za-z]{3}\d{4} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2})\] '
+                r'\[Server thread/INFO\] \[(?:net\.minecraft\.server\.dedicated\.DedicatedServer|minecraft/DedicatedServer)/?\]: '
+                r'(.+?) suffocated'
+            ),
+            # Projectile deaths
+            re.compile(
+                r'\[(\d{2}[A-Za-z]{3}\d{4} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2})\] '
+                r'\[Server thread/INFO\] \[(?:net\.minecraft\.server\.dedicated\.DedicatedServer|minecraft/DedicatedServer)/?\]: '
+                r'(.+?) was shot by (.+?)(?:\s|$)'
+            )
+        ]
+        
+        # Player name cache for normalization
+        self.player_name_cache = {}
         
         if app is not None:
             self.init_app(app)
@@ -95,8 +207,381 @@ class MetricsStorage:
                 )
             ''')
             
+            # Create players table for login/logout tracking
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS players (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    login_time DATETIME NOT NULL,
+                    logout_time DATETIME NULL,
+                    is_online BOOLEAN DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create indexes for faster player queries
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_players_username 
+                ON players(username)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_players_online 
+                ON players(is_online)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_players_login_time 
+                ON players(login_time)
+            ''')
+            
+            # Create player_deaths table for tracking all death types
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS player_deaths (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    death_time DATETIME NOT NULL,
+                    death_cause TEXT NOT NULL,
+                    death_method TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Migration: Add death_method column if it doesn't exist (for existing installations)
+            cursor.execute("PRAGMA table_info(player_deaths)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if 'death_method' not in columns:
+                cursor.execute('ALTER TABLE player_deaths ADD COLUMN death_method TEXT')
+                # Update existing records to use death_cause as death_method for vault deaths
+                cursor.execute('''
+                    UPDATE player_deaths 
+                    SET death_method = 'Vault Defeat', death_cause = vault_type 
+                    WHERE death_method IS NULL AND vault_type IS NOT NULL
+                ''')
+            
+            # Create indexes for faster death queries
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_deaths_username 
+                ON player_deaths(username)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_deaths_time 
+                ON player_deaths(death_time)
+            ''')
+            
             conn.commit()
             self._log_info(f'Initialized metrics database at {self.db_path}')
+            
+            # Initialize log position tracking
+            self._init_log_position_tracking()
+            
+            # Start file monitoring
+            self._start_log_file_monitoring()
+    
+    def _start_log_file_monitoring(self):
+        """Start filesystem monitoring for log files"""
+        if not WATCHDOG_AVAILABLE:
+            self._log_warning('⚠️ Watchdog library not available, using 10-second polling fallback')
+            return
+            
+        try:
+            server_path = self.app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
+            log_directory = os.path.join(server_path, 'logs')
+            
+            if not os.path.exists(log_directory):
+                self._log_warning(f'⚠️ Log directory not found: {log_directory}, using 10-second polling fallback')
+                return
+            
+            # Create file observer
+            self.file_observer = Observer()
+            event_handler = LogFileEventHandler(self)
+            
+            # Watch the logs directory for latest.log changes
+            self.file_observer.schedule(event_handler, log_directory, recursive=False)
+            self.file_observer.start()
+            
+            self.watchdog_enabled = True
+            self._log_info(f'✅ Started real-time file monitoring for log directory: {log_directory}')
+            
+        except Exception as e:
+            self._log_error(f'❌ Failed to start file monitoring: {e}, falling back to polling')
+            self.watchdog_enabled = False
+    
+    def _stop_log_file_monitoring(self):
+        """Stop filesystem monitoring for log files"""
+        if self.file_observer:
+            try:
+                self.file_observer.stop()
+                self.file_observer.join(timeout=5)
+                self.watchdog_enabled = False
+                self._log_info('Stopped file monitoring')
+            except Exception as e:
+                self._log_error(f'Error stopping file monitoring: {e}')
+    
+    def _init_log_position_tracking(self):
+        """Initialize log file position tracking"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Get stored log position
+                cursor.execute('SELECT value FROM metrics_config WHERE key = ?', ('log_position',))
+                row = cursor.fetchone()
+                
+                if row:
+                    self.log_file_position = int(json.loads(row[0]))
+                    self._log_info(f'Resumed log monitoring from position {self.log_file_position}')
+                else:
+                    # Start from end of current log file
+                    self.log_file_position = self._get_current_log_size()
+                    self._save_log_position()
+                    self._log_info(f'Started log monitoring from end of file (position {self.log_file_position})')
+                    
+        except Exception as e:
+            self._log_error(f'Failed to initialize log position tracking: {e}')
+            self.log_file_position = 0
+    
+    def _get_current_log_size(self):
+        """Get current size of latest.log file"""
+        try:
+            server_path = self.app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
+            log_path = os.path.join(server_path, 'logs', 'latest.log')
+            
+            if os.path.exists(log_path):
+                return os.path.getsize(log_path)
+            else:
+                self._log_warning(f'Log file not found: {log_path}')
+                return 0
+        except Exception as e:
+            self._log_error(f'Failed to get log file size: {e}')
+            return 0
+    
+    def _save_log_position(self):
+        """Save current log file position to database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT OR REPLACE INTO metrics_config (key, value, updated_at)
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                ''', ('log_position', json.dumps(self.log_file_position)))
+                conn.commit()
+        except Exception as e:
+            self._log_error(f'Failed to save log position: {e}')
+    
+    def _normalize_player_name(self, display_name: str) -> str:
+        """Normalize player names to handle achievement titles (cached version)"""
+        if display_name in self.player_name_cache:
+            return self.player_name_cache[display_name]
+        
+        # Simple normalization - remove common title patterns
+        # "Slayer MadSavage69 of the Ancients" -> "MadSavage69"
+        title_patterns = [
+            r'^[A-Za-z\s]+ ([A-Za-z0-9_]+) of the .+$',  # "Title Name of the Something"
+            r'^[A-Za-z\s]+ ([A-Za-z0-9_]+)$',            # "Title Name"
+        ]
+        
+        for pattern in title_patterns:
+            match = re.match(pattern, display_name)
+            if match:
+                base_name = match.group(1)
+                self.player_name_cache[display_name] = base_name
+                return base_name
+        
+        # If no pattern matches, assume it's already a base name
+        self.player_name_cache[display_name] = display_name
+        return display_name
+    
+    def _parse_timestamp(self, timestamp_str: str) -> datetime:
+        """Parse Minecraft log timestamp format"""
+        try:
+            # Full format: 22Aug2025 00:16:55.377
+            if len(timestamp_str) > 10 and any(month in timestamp_str for month in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']):
+                return datetime.strptime(timestamp_str, '%d%b%Y %H:%M:%S.%f')
+            # Short format: 15:09:47 - use today's date
+            elif ':' in timestamp_str and len(timestamp_str) <= 8:
+                time_part = datetime.strptime(timestamp_str, '%H:%M:%S').time()
+                return datetime.combine(datetime.now().date(), time_part)
+            else:
+                self._log_warning(f"Unknown timestamp format: '{timestamp_str}'")
+                return datetime.now()
+        except ValueError as e:
+            self._log_warning(f"Failed to parse timestamp '{timestamp_str}': {e}")
+            return datetime.now()
+    
+    def _process_new_log_lines(self):
+        """Process new lines from latest.log file"""
+        try:
+            server_path = self.app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
+            log_path = os.path.join(server_path, 'logs', 'latest.log')
+            
+            if not os.path.exists(log_path):
+                return
+            
+            current_size = os.path.getsize(log_path)
+            
+            # Check if file was rotated (size decreased significantly)
+            if current_size < self.log_file_position:
+                self._log_info('Log file rotated, restarting from beginning')
+                self.log_file_position = 0
+            
+            # Check if there's new content
+            if current_size <= self.log_file_position:
+                return  # No new content
+            
+            # Read new lines
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                f.seek(self.log_file_position)
+                new_content = f.read()
+                self.log_file_position = f.tell()
+            
+            if not new_content.strip():
+                return
+            
+            # Process each line
+            lines = new_content.strip().split('\n')
+            events_processed = 0
+            
+            for line in lines:
+                if self._process_log_line(line):
+                    events_processed += 1
+            
+            if events_processed > 0:
+                self._log_info(f'Processed {events_processed} events from latest.log')
+                self._save_log_position()
+                
+        except Exception as e:
+            self._log_error(f'Failed to process new log lines: {e}')
+    
+    def _process_log_line(self, line: str) -> bool:
+        """Process a single log line for join/leave/death events"""
+        try:
+            # Check for join events
+            match = self.join_pattern.search(line)
+            if match:
+                timestamp_str = match.group(1)
+                display_name = match.group(2)
+                timestamp = self._parse_timestamp(timestamp_str)
+                username = self._normalize_player_name(display_name)
+                
+                self._record_player_join(username, timestamp)
+                return True
+            
+            # Check for leave events  
+            match = self.leave_pattern.search(line)
+            if match:
+                timestamp_str = match.group(1)
+                display_name = match.group(2)
+                timestamp = self._parse_timestamp(timestamp_str)
+                username = self._normalize_player_name(display_name)
+                
+                self._record_player_leave(username, timestamp)
+                return True
+            
+            # Check for death events (multiple patterns)
+            for i, death_pattern in enumerate(self.death_patterns):
+                match = death_pattern.search(line)
+                if match:
+                    timestamp_str = match.group(1)
+                    display_name = match.group(2)
+                    timestamp = self._parse_timestamp(timestamp_str)
+                    username = self._normalize_player_name(display_name)
+                    
+                    # Determine death cause and method based on pattern
+                    if i == 0:  # Vault defeat
+                        vault_type = match.group(3)
+                        self._record_player_death(username, timestamp, vault_type, 'Vault Defeat')
+                    elif i == 1:  # Slain by entity
+                        killer = match.group(3)
+                        self._record_player_death(username, timestamp, killer, 'Slain')
+                    elif i == 2:  # Fall damage
+                        self._record_player_death(username, timestamp, 'High Place', 'Fall Damage')
+                    elif i == 3:  # Explosion
+                        bomber = match.group(3)
+                        self._record_player_death(username, timestamp, bomber, 'Explosion')
+                    elif i == 4:  # Burned to death
+                        self._record_player_death(username, timestamp, 'Fire/Lava', 'Burned')
+                    elif i == 5:  # Suffocation
+                        self._record_player_death(username, timestamp, 'Blocks', 'Suffocation')
+                    elif i == 6:  # Shot by
+                        shooter = match.group(3)
+                        self._record_player_death(username, timestamp, shooter, 'Projectile')
+                    
+                    return True
+                
+        except Exception as e:
+            self._log_error(f'Failed to process log line: {e}')
+        
+        return False
+    
+    def _record_player_join(self, username: str, timestamp: datetime):
+        """Record a player join event"""
+        with self._lock:
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    
+                    # Mark any existing active sessions as offline first (handles crashes/restarts)
+                    cursor.execute('''
+                        UPDATE players 
+                        SET is_online = 0, logout_time = ?, updated_at = ?
+                        WHERE username = ? AND is_online = 1
+                    ''', (timestamp, timestamp, username))
+                    
+                    # Insert new login session
+                    cursor.execute('''
+                        INSERT INTO players (username, login_time, is_online)
+                        VALUES (?, ?, 1)
+                    ''', (username, timestamp))
+                    
+                    conn.commit()
+                    self._log_info(f'Player joined: {username} at {timestamp}')
+                    
+            except Exception as e:
+                self._log_error(f'Failed to record player join: {e}')
+    
+    def _record_player_leave(self, username: str, timestamp: datetime):
+        """Record a player leave event"""
+        with self._lock:
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    
+                    # Update the most recent active session for this player
+                    cursor.execute('''
+                        UPDATE players 
+                        SET is_online = 0, logout_time = ?, updated_at = ?
+                        WHERE username = ? AND is_online = 1
+                        ORDER BY login_time DESC
+                        LIMIT 1
+                    ''', (timestamp, timestamp, username))
+                    
+                    if cursor.rowcount > 0:
+                        conn.commit()
+                        self._log_info(f'Player left: {username} at {timestamp}')
+                    else:
+                        self._log_warning(f'Leave event for {username} but no active session found')
+                        
+            except Exception as e:
+                self._log_error(f'Failed to record player leave: {e}')
+    
+    def _record_player_death(self, username: str, timestamp: datetime, death_cause: str, death_method: str):
+        """Record a player death event (separate from join/leave)"""
+        with self._lock:
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    
+                    # Insert death record with new schema
+                    cursor.execute('''
+                        INSERT INTO player_deaths (username, death_time, death_cause, death_method)
+                        VALUES (?, ?, ?, ?)
+                    ''', (username, timestamp, death_cause, death_method))
+                    
+                    conn.commit()
+                    self._log_info(f'Player death: {username} - {death_method} by {death_cause} at {timestamp}')
+                    
+            except Exception as e:
+                self._log_error(f'Failed to record player death: {e}')
     
     def store_metric(self, metric_type: str, value: float, metadata: Optional[Dict] = None):
         """Store a single metric in the database"""
@@ -569,17 +1054,25 @@ class MetricsStorage:
                     if status.get('running') and status.get('players') is not None:
                         player_count = status.get('players', 0)
                         max_players = status.get('max_players', 20)
+                        player_names = status.get('player_names', [])
                         self.store_metric('player_count', player_count, {
                             'source': 'mcstatus',
                             'max_players': max_players,
+                            'player_names': player_names,
                             'server_running': True
                         })
+                        
+                        # Note: Player login/logout tracking now handled by log parsing
+                        # mcstatus is only used for current player count display
                     else:
                         # Server is not running or player data unavailable
                         self.store_metric('player_count', 0, {
                             'source': 'server_offline',
                             'server_running': False
                         })
+                        
+                        # Note: Player offline status now handled by log parsing
+                        # Server shutdown will be detected via log events
                 except Exception as e:
                     self._log_warning(f'Failed to collect player count: {e}')
                     # Store 0 with error info on failure
@@ -752,17 +1245,25 @@ class MetricsStorage:
                 if status.get('running') and status.get('players') is not None:
                     player_count = status.get('players', 0)
                     max_players = status.get('max_players', 20)
+                    player_names = status.get('player_names', [])
                     self.store_metric('player_count', player_count, {
                         'source': 'mcstatus',
                         'max_players': max_players,
+                        'player_names': player_names,
                         'server_running': True
                     })
+                    
+                    # Note: Player login/logout tracking now handled by log parsing
+                    # mcstatus is only used for current player count display
                 else:
                     # Server is not running or player data unavailable
                     self.store_metric('player_count', 0, {
                         'source': 'server_offline',
                         'server_running': False
                     })
+                    
+                    # Note: Player offline status now handled by log parsing
+                    # Server shutdown will be detected via log events
             except Exception as e:
                 self._log_warning(f'Failed to collect player count: {e}')
                 # Store 0 with error info on failure
@@ -846,9 +1347,15 @@ class MetricsStorage:
                         self.collect_tps_and_lag_metrics()
                         last_collection['tps_lag'] = current_time
                     
-                    # Cleanup old metrics every hour (check every 60 seconds)
+                    # Process new log lines - fallback polling every 10 seconds (only if watchdog not available)
+                    if not self.watchdog_enabled and current_time - self.last_log_check >= 10:
+                        self._process_new_log_lines()
+                        self.last_log_check = current_time
+                    
+                    # Cleanup old metrics and player data every hour (check every 60 seconds)
                     if int(current_time) % 3600 < 60:
                         self.cleanup_old_metrics()
+                        self.cleanup_old_player_data()
                 
             except Exception as e:
                 self._log_error(f'Error in metrics collection: {e}')
@@ -871,6 +1378,10 @@ class MetricsStorage:
         """Stop the background metrics collection thread"""
         if self.collection_thread is not None:
             self.stop_collection = True
+            
+            # Stop file monitoring
+            self._stop_log_file_monitoring()
+            
             self.collection_thread.join(timeout=5)
             self._log_info('Stopped metrics collection thread')
     
@@ -900,6 +1411,123 @@ class MetricsStorage:
                 conn.commit()
         except Exception as e:
             self._log_error(f'Failed to set config value {key}: {e}')
+    
+    def update_player_status(self, current_players: List[str]):
+        """Update player login/logout status based on current online players"""
+        current_time = datetime.now()
+        
+        with self._lock:
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    
+                    # Get currently online players from database
+                    cursor.execute('SELECT username FROM players WHERE is_online = 1')
+                    db_online_players = set(row[0] for row in cursor.fetchall())
+                    
+                    current_player_set = set(current_players)
+                    
+                    # Find players who just logged in
+                    new_players = current_player_set - db_online_players
+                    for username in new_players:
+                        # Mark any previous sessions as offline first
+                        cursor.execute('''
+                            UPDATE players 
+                            SET is_online = 0, logout_time = ?, updated_at = ?
+                            WHERE username = ? AND is_online = 1
+                        ''', (current_time, current_time, username))
+                        
+                        # Insert new login session
+                        cursor.execute('''
+                            INSERT INTO players (username, login_time, is_online)
+                            VALUES (?, ?, 1)
+                        ''', (username, current_time))
+                    
+                    # Find players who just logged out
+                    logged_out_players = db_online_players - current_player_set
+                    for username in logged_out_players:
+                        cursor.execute('''
+                            UPDATE players 
+                            SET is_online = 0, logout_time = ?, updated_at = ?
+                            WHERE username = ? AND is_online = 1
+                        ''', (current_time, current_time, username))
+                    
+                    conn.commit()
+                    
+                    if new_players:
+                        self._log_info(f'Players logged in: {", ".join(new_players)}')
+                    if logged_out_players:
+                        self._log_info(f'Players logged out: {", ".join(logged_out_players)}')
+                        
+            except Exception as e:
+                self._log_error(f'Failed to update player status: {e}')
+    
+    def get_players_status(self, hours: int = None) -> Dict:
+        """Get player login/logout status for all players (ignores hours parameter for backward compatibility)"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Get ALL player sessions (no time restriction)
+                cursor.execute('''
+                    SELECT username, login_time, logout_time, is_online
+                    FROM players 
+                    ORDER BY login_time DESC
+                ''')
+                
+                players_data = []
+                online_players = []
+                offline_players = []
+                
+                for row in cursor.fetchall():
+                    username, login_time_str, logout_time_str, is_online = row
+                    
+                    player_info = {
+                        'username': username,
+                        'login_time': login_time_str,
+                        'logout_time': logout_time_str,
+                        'is_online': bool(is_online)
+                    }
+                    
+                    players_data.append(player_info)
+                    
+                    if is_online:
+                        online_players.append(player_info)
+                    else:
+                        offline_players.append(player_info)
+                
+                # Get unique players (latest session for each)
+                unique_players = {}
+                for player in players_data:
+                    username = player['username']
+                    if username not in unique_players or player['login_time'] > unique_players[username]['login_time']:
+                        unique_players[username] = player
+                
+                return {
+                    'online_players': online_players,
+                    'offline_players': offline_players,
+                    'all_sessions': players_data,
+                    'unique_players': list(unique_players.values()),
+                    'total_online': len(online_players),
+                    'total_sessions': len(players_data)
+                }
+                
+        except Exception as e:
+            self._log_error(f'Failed to get players status: {e}')
+            return {
+                'online_players': [],
+                'offline_players': [],
+                'all_sessions': [],
+                'unique_players': [],
+                'total_online': 0,
+                'total_sessions': 0
+            }
+    
+    def cleanup_old_player_data(self):
+        """DISABLED: Player login/logout history is preserved forever"""
+        # Player data is intentionally preserved forever to maintain complete server history
+        self._log_info('Player cleanup skipped - preserving all historical login/logout data')
+        return
 
 # Global instance
 metrics_storage = MetricsStorage()

@@ -673,6 +673,361 @@ function setupConsole() {
     });
 }
 
+// Update player list from monitoring API
+function updatePlayerList() {
+    fetch('/api/monitoring/metrics')
+    .then(response => response.json())
+    .then(data => {
+        const playerCount = data.players || 0;
+        const maxPlayers = data.max_players || 20;
+        const playerNames = data.player_names || [];
+        const playerStatus = data.player_status || { online_players: [], offline_players: [], unique_players: [] };
+        
+        // Update player count badge and statistics
+        const countBadge = document.getElementById('player-count-badge');
+        const currentPlayersEl = document.getElementById('current-players');
+        const maxPlayersEl = document.getElementById('max-players');
+        
+        if (countBadge) countBadge.textContent = playerCount;
+        if (currentPlayersEl) currentPlayersEl.textContent = playerCount;
+        if (maxPlayersEl) maxPlayersEl.textContent = maxPlayers;
+        
+        // Update player list with online/offline status
+        const playerListEl = document.getElementById('player-list');
+        const noPlayersMessage = document.getElementById('no-players-message');
+        
+        // Check if we should show offline players
+        const showOfflineCheckbox = document.getElementById('show-offline-checkbox');
+        let showOffline = false;
+        
+        if (showOfflineCheckbox) {
+            showOffline = showOfflineCheckbox.checked;
+        }
+        
+        // Get all unique players (latest session for each)
+        const allPlayers = playerStatus.unique_players || [];
+        const onlinePlayers = allPlayers.filter(p => p.is_online);
+        const offlinePlayers = allPlayers.filter(p => !p.is_online);
+        
+        // Build player list
+        let playersToShow = onlinePlayers;
+        if (showOffline) {
+            playersToShow = [...onlinePlayers, ...offlinePlayers];
+        }
+        
+        if (playersToShow.length > 0) {
+            // Show player list, hide no players message
+            if (noPlayersMessage) noPlayersMessage.style.display = 'none';
+            if (playerListEl) {
+                playerListEl.style.display = 'block';
+                playerListEl.innerHTML = '';
+                
+                playersToShow.forEach(player => {
+                    const listItem = document.createElement('li');
+                    const isOnline = player.is_online;
+                    const opacity = isOnline ? '1' : '0.5';
+                    const iconClass = isOnline ? 'text-success' : 'text-muted';
+                    const statusText = isOnline ? 'Online' : 'Offline';
+                    
+                    listItem.className = 'list-group-item d-flex align-items-center py-2';
+                    listItem.style.opacity = opacity;
+                    
+                    // Format login time for tooltip
+                    let loginTime = '';
+                    if (player.login_time) {
+                        try {
+                            const date = new Date(player.login_time);
+                            loginTime = date.toLocaleString();
+                        } catch (e) {
+                            loginTime = player.login_time;
+                        }
+                    }
+                    
+                    // Format logout time for tooltip
+                    let logoutTime = '';
+                    if (player.logout_time && !isOnline) {
+                        try {
+                            const date = new Date(player.logout_time);
+                            logoutTime = date.toLocaleString();
+                        } catch (e) {
+                            logoutTime = player.logout_time;
+                        }
+                    }
+                    
+                    const tooltipText = isOnline 
+                        ? `Last login: ${loginTime}` 
+                        : `Last seen: ${logoutTime}`;
+                    
+                    listItem.innerHTML = `
+                        <i class="fas fa-user-circle ${iconClass} me-2"></i>
+                        <span class="fw-medium player-name-clickable" title="${tooltipText}" 
+                              style="cursor: pointer; text-decoration: underline;" 
+                              onclick="showPlayerDetails('${escapeHtml(player.username)}')">${escapeHtml(player.username)}</span>
+                        <small class="text-muted ms-auto">${statusText}</small>
+                    `;
+                    playerListEl.appendChild(listItem);
+                });
+            }
+        } else {
+            // Show no players message, hide player list
+            if (playerListEl) playerListEl.style.display = 'none';
+            if (noPlayersMessage) noPlayersMessage.style.display = 'block';
+        }
+    })
+    .catch(error => {
+        console.error('Error updating player list:', error);
+    });
+}
+
+// Player details modal functions
+function showPlayerDetails(username) {
+    const modal = new bootstrap.Modal(document.getElementById('playerDetailsModal'));
+    
+    // Set username in modal title
+    document.getElementById('playerModalUsername').textContent = username;
+    
+    // Show loading state
+    document.getElementById('playerModalLoading').style.display = 'block';
+    document.getElementById('playerModalContent').style.display = 'none';
+    document.getElementById('playerModalError').style.display = 'none';
+    
+    // Reset modal state - show session history by default
+    document.getElementById('sessionHistoryBtn').classList.add('active');
+    document.getElementById('deathHistoryBtn').classList.remove('active');
+    document.getElementById('sessionHistoryCard').style.display = 'block';
+    document.getElementById('deathHistoryCard').style.display = 'none';
+    
+    // Clear death data cache
+    const deathsList = document.getElementById('playerDeathsList');
+    if (deathsList) {
+        deathsList.removeAttribute('data-loaded');
+        deathsList.innerHTML = '';
+    }
+    
+    // Show modal
+    modal.show();
+    
+    // Fetch player data
+    fetch(`/api/player/${encodeURIComponent(username)}/history`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // Hide loading, show content
+            document.getElementById('playerModalLoading').style.display = 'none';
+            document.getElementById('playerModalContent').style.display = 'block';
+            
+            // Update statistics
+            document.getElementById('playerTotalPlaytime').textContent = data.total_playtime || '0s';
+            document.getElementById('playerTotalSessions').textContent = data.total_sessions || 0;
+            
+            // Update status
+            const isCurrentlyOnline = data.sessions.length > 0 && data.sessions[0].is_online;
+            const statusElement = document.getElementById('playerCurrentStatus');
+            const statusTextElement = document.getElementById('playerStatusText');
+            
+            if (isCurrentlyOnline) {
+                statusElement.className = 'text-success';
+                statusElement.querySelector('i').className = 'fas fa-circle text-success';
+                statusTextElement.textContent = 'Online';
+            } else {
+                statusElement.className = 'text-muted';
+                statusElement.querySelector('i').className = 'fas fa-circle text-muted';
+                statusTextElement.textContent = 'Offline';
+            }
+            
+            // Update sessions list
+            const sessionsList = document.getElementById('playerSessionsList');
+            sessionsList.innerHTML = '';
+            
+            if (data.sessions && data.sessions.length > 0) {
+                data.sessions.forEach(session => {
+                    const row = document.createElement('tr');
+                    
+                    // Add styling for current session
+                    if (session.is_online) {
+                        row.className = 'table-success';
+                    }
+                    
+                    row.innerHTML = `
+                        <td class="text-nowrap">${escapeHtml(session.login_time)}</td>
+                        <td class="text-nowrap">${escapeHtml(session.logout_time)}</td>
+                        <td class="text-nowrap">${escapeHtml(session.duration)}</td>
+                        <td>
+                            ${session.is_online 
+                                ? '<span class="badge bg-success"><i class="fas fa-circle"></i> Online</span>'
+                                : '<span class="badge bg-secondary"><i class="fas fa-circle"></i> Offline</span>'
+                            }
+                        </td>
+                    `;
+                    
+                    sessionsList.appendChild(row);
+                });
+            } else {
+                // No sessions found
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="4" class="text-center text-muted py-3">
+                        <i class="fas fa-info-circle"></i> No session history found
+                    </td>
+                `;
+                sessionsList.appendChild(row);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching player details:', error);
+            
+            // Hide loading, show error
+            document.getElementById('playerModalLoading').style.display = 'none';
+            document.getElementById('playerModalContent').style.display = 'none';
+            document.getElementById('playerModalError').style.display = 'block';
+            document.getElementById('playerModalErrorText').textContent = error.message || 'Failed to load player data';
+        });
+}
+
+// Functions to switch between views in player modal
+function showSessionHistory() {
+    // Update button states
+    document.getElementById('sessionHistoryBtn').classList.add('active');
+    document.getElementById('deathHistoryBtn').classList.remove('active');
+    
+    // Show/hide cards
+    document.getElementById('sessionHistoryCard').style.display = 'block';
+    document.getElementById('deathHistoryCard').style.display = 'none';
+}
+
+function showDeathHistory() {
+    // Update button states
+    document.getElementById('sessionHistoryBtn').classList.remove('active');
+    document.getElementById('deathHistoryBtn').classList.add('active');
+    
+    // Show/hide cards
+    document.getElementById('sessionHistoryCard').style.display = 'none';
+    document.getElementById('deathHistoryCard').style.display = 'block';
+    
+    // Load death data if not already loaded
+    const username = document.getElementById('playerModalUsername').textContent;
+    loadPlayerDeaths(username);
+}
+
+function loadPlayerDeaths(username) {
+    // Check if deaths are already loaded
+    const deathsList = document.getElementById('playerDeathsList');
+    if (deathsList.getAttribute('data-loaded') === 'true') {
+        return; // Already loaded
+    }
+    
+    // Show loading in deaths list
+    deathsList.innerHTML = '<tr><td colspan="2" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading deaths...</td></tr>';
+    
+    // Fetch death data
+    fetch(`/api/player/${encodeURIComponent(username)}/deaths`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // Update death statistics
+            document.getElementById('playerTotalDeaths').textContent = data.total_deaths || 0;
+            document.getElementById('playerMostCommonDeath').textContent = data.most_common_method || 'None';
+            
+            // Clear loading and populate deaths list
+            deathsList.innerHTML = '';
+            
+            if (data.deaths && data.deaths.length > 0) {
+                data.deaths.forEach(death => {
+                    const row = document.createElement('tr');
+                    
+                    // Choose badge color based on death method
+                    let badgeColor = 'bg-danger';
+                    let icon = 'fas fa-skull';
+                    
+                    switch (death.death_method) {
+                        case 'Vault Defeat':
+                            badgeColor = 'bg-purple';
+                            icon = 'fas fa-dungeon';
+                            break;
+                        case 'Fall Damage':
+                            badgeColor = 'bg-warning';
+                            icon = 'fas fa-arrow-down';
+                            break;
+                        case 'Slain':
+                            badgeColor = 'bg-danger';
+                            icon = 'fas fa-sword';
+                            break;
+                        case 'Explosion':
+                            badgeColor = 'bg-orange';
+                            icon = 'fas fa-bomb';
+                            break;
+                        case 'Burned':
+                            badgeColor = 'bg-danger';
+                            icon = 'fas fa-fire';
+                            break;
+                        case 'Suffocation':
+                            badgeColor = 'bg-secondary';
+                            icon = 'fas fa-cube';
+                            break;
+                        case 'Projectile':
+                            badgeColor = 'bg-info';
+                            icon = 'fas fa-bow-arrow';
+                            break;
+                        default:
+                            badgeColor = 'bg-dark';
+                            icon = 'fas fa-question';
+                    }
+                    
+                    row.innerHTML = `
+                        <td class="text-nowrap">${escapeHtml(death.death_time)}</td>
+                        <td>
+                            <span class="badge ${badgeColor}">
+                                <i class="${icon}"></i> ${escapeHtml(death.death_method)}
+                            </span>
+                        </td>
+                        <td class="text-muted">${escapeHtml(death.death_cause)}</td>
+                    `;
+                    deathsList.appendChild(row);
+                });
+            } else {
+                // No deaths found
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="3" class="text-center text-muted py-3">
+                        <i class="fas fa-heart text-success"></i> No deaths found - this player is doing great!
+                    </td>
+                `;
+                deathsList.appendChild(row);
+            }
+            
+            // Mark as loaded
+            deathsList.setAttribute('data-loaded', 'true');
+        })
+        .catch(error => {
+            console.error('Error fetching player deaths:', error);
+            deathsList.innerHTML = `
+                <tr>
+                    <td colspan="3" class="text-center text-danger py-3">
+                        <i class="fas fa-exclamation-triangle"></i> Failed to load death data: ${escapeHtml(error.message)}
+                    </td>
+                </tr>
+            `;
+        });
+}
+
+// Make functions globally available
+window.showPlayerDetails = showPlayerDetails;
+window.showSessionHistory = showSessionHistory;
+window.showDeathHistory = showDeathHistory;
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize theme
@@ -689,6 +1044,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up periodic performance indicator updates (every 2 seconds)
     setInterval(updatePerformanceIndicators, 2000);
+    
+    // Set up player list updates (every 10 seconds) if player list is present
+    if (document.getElementById('player-list')) {
+        updatePlayerList(); // Initial load
+        setInterval(updatePlayerList, 10000);
+    }
     
     // Setup console if present on page
     setupConsole();
