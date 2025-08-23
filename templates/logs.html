@@ -457,9 +457,20 @@
             return;
         }
         
-        
         // Stop existing connection if any
         stopFollow(logType);
+        
+        // Set up watchdog timer to detect hanging connections
+        const connectionStartTime = Date.now();
+        const watchdogTimeout = setTimeout(() => {
+            console.log(`SSE watchdog timeout for ${logType} - connection may be hanging`);
+            const checkbox = document.getElementById(`follow-${logType}`);
+            if (checkbox && checkbox.checked) {
+                checkbox.checked = false;
+                stopFollow(logType);
+                appendLogContent(logType, '[WATCHDOG] Connection timeout - stopped following. Try refreshing the page if server is starting up.');
+            }
+        }, 30000); // 30 second watchdog
         
         // Create SSE connection - journal has different stream endpoint
         const streamUrl = logType === 'journal' ? '/logs/journal/stream' : `/logs/stream/${logType}`;
@@ -476,6 +487,14 @@
                     case 'initial':
                         // Load initial content
                         updateLogContent(logType, data.content || `No ${logType} log data available`);
+                        // Clear watchdog timer on successful initial load
+                        if (watchdogTimeout) clearTimeout(watchdogTimeout);
+                        break;
+                        
+                    case 'connected':
+                        appendLogContent(logType, '[CONNECTED] Log streaming started');
+                        // Clear watchdog timer on successful connection
+                        if (watchdogTimeout) clearTimeout(watchdogTimeout);
                         break;
                         
                     case 'reconnected':
@@ -494,6 +513,59 @@
                         appendLogContent(logType, '[LOG ROTATED] ' + data.message);
                         break;
                         
+                    case 'disabled':
+                        console.log(`SSE disabled for ${logType}:`, data.message);
+                        appendLogContent(logType, '[STREAMING DISABLED] ' + data.message);
+                        // Stop following when streaming is disabled
+                        const disabledCheckbox = document.getElementById(`follow-${logType}`);
+                        if (disabledCheckbox) {
+                            disabledCheckbox.checked = false;
+                            stopFollow(logType);
+                        }
+                        // Show user-friendly message and set up retry
+                        if (data.server_status === 'starting') {
+                            appendLogContent(logType, '[INFO] Server is starting up. Log streaming will resume automatically when server is ready.');
+                            
+                            // Set up automatic retry every 10 seconds to check if server is ready
+                            const retryInterval = setInterval(() => {
+                                fetch('/server/status')
+                                    .then(response => response.json())
+                                    .then(statusData => {
+                                        if (statusData.status === 'running') {
+                                            clearInterval(retryInterval);
+                                            appendLogContent(logType, '[INFO] Server is now running. Attempting to resume log streaming...');
+                                            
+                                            // Re-enable following checkbox and restart streaming
+                                            const checkbox = document.getElementById(`follow-${logType}`);
+                                            if (checkbox) {
+                                                checkbox.checked = true;
+                                                setTimeout(() => startFollow(logType), 1000); // Small delay
+                                            }
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.log('Status check failed during retry:', error);
+                                    });
+                            }, 10000); // Check every 10 seconds
+                            
+                            // Clear retry after 5 minutes to prevent infinite checking
+                            setTimeout(() => {
+                                clearInterval(retryInterval);
+                            }, 300000);
+                        }
+                        break;
+                        
+                    case 'timeout':
+                        console.log(`SSE timeout for ${logType}:`, data.message);
+                        appendLogContent(logType, '[TIMEOUT] ' + data.message);
+                        // Stop following when timeout occurs
+                        const timeoutCheckbox = document.getElementById(`follow-${logType}`);
+                        if (timeoutCheckbox) {
+                            timeoutCheckbox.checked = false;
+                            stopFollow(logType);
+                        }
+                        break;
+                        
                     case 'error':
                         console.error(`SSE error for ${logType}:`, data.error);
                         appendLogContent(logType, '[ERROR] ' + data.error);
@@ -509,13 +581,26 @@
             // Only handle actual connection failures, ignore normal SSE events
             if (eventSource.readyState === 2) {
                 console.log(`SSE connection closed for ${logType}, attempting reconnect`);
-                // Auto-reconnect after 3 seconds if checkbox is still checked
+                // Use shorter reconnect delay during potential startup issues
+                const reconnectDelay = 2000; // 2 seconds
                 setTimeout(() => {
                     const checkbox = document.getElementById(`follow-${logType}`);
                     if (checkbox && checkbox.checked) {
                         startFollow(logType);
                     }
-                }, 3000);
+                }, reconnectDelay);
+            } else if (eventSource.readyState === 0) {
+                // Connecting state - add a timeout to prevent indefinite connecting
+                setTimeout(() => {
+                    if (eventSource.readyState === 0) {
+                        console.log(`Connection timeout for ${logType}, stopping follow`);
+                        const checkbox = document.getElementById(`follow-${logType}`);
+                        if (checkbox) {
+                            checkbox.checked = false;
+                            stopFollow(logType);
+                        }
+                    }
+                }, 15000); // 15 second timeout for initial connection
             }
         };
     }

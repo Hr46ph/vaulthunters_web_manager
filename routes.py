@@ -47,104 +47,84 @@ def _execute_rcon_server_control(action):
                 'error': 'RCON password not set in server.properties'
             }
         
-        from services.rcon_client import execute_rcon_command
+        from services.rcon_client import RconClient
         
         if action == 'stop':
-            # Execute safe shutdown sequence via RCON (save first, then stop)
+            # Use direct process control for reliable stop
             try:
-                # Step 1: Disable auto-save
-                success1, response1 = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-off')
-                if not success1:
-                    current_app.logger.warning(f'save-off command failed: {response1}')
+                current_app.logger.info('Stopping server using direct process control')
+                from services.system_control import SystemControlService
+                system_control = SystemControlService()
+                result = system_control.stop_server()
                 
-                # Step 2: Force save all chunks  
-                import time
-                time.sleep(1)
-                success2, response2 = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-all flush')
-                if not success2:
-                    current_app.logger.warning(f'save-all flush command failed: {response2}')
-                
-                # Step 3: Stop the server
-                time.sleep(2)
-                success3, response3 = execute_rcon_command(server_host, rcon_port, rcon_password, 'stop')
-                
-                if success3:
-                    return {
-                        'success': True,
-                        'message': 'Server shutdown sequence completed (save-off → save-all flush → stop)',
-                        'rcon_command': 'save-off; save-all flush; stop',
-                        'rcon_response': f'save-off: {response1 or "OK"} | save-all: {response2 or "OK"} | stop: {response3 or "OK"}'
-                    }
-                else:
-                    return {
-                        'success': False,
-                        'error': f'RCON stop command failed: {response3}'
-                    }
+                current_app.logger.info(f'Process stop result: {result}')
+                return result
             except Exception as e:
+                current_app.logger.error(f'Process stop failed: {e}')
                 return {
                     'success': False,
-                    'error': f'RCON shutdown sequence failed: {str(e)}'
+                    'error': f'Server stop failed: {str(e)}'
                 }
                 
         elif action == 'restart':
-            # Execute safe shutdown sequence via RCON, then start
+            # Use direct process control for reliable restart
             try:
-                # Step 1: Disable auto-save
-                success1, response1 = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-off')
-                if not success1:
-                    current_app.logger.warning(f'save-off command failed during restart: {response1}')
+                current_app.logger.info('Restarting server using direct process control')
+                from services.system_control import SystemControlService
+                system_control = SystemControlService()
                 
-                # Step 2: Force save all chunks  
-                import time
-                time.sleep(1)
-                success2, response2 = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-all flush')
-                if not success2:
-                    current_app.logger.warning(f'save-all flush command failed during restart: {response2}')
+                # First stop the server
+                current_app.logger.info('Stopping server for restart...')
+                stop_result = system_control.stop_server()
+                current_app.logger.info(f'Stop result: {stop_result}')
                 
-                # Step 3: Stop the server
-                time.sleep(2)
-                success3, response3 = execute_rcon_command(server_host, rcon_port, rcon_password, 'stop')
-                
-                if success3:
-                    # Wait a moment for server to shut down
-                    time.sleep(3)
+                if stop_result['success']:
+                    # Wait a moment for cleanup
+                    time.sleep(2.0)
                     
-                    # Then start using system control
-                    system_control = SystemControlService()
+                    # Then start the server
+                    current_app.logger.info('Starting server after stop...')
                     start_result = system_control.start_server()
+                    current_app.logger.info(f'Start result: {start_result}')
                     
                     return {
                         'success': start_result['success'],
-                        'message': f"Server restart: Safe shutdown completed (save-off → save-all flush → stop), start {'successful' if start_result['success'] else 'failed'}",
-                        'rcon_command': 'save-off; save-all flush; stop',
-                        'rcon_response': f'save-off: {response1 or "OK"} | save-all: {response2 or "OK"} | stop: {response3 or "OK"}',
+                        'message': f"Server restart: Stop {'successful' if stop_result['success'] else 'failed'}, Start {'successful' if start_result['success'] else 'failed'}",
+                        'stop_result': stop_result,
                         'start_result': start_result
                     }
                 else:
                     return {
                         'success': False,
-                        'error': f'RCON stop command failed during restart: {response3}'
+                        'error': f"Restart failed during stop phase: {stop_result.get('error', 'Unknown error')}"
                     }
+                    
             except Exception as e:
+                current_app.logger.error(f'Process restart failed: {e}')
                 return {
                     'success': False,
-                    'error': f'RCON restart sequence failed: {str(e)}'
+                    'error': f'Server restart failed: {str(e)}'
                 }
                 
         elif action == 'save':
             # Execute save-all flush command via RCON
-            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'save-all flush')
-            if success:
-                return {
-                    'success': True,
-                    'message': 'World save command sent via RCON',
-                    'rcon_command': 'save-all flush',
-                    'rcon_response': response
-                }
-            else:
+            try:
+                with RconClient(server_host, rcon_port, rcon_password, timeout=20.0) as rcon:
+                    current_app.logger.info(f'Executing save command via RCON')
+                    response = rcon.command('save-all flush')
+                    current_app.logger.info(f'save-all flush result: {response}')
+                    
+                    return {
+                        'success': True,
+                        'message': 'World save command sent via RCON',
+                        'rcon_command': 'save-all flush',
+                        'rcon_response': response
+                    }
+            except Exception as e:
+                current_app.logger.error(f'RCON save command failed: {e}')
                 return {
                     'success': False,
-                    'error': f'RCON save command failed: {response}'
+                    'error': f'RCON save command failed: {str(e)}'
                 }
         
         return {'success': False, 'error': 'Unknown action'}
@@ -441,8 +421,54 @@ def monitoring():
 @main_bp.route('/api/monitoring/metrics')
 def monitoring_metrics():
     """API endpoint for monitoring metrics"""
-    # Simple test to verify the route works
-    current_app.logger.info('=== MONITORING METRICS API CALLED ===')
+    # Check server status first - NO metrics collection if server not green
+    try:
+        system_control = SystemControlService()
+        server_status = system_control.get_server_status()
+        
+        if not server_status.get('running', False) or server_status.get('status') != 'running':
+            # Return minimal safe data when server is stopped or starting
+            return jsonify({
+                'server_running': False,
+                'server_status': server_status.get('status', 'stopped'),
+                'players': 0,
+                'max_players': 20,
+                'player_names': [],
+                'java_memory_mb': 0,
+                'java_cpu_percent': 0,
+                'player_status': {'online_players': [], 'offline_players': [], 'unique_players': [], 'total_online': 0},
+                'system_memory': {'used_gb': 0, 'total_gb': 0, 'percent': 0},
+                'detailed_memory': {'used_mb': 0, 'buffers_mb': 0, 'cache_mb': 0, 'swap_used_mb': 0, 'total_mb': 0, 'percent': 0},
+                'system_load': 0,
+                'cpu_system_avg': 0,
+                'cpu_count': 4,
+                'cpu_per_core': [0, 0, 0, 0],
+                'events': [{'type': 'Server Status', 'message': f'Server {server_status.get("status", "stopped")} - metrics collection disabled', 'timestamp': datetime.now().isoformat(), 'severity': 'info'}],
+                'message': 'Metrics collection disabled - server not running'
+            })
+    except Exception as e:
+        current_app.logger.error(f'Error checking server status for metrics: {e}')
+        # Return safe fallback data
+        return jsonify({
+            'server_running': False,
+            'server_status': 'unknown',
+            'players': 0,
+            'max_players': 20,
+            'player_names': [],
+            'java_memory_mb': 0,
+            'java_cpu_percent': 0,
+            'player_status': {'online_players': [], 'offline_players': [], 'unique_players': [], 'total_online': 0},
+            'system_memory': {'used_gb': 0, 'total_gb': 0, 'percent': 0},
+            'detailed_memory': {'used_mb': 0, 'buffers_mb': 0, 'cache_mb': 0, 'swap_used_mb': 0, 'total_mb': 0, 'percent': 0},
+            'system_load': 0,
+            'cpu_system_avg': 0,
+            'cpu_count': 4,
+            'cpu_per_core': [0, 0, 0, 0],
+            'events': [{'type': 'Error', 'message': 'Status check failed - metrics collection disabled', 'timestamp': datetime.now().isoformat(), 'severity': 'error'}],
+            'error': 'Status check failed'
+        })
+    
+    current_app.logger.info('=== MONITORING METRICS API CALLED - SERVER RUNNING ===')
     
     # Get system memory data (not just Minecraft process)
     system_memory = {'used_gb': 0, 'total_gb': 0, 'percent': 0}
@@ -1118,6 +1144,29 @@ def log_stream(log_type):
     if log_type not in ['latest', 'debug']:
         return jsonify({'error': 'Invalid log type for streaming'}), 400
     
+    # Check server status first - disable SSE streaming if server is restarting
+    try:
+        system_control = SystemControlService()
+        server_status = system_control.get_server_status()
+        
+        # Disable streaming during restart or when server is starting/stopping to prevent hanging
+        if server_status.get('status') == 'starting':
+            from flask import Response
+            def generate_disabled():
+                yield f"data: {json.dumps({'type': 'disabled', 'message': 'Log streaming disabled during server startup to prevent hanging', 'server_status': 'starting'})}\n\n"
+            
+            return Response(
+                generate_disabled(),
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'X-Accel-Buffering': 'no'
+                }
+            )
+    except Exception as e:
+        current_app.logger.warning(f'Failed to check server status for log streaming: {e}')
+    
     # Capture Flask config values in request context (before generator starts)
     server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/natie/VaultHunters')
     log_files = current_app.config.get('LOG_FILES', {
@@ -1137,13 +1186,27 @@ def log_stream(log_type):
                 yield f"data: {json.dumps({'type': 'error', 'error': f'Log file not found: {log_path}'})}\n\n"
                 return
             
-            # Send initial content using simple tail
+            # Check if server is starting up to adjust behavior
+            server_startup_mode = False
             try:
-                result = subprocess.run(['tail', '-n', '500', log_path], capture_output=True, text=True, timeout=5)
+                from services.system_control import SystemControlService
+                system_control = SystemControlService()
+                status = system_control.get_server_status()
+                server_startup_mode = status.get('status') == 'starting'
+            except Exception:
+                pass
+            
+            # Send initial content using simple tail with startup-aware timeout
+            try:
+                initial_timeout = 10 if server_startup_mode else 5
+                result = subprocess.run(['tail', '-n', '500', log_path], capture_output=True, text=True, timeout=initial_timeout)
                 if result.returncode == 0 and result.stdout:
-                    yield f"data: {json.dumps({'type': 'initial', 'content': result.stdout, 'log_type': log_type})}\n\n"
+                    yield f"data: {json.dumps({'type': 'initial', 'content': result.stdout, 'log_type': log_type, 'startup_mode': server_startup_mode})}\n\n"
                 else:
-                    yield f"data: {json.dumps({'type': 'initial', 'content': f'No {log_type} log data available', 'log_type': log_type})}\n\n"
+                    yield f"data: {json.dumps({'type': 'initial', 'content': f'No {log_type} log data available', 'log_type': log_type, 'startup_mode': server_startup_mode})}\n\n"
+            except subprocess.TimeoutExpired:
+                yield f"data: {json.dumps({'type': 'error', 'error': f'Initial content read timed out - server may be starting up', 'log_type': log_type})}\n\n"
+                return
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'error': f'Failed to read initial content: {str(e)}'})}\n\n"
                 return
@@ -1156,7 +1219,9 @@ def log_stream(log_type):
                 
                 last_activity = time.time()
                 last_file_check = time.time()
+                connection_start = time.time()
                 file_stat = None
+                max_connection_time = 300  # 5 minutes max connection time during startup
                 
                 # Get initial file stats
                 try:
@@ -1164,22 +1229,28 @@ def log_stream(log_type):
                 except OSError:
                     file_stat = None
                 
-                yield f"data: {json.dumps({'type': 'connected', 'log_type': log_type})}\n\n"
+                yield f"data: {json.dumps({'type': 'connected', 'log_type': log_type, 'startup_mode': server_startup_mode})}\n\n"
                 
                 def start_tail_process():
-                    """Start a new tail process"""
+                    """Start a new tail process with startup-aware configuration"""
+                    # Use shorter buffer and more responsive settings during startup
+                    bufsize = 0 if server_startup_mode else 1
+                    
                     process = subprocess.Popen(
                         ['tail', '-f', log_path],  # Use -f instead of -F for better control
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         universal_newlines=True,
-                        bufsize=0
+                        bufsize=bufsize
                     )
                     
                     # Make stdout non-blocking
-                    fd = process.stdout.fileno()
-                    fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-                    fcntl.fcntl(fd, fcntl.F_SETFL, fl | os_module.O_NONBLOCK)
+                    try:
+                        fd = process.stdout.fileno()
+                        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+                        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os_module.O_NONBLOCK)
+                    except Exception as e:
+                        current_app.logger.warning(f"Failed to set non-blocking mode for {log_type}: {e}")
                     
                     return process
                 
@@ -1188,6 +1259,11 @@ def log_stream(log_type):
                 # Stream with file rotation detection
                 while True:
                     current_time = time.time()
+                    
+                    # Check for connection timeout during startup to prevent indefinite hanging
+                    if server_startup_mode and (current_time - connection_start > max_connection_time):
+                        yield f"data: {json.dumps({'type': 'timeout', 'message': 'Connection timed out during server startup - please refresh page', 'log_type': log_type})}\n\n"
+                        break
                     
                     # Check if process is still running
                     if tail_process.poll() is not None:
@@ -1232,25 +1308,34 @@ def log_stream(log_type):
                         
                         last_file_check = current_time
                     
-                    # Use select to check for data availability with timeout
-                    ready, _, _ = select.select([tail_process.stdout], [], [], 1.0)
+                    # Use startup-aware timeout for select() to prevent hanging
+                    select_timeout = 0.5 if server_startup_mode else 1.0
                     
-                    if ready:
-                        try:
-                            line = tail_process.stdout.readline()
-                            if line:
-                                line = line.rstrip()
+                    try:
+                        # Use shorter timeout during startup to be more responsive
+                        ready, _, _ = select.select([tail_process.stdout], [], [], select_timeout)
+                        
+                        if ready:
+                            try:
+                                line = tail_process.stdout.readline()
                                 if line:
-                                    yield f"data: {json.dumps({'type': 'line', 'line': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
-                                    last_activity = current_time
-                        except IOError:
-                            # No data available, continue
-                            pass
-                    else:
-                        # Send keepalive every 30 seconds
-                        if current_time - last_activity > 30:
-                            yield f"data: {json.dumps({'type': 'keepalive', 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
-                            last_activity = current_time
+                                    line = line.rstrip()
+                                    if line:
+                                        yield f"data: {json.dumps({'type': 'line', 'line': line, 'timestamp': datetime.now().isoformat(), 'log_type': log_type})}\n\n"
+                                        last_activity = current_time
+                            except (IOError, OSError):
+                                # No data available or process died, continue
+                                pass
+                        else:
+                            # Send keepalive more frequently during startup
+                            keepalive_interval = 15 if server_startup_mode else 30
+                            if current_time - last_activity > keepalive_interval:
+                                yield f"data: {json.dumps({'type': 'keepalive', 'timestamp': datetime.now().isoformat(), 'log_type': log_type, 'startup_mode': server_startup_mode})}\n\n"
+                                last_activity = current_time
+                    except (OSError, IOError) as e:
+                        current_app.logger.warning(f"Select error for {log_type} stream: {e}")
+                        # Break out of loop to restart process
+                        break
                     
                     # Check for client disconnect
                     try:
@@ -1615,25 +1700,25 @@ def save_jvm_config():
 
 @main_bp.route('/config/jvm/apply_aikars_flags', methods=['POST'])
 def apply_aikars_flags():
-    """Apply Aikar's flags to user_jvm_args.txt"""
+    """Generate Aikar's flags content (without saving)"""
     try:
         config_manager = ConfigManager()
-        result = config_manager.apply_aikars_flags()
+        result = config_manager.generate_aikars_flags_content()
         
         if result['success']:
-            current_app.logger.info('Aikar\'s flags applied successfully')
+            current_app.logger.info('Aikar\'s flags content generated successfully')
             return jsonify({
                 'success': True,
-                'message': result['message'],
-                'backup_created': result.get('backup_created', False)
+                'message': 'Aikar\'s flags generated (not saved - click Save to apply)',
+                'content': result['content']
             })
         else:
-            current_app.logger.error(f'Failed to apply Aikar\'s flags: {result["error"]}')
+            current_app.logger.error(f'Failed to generate Aikar\'s flags: {result["error"]}')
             return jsonify({'error': result['error']}), 500
             
     except Exception as e:
-        current_app.logger.error(f'Apply Aikar\'s flags error: {e}')
-        return jsonify({'error': 'Failed to apply Aikar\'s flags'}), 500
+        current_app.logger.error(f'Generate Aikar\'s flags error: {e}')
+        return jsonify({'error': 'Failed to generate Aikar\'s flags'}), 500
 
 @main_bp.route('/backups')
 def backups():
@@ -1720,6 +1805,16 @@ def console():
 def console_status():
     """Check RCON connection status"""
     try:
+        # First check if server is running - NO RCON/mcstatus if server not green
+        system_control = SystemControlService()
+        server_status = system_control.get_server_status()
+        
+        if not server_status.get('running', False) or server_status.get('status') != 'running':
+            return jsonify({
+                'connected': False,
+                'error': f'Server not running (status: {server_status.get("status", "stopped")})'
+            })
+        
         from mcrcon import MCRcon
         import os
         
@@ -2134,6 +2229,71 @@ def cleanup_duplicate_sessions():
         return jsonify({
             'success': False,
             'error': 'Failed to cleanup duplicate sessions'
+        }), 500
+
+@main_bp.route('/api/server-properties/validate')
+def validate_server_properties():
+    """API endpoint to validate server.properties configuration"""
+    try:
+        from services.server_properties_validator import ServerPropertiesValidator
+        validator = ServerPropertiesValidator()
+        result = validator.validate_properties()
+        
+        return jsonify({
+            'success': True,
+            'validation': result
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Failed to validate server properties: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@main_bp.route('/api/server-properties/apply', methods=['POST'])
+def apply_server_properties():
+    """API endpoint to auto-configure server.properties"""
+    try:
+        # Skip CSRF validation for consistency with other routes
+        current_app.logger.info('CSRF validation skipped for server properties apply')
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+        
+        restart_server = data.get('restart_server', False)
+        custom_password = data.get('custom_rcon_password', None)
+        
+        # Validate custom password if provided
+        if custom_password and len(custom_password.strip()) < 8:
+            return jsonify({
+                'success': False,
+                'error': 'Custom RCON password must be at least 8 characters long'
+            }), 400
+        
+        current_app.logger.info(f'Server properties apply request: restart={restart_server}, custom_password_provided={bool(custom_password)}')
+        
+        from services.server_properties_validator import ServerPropertiesValidator
+        validator = ServerPropertiesValidator()
+        result = validator.auto_configure_properties(
+            restart_server=restart_server,
+            custom_rcon_password=custom_password
+        )
+        
+        current_app.logger.info(f'Server properties apply result: {result}')
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            current_app.logger.error(f'Server properties apply failed: {result}')
+            return jsonify(result), 400
+        
+    except Exception as e:
+        current_app.logger.error(f'Failed to apply server properties: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
 
 @main_bp.route('/health')

@@ -3,6 +3,12 @@
 {% block title %}Configuration - VaultHunters Web Manager{% endblock %}
 
 {% block content %}
+    <!-- Notification Bar -->
+    <div id="notification-bar" class="alert alert-dismissible fade" style="display: none; margin-bottom: 20px;" role="alert">
+        <span id="notification-message"></span>
+        <button type="button" class="btn-close" onclick="hideNotification()"></button>
+    </div>
+
     <div class="row">
         <!-- Category Buttons -->
         <div class="col-md-3">
@@ -228,6 +234,18 @@
         [data-bs-theme="dark"] .file-item:hover {
             background-color: var(--bs-dark);
         }
+        
+        /* Notification Bar Styles */
+        #notification-bar {
+            position: sticky;
+            top: 0;
+            z-index: 1050;
+            border-radius: 0;
+        }
+        
+        #notification-bar.show {
+            display: block !important;
+        }
     </style>
 {% endblock %}
 
@@ -238,6 +256,8 @@
         
         // Category Management
         function showCategory(category) {
+            // Hide notification when navigating between categories
+            hideNotification();
             // Update button states
             document.querySelectorAll('.btn[id^="btn-"]').forEach(btn => {
                 btn.classList.remove('active');
@@ -446,7 +466,9 @@
             const editor = document.getElementById('jvm-args-editor');
             editor.value = 'Loading user_jvm_args.txt...';
             
-            fetch('/config/jvm/user_jvm_args')
+            // Add cache-busting parameter to ensure fresh data
+            const cacheBuster = Date.now();
+            fetch(`/config/jvm/user_jvm_args?t=${cacheBuster}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
@@ -489,16 +511,25 @@
         }
         
         function saveJvmArgs() {
+            // Hide notification when saving
+            hideNotification();
             const content = document.getElementById('jvm-args-editor').value;
             saveJvmContent('user_jvm_args', content, 'user_jvm_args.txt saved successfully!');
         }
         
         function saveUnixArgs() {
+            // Hide notification when saving
+            hideNotification();
             const content = document.getElementById('unix-args-editor').value;
             saveJvmContent('unix_args', content, 'unix_args.txt saved successfully!');
         }
         
         function applyAikarsFlags() {
+            console.log('Apply Aikar\'s flags clicked');
+            // Immediate visual feedback
+            const editor = document.getElementById('jvm-args-editor');
+            editor.value = 'Generating Aikar\'s flags...';
+            
             fetch('/config/jvm/apply_aikars_flags', {
                 method: 'POST',
                 headers: {
@@ -508,18 +539,26 @@
                     csrf_token: document.querySelector('meta[name=csrf-token]').content
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('Response received:', response.status);
+                return response.json();
+            })
             .then(data => {
+                console.log('Response data:', data);
                 if (data.success) {
-                    // Small delay to ensure file write completes before reload
-                    setTimeout(() => {
-                        loadJvmArgs(); // Reload to show the new content
-                    }, 200);
+                    showAlert('success', data.message || 'Aikar\'s flags generated successfully');
+                    // Update the textarea directly with the generated content
+                    const editor = document.getElementById('jvm-args-editor');
+                    console.log('Found editor element:', !!editor);
+                    console.log('Content length:', data.content ? data.content.length : 0);
+                    editor.value = data.content;
+                    console.log('Updated editor value');
                 } else {
-                    showAlert('error', 'Error: ' + (data.error || 'Failed to apply Aikar\'s flags'));
+                    showAlert('error', 'Error: ' + (data.error || 'Failed to generate Aikar\'s flags'));
                 }
             })
             .catch(error => {
+                console.error('Network error:', error);
                 showAlert('error', 'Network error: ' + error);
             });
         }
@@ -579,13 +618,41 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
         
-        function showAlert(type, message) {
-            // Use the existing modal system from app.js
-            if (window.showAlert) {
-                window.showAlert(message);
+        function showNotification(type, message) {
+            const notificationBar = document.getElementById('notification-bar');
+            const messageElement = document.getElementById('notification-message');
+            
+            // Clear existing classes
+            notificationBar.className = 'alert alert-dismissible fade';
+            
+            // Add appropriate Bootstrap alert class
+            if (type === 'success') {
+                notificationBar.classList.add('alert-success');
+            } else if (type === 'error') {
+                notificationBar.classList.add('alert-danger');
+            } else if (type === 'warning') {
+                notificationBar.classList.add('alert-warning');
             } else {
-                alert(message);
+                notificationBar.classList.add('alert-info');
             }
+            
+            // Set message and show
+            messageElement.textContent = message;
+            notificationBar.style.display = 'block';
+            notificationBar.classList.add('show');
+        }
+        
+        function hideNotification() {
+            const notificationBar = document.getElementById('notification-bar');
+            notificationBar.classList.remove('show');
+            setTimeout(() => {
+                notificationBar.style.display = 'none';
+            }, 150); // Match Bootstrap fade transition
+        }
+        
+        function showAlert(type, message) {
+            // Use new notification system instead of popup
+            showNotification(type, message);
         }
         
         // Initialize on page load

@@ -418,25 +418,32 @@ class ConfigManager:
                 return current_content
             
             existing_lines = current_content['content'].split('\n')
+            self.logger.info(f"Processing {len(existing_lines)} existing lines")
             
             # Parse existing JVM args to preserve non-Aikar settings
             preserved_lines = []
             preserved_memory_settings = []
             
-            # Aikar's flag patterns to identify and replace
+            # Aikar's flag patterns to identify and replace (comprehensive list)
             aikar_patterns = [
                 'UseG1GC', 'ParallelRefProcEnabled', 'MaxGCPauseMillis', 'UnlockExperimentalVMOptions',
                 'DisableExplicitGC', 'AlwaysPreTouch', 'G1NewSizePercent', 'G1MaxNewSizePercent',
                 'G1HeapRegionSize', 'G1ReservePercent', 'G1HeapWastePercent', 'G1MixedGCCountTarget',
                 'InitiatingHeapOccupancyPercent', 'G1MixedGCLiveThresholdPercent', 'G1RSetUpdatingPauseTimePercent',
-                'SurvivorRatio', 'PerfDisableSharedMem', 'MaxTenuringThreshold', 'using.aikars.flags', 'aikars.new.flags'
+                'SurvivorRatio', 'PerfDisableSharedMem', 'MaxTenuringThreshold', 'UseLargePagesInMetaspace',
+                'using.aikars.flags', 'aikars.new.flags'
             ]
             
             for line in existing_lines:
                 line = line.strip()
                 
-                # Skip empty lines and existing Aikar flags comment sections
-                if not line or line.startswith('# Aikar\'s Flags') or line.startswith('# Source: https://docs.papermc.io') or line.startswith('# Applied on:'):
+                # Skip empty lines and ALL Aikar-related comment sections
+                if (not line or 
+                    line.startswith('# Aikar\'s Flags') or 
+                    line.startswith('# Source: https://docs.papermc.io') or 
+                    line.startswith('# Applied on:') or
+                    line.startswith('# Memory allocation') or
+                    line.startswith('# Aikar\'s optimization flags')):
                     continue
                 
                 # Preserve memory settings but extract them
@@ -451,9 +458,16 @@ class ConfigManager:
                         is_aikar_flag = True
                         break
                 
+                # Also check for Aikar system properties (-D flags)
+                if line.startswith('-Dusing.aikars.flags') or line.startswith('-Daikars.new.flags'):
+                    is_aikar_flag = True
+                
                 # Preserve non-Aikar flags
                 if not is_aikar_flag:
                     preserved_lines.append(line)
+            
+            self.logger.info(f"Preserved {len(preserved_lines)} non-Aikar lines: {preserved_lines}")
+            self.logger.info(f"Preserved {len(preserved_memory_settings)} memory settings: {preserved_memory_settings}")
             
             # Build new content
             content_lines = []
@@ -472,15 +486,17 @@ class ConfigManager:
                 ''
             ])
             
-            # Add memory settings (use preserved if available, otherwise defaults)
+            # Add memory settings (use preserved if available, otherwise system-optimized defaults)
             if preserved_memory_settings:
                 content_lines.append('# Memory allocation (preserved from existing settings)')
                 content_lines.extend(preserved_memory_settings)
             else:
+                # Get system-optimized heap size when no existing settings
+                recommended_heap_gb = self._get_recommended_heap_size()
                 content_lines.extend([
-                    '# Memory allocation (adjust -Xms and -Xmx based on your system)',
-                    '-Xms4G',
-                    '-Xmx8G'
+                    '# Memory allocation (system-optimized based on your RAM)',
+                    f'-Xms{recommended_heap_gb}G',
+                    f'-Xmx{recommended_heap_gb}G'
                 ])
             
             content_lines.append('')
@@ -502,6 +518,120 @@ class ConfigManager:
             
         except Exception as e:
             self.logger.error(f"Error applying Aikar's flags: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def generate_aikars_flags_content(self):
+        """Generate Aikar's flags content without saving to file"""
+        try:
+            # Get Aikar's flags from config.toml
+            aikars_flags = self._get_aikars_flags_from_config()
+            if not aikars_flags:
+                return {'success': False, 'error': 'Could not load Aikar\'s flags from configuration'}
+            
+            # Read existing content
+            current_content = self.read_jvm_args_file('user_jvm_args')
+            if not current_content['success']:
+                return current_content
+            
+            existing_lines = current_content['content'].split('\n')
+            self.logger.info(f"Processing {len(existing_lines)} existing lines for content generation")
+            
+            # Parse existing JVM args to preserve non-Aikar settings
+            preserved_lines = []
+            preserved_memory_settings = []
+            
+            # Aikar's flag patterns to identify and replace (comprehensive list)
+            aikar_patterns = [
+                'UseG1GC', 'ParallelRefProcEnabled', 'MaxGCPauseMillis', 'UnlockExperimentalVMOptions',
+                'DisableExplicitGC', 'AlwaysPreTouch', 'G1NewSizePercent', 'G1MaxNewSizePercent',
+                'G1HeapRegionSize', 'G1ReservePercent', 'G1HeapWastePercent', 'G1MixedGCCountTarget',
+                'InitiatingHeapOccupancyPercent', 'G1MixedGCLiveThresholdPercent', 'G1RSetUpdatingPauseTimePercent',
+                'SurvivorRatio', 'PerfDisableSharedMem', 'MaxTenuringThreshold', 'UseLargePagesInMetaspace',
+                'using.aikars.flags', 'aikars.new.flags'
+            ]
+            
+            for line in existing_lines:
+                line = line.strip()
+                
+                # Skip empty lines and ALL Aikar-related comment sections
+                if (not line or 
+                    line.startswith('# Aikar\'s Flags') or 
+                    line.startswith('# Source: https://docs.papermc.io') or 
+                    line.startswith('# Applied on:') or
+                    line.startswith('# Memory allocation') or
+                    line.startswith('# Aikar\'s optimization flags')):
+                    continue
+                
+                # Preserve memory settings but extract them
+                if line.startswith('-Xms') or line.startswith('-Xmx'):
+                    preserved_memory_settings.append(line)
+                    continue
+                
+                # Check if this line contains an Aikar flag
+                is_aikar_flag = False
+                for pattern in aikar_patterns:
+                    if pattern in line:
+                        is_aikar_flag = True
+                        break
+                
+                # Also check for Aikar system properties (-D flags)
+                if line.startswith('-Dusing.aikars.flags') or line.startswith('-Daikars.new.flags'):
+                    is_aikar_flag = True
+                
+                # Preserve non-Aikar flags
+                if not is_aikar_flag:
+                    preserved_lines.append(line)
+            
+            self.logger.info(f"Preserved {len(preserved_lines)} non-Aikar lines: {preserved_lines}")
+            self.logger.info(f"Preserved {len(preserved_memory_settings)} memory settings: {preserved_memory_settings}")
+            
+            # Build new content
+            content_lines = []
+            
+            # Add preserved non-Aikar content first
+            if preserved_lines:
+                content_lines.extend([line for line in preserved_lines if line.strip()])
+                if content_lines:  # Only add separator if there are preserved lines
+                    content_lines.append('')
+            
+            # Add Aikar's flags section
+            content_lines.extend([
+                '# Aikar\'s Flags - Optimized JVM arguments for Minecraft servers',
+                '# Source: https://docs.papermc.io/paper/aikars-flags/',
+                '# Generated on: ' + datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                ''
+            ])
+            
+            # Add memory settings (use preserved if available, otherwise system-optimized defaults)
+            if preserved_memory_settings:
+                content_lines.append('# Memory allocation (preserved from existing settings)')
+                content_lines.extend(preserved_memory_settings)
+            else:
+                # Get system-optimized heap size when no existing settings
+                recommended_heap_gb = self._get_recommended_heap_size()
+                content_lines.extend([
+                    '# Memory allocation (system-optimized based on your RAM)',
+                    f'-Xms{recommended_heap_gb}G',
+                    f'-Xmx{recommended_heap_gb}G'
+                ])
+            
+            content_lines.append('')
+            content_lines.append('# Aikar\'s optimization flags')
+            
+            # Add each Aikar flag
+            for flag in aikars_flags:
+                content_lines.append(f'-{flag}')
+            
+            content = '\n'.join(content_lines) + '\n'
+            
+            return {
+                'success': True,
+                'content': content,
+                'message': 'Aikar\'s flags content generated (not saved)'
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error generating Aikar's flags content: {e}")
             return {'success': False, 'error': str(e)}
     
     def _get_aikars_flags_from_config(self):
@@ -548,9 +678,9 @@ class ConfigManager:
             return self._get_default_aikars_flags()
     
     def _get_default_aikars_flags(self):
-        """Get optimized Aikar's flags based on system memory and configuration"""
+        """Get optimized Aikar's flags based on system memory and configuration (excludes memory flags)"""
         try:
-            # Get system memory and determine heap size
+            # Get system memory and determine heap size for conditional optimization
             heap_size_gb = self._get_recommended_heap_size()
             
             # Get threshold from config
@@ -571,12 +701,6 @@ class ConfigManager:
                 'XX:+DisableExplicitGC',
                 'Dusing.aikars.flags=https://mcflags.emc.gs',
                 'Daikars.new.flags=true'
-            ]
-            
-            # Memory size flags (always include heap size)
-            memory_flags = [
-                f'Xms{heap_size_gb}G',
-                f'Xmx{heap_size_gb}G'
             ]
             
             # Conditional flags based on heap size threshold
@@ -603,18 +727,16 @@ class ConfigManager:
                     'XX:G1MixedGCLiveThresholdPercent=90'
                 ]
             
-            # Combine all flags
-            all_flags = memory_flags + base_flags + conditional_flags
+            # Combine flags WITHOUT memory settings (those are handled separately)
+            all_flags = base_flags + conditional_flags
             
-            self.logger.info(f"Generated Aikar's flags for {heap_size_gb}GB heap (threshold: {threshold}GB)")
+            self.logger.info(f"Generated Aikar's flags (optimized for {heap_size_gb}GB heap, threshold: {threshold}GB)")
             return all_flags
             
         except Exception as e:
             self.logger.error(f"Error generating optimized flags, using fallback: {e}")
-            # Fallback to basic flags
+            # Fallback to basic flags (WITHOUT memory settings)
             return [
-                'Xms6G',
-                'Xmx6G',
                 'XX:+UseG1GC',
                 'XX:+UnlockExperimentalVMOptions',
                 'XX:G1NewSizePercent=40',

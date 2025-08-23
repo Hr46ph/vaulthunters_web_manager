@@ -386,12 +386,18 @@ function updateStatusDisplay(status) {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Players:</span>
-                <span class="ms-3">${status.players}/${status.max_players}</span>
+                <span class="text-muted ms-3">--</span>
             </div>`;
         }
         
         // Always show CPU field
-        if (status.cpu_usage > 0) {
+        if (status.status === 'stopped') {
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>Java CPU:</span>
+                <span class="text-muted ms-3">--</span>
+            </div>`;
+        } else if (status.cpu_usage > 0) {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Java CPU:</span>
@@ -406,7 +412,13 @@ function updateStatusDisplay(status) {
         }
         
         // Always show Memory field
-        if (status.memory_usage > 0) {
+        if (status.status === 'stopped') {
+            html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>Java Memory:</span>
+                <span class="text-muted ms-3">--</span>
+            </div>`;
+        } else if (status.memory_usage > 0) {
             const memoryDisplay = status.memory_usage >= 1024 
                 ? `${(status.memory_usage / 1024).toFixed(1)} GB`
                 : `${status.memory_usage} MB`;
@@ -929,4 +941,300 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(checkRconStatus, 30000);
     }
     
+    // Check server properties validation on startup
+    checkServerPropertiesValidation();
+    
+});
+
+// Server Properties Validation Functions
+function checkServerPropertiesValidation() {
+    // Only run this check on the dashboard page
+    if (!window.location.pathname.endsWith('/') && window.location.pathname !== '/') {
+        return;
+    }
+    
+    // Add a small delay to avoid race conditions with page loading
+    setTimeout(() => {
+        fetch('/api/server-properties/validate')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.validation) {
+                    const validation = data.validation;
+                    
+                    // Show alert if there are validation issues, hide if everything is fine
+                    if (!validation.valid && validation.issues && validation.issues.length > 0) {
+                        showServerPropertiesAlert(validation);
+                    } else {
+                        // Hide alert if validation passes
+                        const alertElement = document.getElementById('server-properties-alert');
+                        if (alertElement) {
+                            alertElement.style.display = 'none';
+                        }
+                    }
+                } else {
+                    console.warn('Failed to validate server properties:', data.error);
+                }
+            })
+            .catch(error => {
+                console.warn('Failed to check server properties validation:', error);
+            });
+    }, 1000); // 1 second delay
+}
+
+function showServerPropertiesAlert(validation) {
+    const alertElement = document.getElementById('server-properties-alert');
+    const summaryElement = document.getElementById('properties-issues-summary');
+    
+    if (!alertElement || !summaryElement) return;
+    
+    // Build summary text
+    const criticalCount = validation.critical_issues || 0;
+    const warningCount = validation.warning_issues || 0;
+    const totalCount = validation.total_issues || 0;
+    
+    let summaryText = '';
+    if (criticalCount > 0) {
+        summaryText += `<span class="badge bg-danger me-2">${criticalCount} Critical</span>`;
+    }
+    if (warningCount > 0) {
+        summaryText += `<span class="badge bg-warning me-2">${warningCount} Warnings</span>`;
+    }
+    summaryText += `<span class="text-muted">${totalCount} total issues found</span>`;
+    
+    summaryElement.innerHTML = summaryText;
+    
+    // Show the alert
+    alertElement.style.display = 'block';
+}
+
+function dismissPropertiesAlert() {
+    const alertElement = document.getElementById('server-properties-alert');
+    if (alertElement) {
+        alertElement.style.display = 'none';
+    }
+}
+
+function loadServerPropertiesModal() {
+    const modalContent = document.getElementById('propertiesModalContent');
+    const modalLoading = document.getElementById('propertiesModalLoading');
+    const modalError = document.getElementById('propertiesModalError');
+    const applyBtn = document.getElementById('applyPropertiesBtn');
+    
+    // Show loading state
+    modalContent.style.display = 'none';
+    modalError.style.display = 'none';
+    modalLoading.style.display = 'block';
+    applyBtn.disabled = true;
+    
+    fetch('/api/server-properties/validate')
+        .then(response => response.json())
+        .then(data => {
+            modalLoading.style.display = 'none';
+            
+            if (data.success && data.validation) {
+                const validation = data.validation;
+                
+                if (!validation.valid && validation.issues) {
+                    populatePropertiesIssues(validation.issues);
+                    modalContent.style.display = 'block';
+                    applyBtn.disabled = false;
+                } else {
+                    // No issues found
+                    modalError.style.display = 'block';
+                    document.getElementById('propertiesModalErrorText').textContent = 
+                        'All required server properties are already properly configured.';
+                }
+            } else {
+                throw new Error(data.error || 'Failed to validate properties');
+            }
+        })
+        .catch(error => {
+            modalLoading.style.display = 'none';
+            modalError.style.display = 'block';
+            document.getElementById('propertiesModalErrorText').textContent = error.message;
+        });
+}
+
+function populatePropertiesIssues(issues) {
+    const issuesContainer = document.getElementById('propertiesIssuesList');
+    if (!issuesContainer) return;
+    
+    let html = '';
+    
+    issues.forEach((issue, index) => {
+        const severityBadge = issue.severity === 'critical' ? 
+            '<span class="badge bg-danger">Critical</span>' : 
+            '<span class="badge bg-warning">Warning</span>';
+        
+        html += `
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-cog"></i> ${issue.name}
+                        ${severityBadge}
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">${issue.description}</p>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Current Value:</strong>
+                            <code class="text-danger">${issue.current_value}</code>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Required Value:</strong>
+                            <code class="text-success">${issue.required_value}</code>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-sm alert-info mb-2">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Why this is needed:</strong> ${issue.technical_details}
+                    </div>
+                    
+                    ${issue.security_note ? `
+                        <div class="alert alert-sm alert-warning mb-0">
+                            <i class="fas fa-shield-alt"></i>
+                            <strong>Security Note:</strong> ${issue.security_note}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    });
+    
+    issuesContainer.innerHTML = html;
+}
+
+function togglePasswordVisibility() {
+    const passwordInput = document.getElementById('customRconPassword');
+    const toggleIcon = document.getElementById('passwordToggleIcon');
+    
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.className = 'fas fa-eye-slash';
+    } else {
+        passwordInput.type = 'password';
+        toggleIcon.className = 'fas fa-eye';
+    }
+}
+
+function applyServerProperties() {
+    const applyBtn = document.getElementById('applyPropertiesBtn');
+    const originalBtnText = applyBtn.innerHTML;
+    
+    // Get form data
+    const restartOption = document.querySelector('input[name="restartOption"]:checked')?.value || 'apply';
+    const passwordOption = document.querySelector('input[name="passwordOption"]:checked')?.value || 'generate';
+    const customPassword = document.getElementById('customRconPassword')?.value || '';
+    
+    // Validate custom password if selected
+    if (passwordOption === 'custom' && customPassword.length < 8) {
+        showAlert('Error', 'Custom RCON password must be at least 8 characters long.');
+        return;
+    }
+    
+    // Show loading state
+    applyBtn.disabled = true;
+    applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying...';
+    
+    const requestData = {
+        restart_server: restartOption === 'restart',
+        custom_rcon_password: passwordOption === 'custom' ? customPassword : null
+    };
+    
+    fetch('/api/server-properties/apply', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        applyBtn.disabled = false;
+        applyBtn.innerHTML = originalBtnText;
+        
+        if (data.success) {
+            // Show success message
+            let message = data.message;
+            if (data.changes_made && data.changes_made.length > 0) {
+                message += `\n\nChanges applied:\n`;
+                data.changes_made.forEach(change => {
+                    message += `• ${change.display_name}: ${change.old_value} → ${change.new_value}\n`;
+                });
+            }
+            
+            if (data.backup_created) {
+                message += `\nBackup created: ${data.backup_path}`;
+            }
+            
+            if (data.restart_performed) {
+                message += '\n\nServer has been restarted with the new configuration.';
+            } else if (data.restart_required) {
+                message += '\n\nPlease restart the server for changes to take effect.';
+            }
+            
+            // Close modal first
+            const modalElement = document.getElementById('serverPropertiesModal');
+            const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+            modal.hide();
+            
+            // Hide properties alert if visible
+            dismissPropertiesAlert();
+            
+            // Show success message in a simpler way
+            if (data.restart_performed) {
+                alert('Configuration applied successfully! Server has been restarted with the new configuration.');
+            } else if (data.restart_required) {
+                alert('Configuration applied successfully! Please restart the server for changes to take effect.');
+            } else {
+                alert('Configuration applied successfully!');
+            }
+            
+            // Refresh page immediately to show updated status
+            window.location.reload();
+            
+        } else {
+            // Show detailed error message
+            let errorMessage = data.error || 'Failed to apply server properties configuration.';
+            
+            // Add specific context for restart failures
+            if (data.restart_required && !data.restart_performed) {
+                errorMessage += '\n\nNote: Configuration changes were applied successfully, but server restart failed. Please manually restart the server for changes to take effect.';
+            }
+            
+            alert('Configuration Failed: ' + errorMessage);
+        }
+    })
+    .catch(error => {
+        applyBtn.disabled = false;
+        applyBtn.innerHTML = originalBtnText;
+        console.error('Server properties apply error:', error);
+        alert('Network Error: Failed to apply server properties. Please check your connection and try again.\n\nError details: ' + error.message);
+    });
+}
+
+// Event listeners for the modal
+document.addEventListener('DOMContentLoaded', function() {
+    // Password option change listener
+    const passwordOptions = document.querySelectorAll('input[name="passwordOption"]');
+    passwordOptions.forEach(option => {
+        option.addEventListener('change', function() {
+            const customInput = document.getElementById('customPasswordInput');
+            if (this.value === 'custom') {
+                customInput.style.display = 'block';
+            } else {
+                customInput.style.display = 'none';
+            }
+        });
+    });
+    
+    // Load modal content when opened
+    const propertiesModal = document.getElementById('serverPropertiesModal');
+    if (propertiesModal) {
+        propertiesModal.addEventListener('show.bs.modal', loadServerPropertiesModal);
+    }
 });

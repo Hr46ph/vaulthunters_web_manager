@@ -260,6 +260,19 @@ class MetricsStorage:
             self._log_warning(f"Failed to parse timestamp '{timestamp_str}': {e}")
             return datetime.now()
     
+    def _get_current_online_players(self):
+        """Get current online players from the server (helper method for startup reconciliation)"""
+        try:
+            player_status = self._collect_player_status_via_mcstatus()
+            if player_status['success']:
+                # Return players in the expected format: list of dicts with 'name' key
+                return [{'name': name} for name in player_status.get('players', [])]
+            else:
+                return []
+        except Exception as e:
+            self._log_warning(f'Failed to get current online players: {e}')
+            return []
+
     def _collect_player_status_via_mcstatus(self):
         """Collect current player status using mcstatus and update database"""
         try:
@@ -530,6 +543,15 @@ class MetricsStorage:
     def _collect_server_tps_safe(self) -> Optional[Dict]:
         """Safely collect server TPS data via RCON without blocking the metrics thread"""
         try:
+            # Check if server is running before attempting RCON connection
+            from services.system_control import SystemControlService
+            system_control = SystemControlService()
+            status = system_control.get_server_status()
+            
+            if not status.get('running', False):
+                # Server is not running, skip RCON collection silently
+                return None
+            
             # Get server configuration for RCON connection
             server_host = self.app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
             
@@ -742,30 +764,39 @@ class MetricsStorage:
                 except Exception as e:
                     self._log_warning(f'Failed to collect Java process metrics: {e}')
             
-            # Server TPS via RCON
+            # Server TPS via RCON (only if server is running)
             if config.get('METRICS_COLLECT_SERVER_TPS', True):
-                try:
-                    tps_data = self._collect_server_tps_safe()
-                    if tps_data:
-                        self.store_metric('server_tps', tps_data['overall_tps'], {
-                            'source': 'rcon_forge_tps',
-                            'dimensions': tps_data['dimensions']
-                        })
-                        
-                        # Store individual dimension TPS
-                        for dim_name, dim_data in tps_data['dimensions'].items():
-                            self.store_metric(f'server_tps_{dim_name}', dim_data['tps'], {
+                # Check if server is running first
+                from services.system_control import SystemControlService
+                system_control = SystemControlService()
+                server_status = system_control.get_server_status()
+                
+                if server_status.get('running', False):
+                    try:
+                        tps_data = self._collect_server_tps_safe()
+                        if tps_data:
+                            self.store_metric('server_tps', tps_data['overall_tps'], {
                                 'source': 'rcon_forge_tps',
-                                'dimension': dim_name,
-                                'mean_tick_time': dim_data['mean_tick_time']
+                                'dimensions': tps_data['dimensions']
                             })
-                    else:
-                        # Fallback to placeholder when RCON fails
-                        self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_failed'})
-                except Exception as e:
-                    self._log_warning(f'Failed to collect server TPS via RCON: {e}')
-                    # Store placeholder on any error to keep metrics consistent
-                    self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_error'})
+                            
+                            # Store individual dimension TPS
+                            for dim_name, dim_data in tps_data['dimensions'].items():
+                                self.store_metric(f'server_tps_{dim_name}', dim_data['tps'], {
+                                    'source': 'rcon_forge_tps',
+                                    'dimension': dim_name,
+                                    'mean_tick_time': dim_data['mean_tick_time']
+                                })
+                        else:
+                            # Fallback to placeholder when RCON fails
+                            self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_failed'})
+                    except Exception as e:
+                        self._log_warning(f'Failed to collect server TPS via RCON: {e}')
+                        # Store placeholder on any error to keep metrics consistent
+                        self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_error'})
+                else:
+                    # Server is stopped - skip TPS collection entirely
+                    pass
             
             
             # Hardware temperature monitoring
@@ -930,60 +961,82 @@ class MetricsStorage:
     def collect_tps_and_lag_metrics(self):
         """Collect TPS and lag spike metrics (3-second interval)"""
         try:
-            # Server TPS via RCON
-            try:
-                tps_data = self._collect_server_tps_safe()
-                if tps_data:
-                    self.store_metric('server_tps', tps_data['overall_tps'], {
-                        'source': 'rcon_forge_tps',
-                        'dimensions': tps_data['dimensions'],
-                        'overall_tick_time': tps_data['overall_tick_time']
-                    })
-                    
-                    # Store overall mean tick time as separate metric for charting
-                    self.store_metric('server_tick_time', tps_data['overall_tick_time'], {
-                        'source': 'rcon_forge_tps'
-                    })
-                    
-                    # Store individual dimension TPS
-                    for dim_name, dim_data in tps_data['dimensions'].items():
-                        self.store_metric(f'server_tps_{dim_name}', dim_data['tps'], {
-                            'source': 'rcon_forge_tps',
-                            'dimension': dim_name,
-                            'mean_tick_time': dim_data['mean_tick_time']
-                        })
-                else:
-                    # Fallback to placeholder when RCON fails
-                    self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_failed'})
-            except Exception as e:
-                self._log_warning(f'Failed to collect server TPS via RCON: {e}')
-                # Store placeholder on any error to keep metrics consistent
-                self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_error'})
+            # Check if server is running first
+            from services.system_control import SystemControlService
+            system_control = SystemControlService()
+            server_status = system_control.get_server_status()
+            server_running = server_status.get('running', False)
             
-            # Player count via mcstatus (fast and accurate) - moved to 3-second cycle
-            try:
-                player_status = self._collect_player_status_via_mcstatus()
-                
-                if player_status['success']:
-                    self.store_metric('player_count', player_status['player_count'], {
-                        'source': 'mcstatus_query',
-                        'max_players': player_status['max_players'],
-                        'player_names': player_status['players'],
+            # Server TPS via RCON (only if server is running)
+            if server_running:
+                try:
+                    tps_data = self._collect_server_tps_safe()
+                    if tps_data:
+                        self.store_metric('server_tps', tps_data['overall_tps'], {
+                            'source': 'rcon_forge_tps',
+                            'dimensions': tps_data['dimensions'],
+                            'overall_tick_time': tps_data['overall_tick_time']
+                        })
+                        
+                        # Store overall mean tick time as separate metric for charting
+                        self.store_metric('server_tick_time', tps_data['overall_tick_time'], {
+                            'source': 'rcon_forge_tps'
+                        })
+                        
+                        # Store individual dimension TPS
+                        for dim_name, dim_data in tps_data['dimensions'].items():
+                            self.store_metric(f'server_tps_{dim_name}', dim_data['tps'], {
+                                'source': 'rcon_forge_tps',
+                                'dimension': dim_name,
+                                'mean_tick_time': dim_data['mean_tick_time']
+                            })
+                    else:
+                        # Fallback to placeholder when RCON fails (server running but no TPS data)
+                        self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_failed'})
+                except Exception as e:
+                    self._log_warning(f'Failed to collect server TPS via RCON: {e}')
+                    # Store placeholder on any error to keep metrics consistent
+                    self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_error'})
+            else:
+                # Server is stopped - skip TPS collection entirely (no placeholder needed)
+                pass
+            
+            # Player count via mcstatus (only if server is running)
+            if server_running:
+                try:
+                    player_status = self._collect_player_status_via_mcstatus()
+                    
+                    if player_status['success']:
+                        self.store_metric('player_count', player_status['player_count'], {
+                            'source': 'mcstatus_query',
+                            'max_players': player_status['max_players'],
+                            'player_names': player_status['players'],
+                            'server_running': True
+                        })
+                    else:
+                        # Server running but mcstatus failed - clear all online players
+                        self.update_player_status([])  # Clear all online players
+                        self.store_metric('player_count', 0, {
+                            'source': 'mcstatus_failed',
+                            'error': player_status.get('error', 'Unknown error'),
+                            'server_running': True
+                        })
+                        
+                except Exception as e:
+                    self._log_warning(f'Failed to collect player count via mcstatus: {e}')
+                    # Clear all online players when collection fails
+                    self.update_player_status([])
+                    self.store_metric('player_count', 0, {
+                        'source': 'error',
+                        'error': str(e),
                         'server_running': True
                     })
-                else:
-                    # Server likely offline or unreachable
-                    self.store_metric('player_count', 0, {
-                        'source': 'mcstatus_failed',
-                        'error': player_status.get('error', 'Unknown error'),
-                        'server_running': False
-                    })
-                    
-            except Exception as e:
-                self._log_warning(f'Failed to collect player count via mcstatus: {e}')
+            else:
+                # Server is stopped - clear all online players and set count to 0
+                self.update_player_status([])  # Clear all online players
                 self.store_metric('player_count', 0, {
-                    'source': 'error',
-                    'error': str(e)
+                    'source': 'server_stopped',
+                    'server_running': False
                 })
         
         except Exception as e:
