@@ -315,8 +315,8 @@
                             <!-- Dimension charts will be dynamically created here -->
                         </div>
 
-                        <!-- Game Performance Row: Lag Spikes and Player Count -->
-                        <div class="row mb-4">
+                        <!-- Lag Spike History will be inserted next to last dimension chart -->
+                        <div id="lag-spike-placeholder" style="display: none;">
                             <div class="col-md-6">
                                 <div class="card">
                                     <div class="card-header">
@@ -334,7 +334,11 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                        </div>
+
+                        <!-- Player Count - Full Width -->
+                        <div class="row mb-4">
+                            <div class="col-12">
                                 <div class="card">
                                     <div class="card-header">
                                         <h6><i class="fas fa-users"></i> Player Count History</h6>
@@ -344,7 +348,7 @@
                                             <canvas id="player-chart"></canvas>
                                         </div>
                                         <div class="text-center mt-2">
-                                            <small class="text-muted">Current: <span id="player-current" class="fw-bold">--</span> / Max: <span id="player-max" class="fw-bold">--</span></small>
+                                            <small class="text-muted">Current: <span id="player-current" class="fw-bold">--</span> / Peak: <span id="player-max" class="fw-bold">--</span></small>
                                         </div>
                                     </div>
                                 </div>
@@ -380,6 +384,68 @@ let monitoringData = {
     memoryBuffers: [],
     memoryCache: []
 };
+
+// TPS-based lag spike detection
+let previousTPS = 20.0;
+let tpsHistory = [];
+const TPS_HISTORY_SIZE = 10; // Keep last 10 TPS readings
+
+function detectTPSLagSpike(currentTPS, currentTickTime) {
+    if (currentTPS <= 0) return; // Skip invalid data
+    
+    // Add to TPS history
+    tpsHistory.push({tps: currentTPS, timestamp: Date.now()});
+    if (tpsHistory.length > TPS_HISTORY_SIZE) {
+        tpsHistory.shift();
+    }
+    
+    // Detect significant TPS drops (similar to your understanding of lag thresholds)
+    let isLagSpike = false;
+    let spikeType = '';
+    
+    if (currentTPS < 15) {
+        // Severe lag - equivalent to server "Can't keep up" territory
+        isLagSpike = true;
+        spikeType = 'Severe TPS Drop';
+    } else if (currentTPS < 17 && previousTPS >= 18) {
+        // Moderate lag spike - noticeable performance drop
+        isLagSpike = true;
+        spikeType = 'Moderate TPS Drop';
+    } else if (currentTickTime > 75) {
+        // High tick time indicates processing delays
+        isLagSpike = true;
+        spikeType = 'High Tick Time';
+    }
+    
+    if (isLagSpike) {
+        // Calculate estimated delay like Minecraft server does
+        const idealTickTime = 50; // 50ms = 20 TPS
+        const extraTime = Math.max(0, currentTickTime - idealTickTime);
+        const estimatedTicks = Math.round(extraTime / idealTickTime);
+        
+        addTPSLagSpike(extraTime, estimatedTicks, spikeType, currentTPS);
+    }
+    
+    previousTPS = currentTPS;
+}
+
+function addTPSLagSpike(msDelay, ticksDelay, type, tps) {
+    const now = Date.now();
+    monitoringData.lagSpikes.push({
+        timestamp: now,
+        msDelay: msDelay,
+        ticksDelay: ticksDelay,
+        type: type,
+        tps: tps,
+        source: 'tps_monitoring'
+    });
+    
+    // Clean old lag spikes (keep last 10 minutes)
+    const cutoff = now - (10 * 60 * 1000);
+    monitoringData.lagSpikes = monitoringData.lagSpikes.filter(spike => spike.timestamp > cutoff);
+    
+    console.log(`TPS Lag Spike detected: ${type} - TPS: ${tps}, Extra time: ${msDelay}ms, Ticks behind: ${ticksDelay}`);
+}
 
 // Configuration state
 let currentConfig = {
@@ -706,6 +772,32 @@ function initializeCharts() {
                 legend: {
                     display: false
                 },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            const item = tooltipItems[0];
+                            return new Date(item.parsed.x).toLocaleString();
+                        },
+                        label: function(context) {
+                            const value = context.parsed.y;
+                            const dataIndex = context.dataIndex;
+                            
+                            // Try to get lag spike details from allLagSpikes array
+                            if (window.lastLagSpikes && window.lastLagSpikes[dataIndex]) {
+                                const spike = window.lastLagSpikes[dataIndex];
+                                let label = `Duration: ${value}ms`;
+                                if (spike.type) label += `\nType: ${spike.type}`;
+                                if (spike.tps !== undefined) label += `\nTPS: ${spike.tps}`;
+                                if (spike.source) {
+                                    const sourceText = spike.source === 'server_logs' ? 'Server Log' : 'TPS Monitor';
+                                    label += `\nSource: ${sourceText}`;
+                                }
+                                return label.split('\n');
+                            }
+                            return `Duration: ${value}ms`;
+                        }
+                    }
+                }
             }
         }
     });
@@ -802,6 +894,7 @@ function initializeCharts() {
             scales: {
                 y: {
                     beginAtZero: true,
+                    max: 20, // Will be dynamically updated with server max players
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     },
@@ -1128,11 +1221,19 @@ function createDimensionCharts(dimensions) {
     let chartsHtml = '<div class="row">';
     const chartConfigs = [];
     
-    dimensions.forEach(dimension => {
+    dimensions.forEach((dimension, index) => {
         const displayName = dimensionNames[dimension] || dimension.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         const config = createDimensionChart(dimension, displayName);
         chartConfigs.push({ dimension, ...config });
         chartsHtml += config.chartHtml;
+        
+        // If this is the last dimension and there's an odd number of dimensions,
+        // add the lag spike chart to the same row
+        if (index === dimensions.length - 1 && dimensions.length % 2 === 1) {
+            // Get the lag spike chart HTML from the placeholder
+            const lagSpikeHtml = document.getElementById('lag-spike-placeholder').innerHTML;
+            chartsHtml += lagSpikeHtml;
+        }
     });
     
     chartsHtml += '</div>';
@@ -1440,10 +1541,15 @@ function updateServerHealthStatus(metrics, status) {
             rconStatusBadge.textContent = 'Error';
             rconStatusBadge.className = 'badge bg-danger ms-auto';
             rconStatusIndicator.className = 'status-indicator status-danger';
+        } else if (metrics.rcon_status === 'disabled') {
+            rconStatusBadge.textContent = 'Disabled';
+            rconStatusBadge.className = 'badge bg-secondary ms-auto';
+            rconStatusIndicator.className = 'status-indicator status-unknown';
         } else {
-            rconStatusBadge.textContent = 'Disconnected';
-            rconStatusBadge.className = 'badge bg-warning ms-auto';
-            rconStatusIndicator.className = 'status-indicator status-warning';
+            // Unknown status
+            rconStatusBadge.textContent = 'Unknown';
+            rconStatusBadge.className = 'badge bg-secondary ms-auto';
+            rconStatusIndicator.className = 'status-indicator status-unknown';
         }
     }
     
@@ -1483,16 +1589,37 @@ function updateServerHealthStatus(metrics, status) {
         }
     }
     
-    // Disk Space Status (if available in metrics)
+    // Disk Space Status
     const diskStatusBadge = document.getElementById('disk-status-badge');
     const diskStatusIndicator = document.getElementById('disk-status-indicator');
     
     if (diskStatusBadge && diskStatusIndicator) {
-        // For now, show as good since we don't have disk metrics in the API yet
-        // This can be enhanced later when disk space monitoring is added
-        diskStatusBadge.textContent = 'Good';
-        diskStatusBadge.className = 'badge bg-success ms-auto';
-        diskStatusIndicator.className = 'status-indicator status-good';
+        if (metrics.disk_space && metrics.disk_space.status) {
+            const diskData = metrics.disk_space;
+            const freeGB = diskData.free_gb;
+            
+            if (diskData.status === 'good') {
+                diskStatusBadge.textContent = `${freeGB}GB Free`;
+                diskStatusBadge.className = 'badge bg-success ms-auto';
+                diskStatusIndicator.className = 'status-indicator status-good';
+            } else if (diskData.status === 'warning') {
+                diskStatusBadge.textContent = `${freeGB}GB Free`;
+                diskStatusBadge.className = 'badge bg-warning ms-auto';
+                diskStatusIndicator.className = 'status-indicator status-warning';
+            } else if (diskData.status === 'danger') {
+                diskStatusBadge.textContent = `${freeGB}GB Free`;
+                diskStatusBadge.className = 'badge bg-danger ms-auto';
+                diskStatusIndicator.className = 'status-indicator status-danger';
+            } else {
+                diskStatusBadge.textContent = 'Error';
+                diskStatusBadge.className = 'badge bg-secondary ms-auto';
+                diskStatusIndicator.className = 'status-indicator status-unknown';
+            }
+        } else {
+            diskStatusBadge.textContent = 'Unknown';
+            diskStatusBadge.className = 'badge bg-secondary ms-auto';
+            diskStatusIndicator.className = 'status-indicator status-unknown';
+        }
     }
 }
 
@@ -1704,6 +1831,11 @@ function updateCharts(metrics, status = null) {
             tpsChart.data.datasets[1].data.push(null);
         }
         
+        // Detect TPS-based lag spikes
+        if (metrics.current_tps !== undefined && metrics.current_tick_time !== undefined) {
+            detectTPSLagSpike(metrics.current_tps, metrics.current_tick_time);
+        }
+        
         // Keep data points based on time range (15 min = 18 points, 30 min = 36 points, 1hr = 72 points, etc.)
         const timeRangeHours = currentConfig.chart_range || 1;
         const maxPoints = Math.max(20, Math.ceil(timeRangeHours * 72)); // 72 points per hour (5-second intervals)
@@ -1775,11 +1907,36 @@ function updateCharts(metrics, status = null) {
     }
 
     // Update lag chart with recent spikes
+    // Combine server lag spikes (from logs) with TPS-based lag spikes
+    let allLagSpikes = [];
+    
+    // Add server-provided lag spikes (from log parsing)
     if (metrics.recent_lag_spikes && metrics.recent_lag_spikes.length > 0) {
-        lagChart.data.labels = metrics.recent_lag_spikes.map(spike => 
-            new Date(spike.timestamp)
-        );
-        lagChart.data.datasets[0].data = metrics.recent_lag_spikes.map(spike => spike.duration);
+        allLagSpikes = allLagSpikes.concat(metrics.recent_lag_spikes.map(spike => ({
+            ...spike,
+            source: 'server_logs'
+        })));
+    }
+    
+    // Add TPS-based lag spikes (from monitoring)
+    if (monitoringData.lagSpikes && monitoringData.lagSpikes.length > 0) {
+        allLagSpikes = allLagSpikes.concat(monitoringData.lagSpikes.map(spike => ({
+            timestamp: spike.timestamp,
+            duration: spike.msDelay,
+            type: spike.type,
+            tps: spike.tps,
+            source: spike.source
+        })));
+    }
+    
+    // Sort by timestamp and remove duplicates
+    allLagSpikes.sort((a, b) => a.timestamp - b.timestamp);
+    
+    if (allLagSpikes.length > 0) {
+        lagChart.data.labels = allLagSpikes.map(spike => new Date(spike.timestamp));
+        lagChart.data.datasets[0].data = allLagSpikes.map(spike => spike.duration);
+        // Store for tooltip access
+        window.lastLagSpikes = allLagSpikes;
         lagChart.update('none');
         updateLagStats(); // Update lag statistics
     } else if (metrics.recent_lag_spikes !== undefined) {
@@ -1815,7 +1972,15 @@ function updateCharts(metrics, status = null) {
         playerChart.data.labels.shift();
         playerChart.data.datasets[0].data.shift();
     }
-    playerChart.update('none');
+    // Update player chart Y-axis max based on server max players
+    if (metrics.max_players && metrics.max_players > 0) {
+        if (playerChart.options.scales.y.max !== metrics.max_players) {
+            playerChart.options.scales.y.max = metrics.max_players;
+            playerChart.update('none');
+        }
+    } else {
+        playerChart.update('none');
+    }
     
     // Update current player count immediately
     document.getElementById('player-current').textContent = playerCount;
@@ -2067,8 +2232,25 @@ function updateHealthStatus(status, metrics) {
     }
     updateStatusIndicator('performance-status', perfStatus, perfText);
 
-    // Disk status (placeholder)
-    updateStatusIndicator('disk-status', 'good', 'OK');
+    // Disk status (using real disk space data)
+    if (metrics.disk_space && metrics.disk_space.status) {
+        const diskData = metrics.disk_space;
+        let diskText = 'OK';
+        let diskStatus = diskData.status;
+        
+        if (diskData.status === 'warning') {
+            diskText = 'Low Space';
+        } else if (diskData.status === 'danger') {
+            diskText = 'Critical';
+        } else if (diskData.status === 'error') {
+            diskStatus = 'danger';
+            diskText = 'Error';
+        }
+        
+        updateStatusIndicator('disk-status', diskStatus, diskText);
+    } else {
+        updateStatusIndicator('disk-status', 'good', 'OK');
+    }
 }
 
 // Helper function to update status indicators
@@ -2715,11 +2897,19 @@ function createDimensionChartsSync(dimensions) {
     let chartsHtml = '<div class="row">';
     const chartConfigs = [];
     
-    dimensions.forEach(dimension => {
+    dimensions.forEach((dimension, index) => {
         const displayName = dimensionNames[dimension] || dimension.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         const config = createDimensionChart(dimension, displayName);
         chartConfigs.push({ dimension, ...config });
         chartsHtml += config.chartHtml;
+        
+        // If this is the last dimension and there's an odd number of dimensions,
+        // add the lag spike chart to the same row
+        if (index === dimensions.length - 1 && dimensions.length % 2 === 1) {
+            // Get the lag spike chart HTML from the placeholder
+            const lagSpikeHtml = document.getElementById('lag-spike-placeholder').innerHTML;
+            chartsHtml += lagSpikeHtml;
+        }
     });
     
     chartsHtml += '</div>';

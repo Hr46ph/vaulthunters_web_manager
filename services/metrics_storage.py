@@ -647,6 +647,13 @@ class MetricsStorage:
                                     dim_name = dim_part[4:].strip()  # Remove "Dim " prefix
                                     # Clean dimension name but preserve uniqueness
                                     dim_name = dim_name.replace('minecraft:', '').replace('the_vault:', '').replace('ae2:', '').replace(':', '_')
+                                    
+                                    # Filter out vault dimensions with UUIDs (contain hyphens and are ~36 chars)
+                                    # Example: "vault_da957b87-e65d-4ac2-8dc1-e819b5456014"
+                                    import re
+                                    if dim_name.startswith('vault_') and re.match(r'vault_[a-f0-9-]{36}$', dim_name.lower()):
+                                        continue  # Skip UUID vault dimensions
+                                    
                                     dimensions[dim_name] = {
                                         'tps': tps,
                                         'mean_tick_time': tick_time

@@ -705,21 +705,81 @@ def monitoring_metrics():
     except Exception as e:
         current_app.logger.warning(f'Failed to get dimension TPS data: {e}')
     
-    # Get RCON status (with timeout for performance)
+    # Get RCON status (with actual connection test)
     rcon_status = 'unknown'
     try:
         from services.server_properties import ServerPropertiesParser
         
-        # Get RCON details from server.properties (fast file read)
+        # Get RCON details from server.properties
         server_props = ServerPropertiesParser()
         if server_props.load_properties() and server_props.is_rcon_enabled():
-            rcon_status = 'configured'  # Assume working if configured
+            # RCON is configured, now test actual connection
+            server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+            rcon_port = server_props.get_rcon_port()
+            rcon_password = server_props.get_rcon_password()
+            
+            if rcon_password:
+                try:
+                    from services.rcon_client import test_rcon_connection
+                    connected, error = test_rcon_connection(server_host, rcon_port, rcon_password)
+                    if connected:
+                        rcon_status = 'connected'
+                    else:
+                        rcon_status = 'error'  # RCON configured but not connected
+                        current_app.logger.warning(f'RCON connection failed: {error}')
+                except Exception as e:
+                    rcon_status = 'error'
+                    current_app.logger.warning(f'RCON connection test failed: {e}')
+            else:
+                rcon_status = 'error'  # RCON enabled but no password
         else:
             rcon_status = 'disabled'  # RCON not enabled
         current_app.logger.info(f'RCON status: {rcon_status}')
     except Exception as e:
-        current_app.logger.warning(f'Failed to check RCON config: {e}')
+        current_app.logger.warning(f'Failed to check RCON status: {e}')
         rcon_status = 'error'
+    
+    # Get disk space information
+    disk_data = {}
+    try:
+        import shutil
+        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
+        
+        # Get disk usage for the server directory
+        total, used, free = shutil.disk_usage(server_path)
+        
+        # Convert to GB
+        total_gb = round(total / (1024**3), 1)
+        used_gb = round(used / (1024**3), 1)
+        free_gb = round(free / (1024**3), 1)
+        used_percent = round((used / total) * 100, 1)
+        
+        # Determine disk status based on free space
+        if free_gb >= 10:
+            disk_status = 'good'
+        elif free_gb >= 1:
+            disk_status = 'warning'
+        else:
+            disk_status = 'danger'
+        
+        disk_data = {
+            'total_gb': total_gb,
+            'used_gb': used_gb,
+            'free_gb': free_gb,
+            'used_percent': used_percent,
+            'status': disk_status
+        }
+        
+        current_app.logger.info(f'Disk space: {free_gb}GB free / {total_gb}GB total ({used_percent}% used) - Status: {disk_status}')
+    except Exception as e:
+        current_app.logger.warning(f'Failed to get disk space: {e}')
+        disk_data = {
+            'total_gb': 0,
+            'used_gb': 0,
+            'free_gb': 0,
+            'used_percent': 0,
+            'status': 'error'
+        }
     
     # Return mixed real and test data
     test_metrics = {
@@ -739,7 +799,8 @@ def monitoring_metrics():
         'cpu_system_avg': cpu_system_avg,  # Real CPU average
         'cpu_count': cpu_count,  # Real CPU count
         'cpu_per_core': cpu_per_core,  # Real per-core data
-        'temperatures': temperature_data  # Real temperature data
+        'temperatures': temperature_data,  # Real temperature data
+        'disk_space': disk_data  # Real disk space data
     }
     
     # Add dimension-specific TPS and tick time data
