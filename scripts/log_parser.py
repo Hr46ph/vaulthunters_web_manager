@@ -468,13 +468,13 @@ class PlayerLogParser:
         sessions = self.create_session_from_events(unique_events)
         self.logger.info(f"Created {len(sessions)} player sessions")
         
-        # Extract deaths
-        deaths = self.extract_deaths_from_events(unique_events)
-        self.logger.info(f"Found {len(deaths)} death events")
+        # Death tracking disabled - skip death extraction
+        deaths = []
+        self.logger.info(f"Death tracking disabled - skipping death events")
         
-        # Import to database
+        # Import sessions to database
         imported, skipped = self.import_to_database(sessions)
-        deaths_imported, deaths_skipped = self.import_deaths_to_database(deaths)
+        deaths_imported, deaths_skipped = 0, 0
         
         # Log player name variations found
         self.logger.info("Player name variations discovered:")

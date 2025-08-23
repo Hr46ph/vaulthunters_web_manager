@@ -522,7 +522,7 @@ def monitoring_metrics():
         current_app.logger.warning(f'Failed to get detailed memory: {e}')
         detailed_memory = system_memory  # Fallback to basic memory
     
-    # Get Java process memory and basic server status (optimized)
+    # Get Java process memory and player data from our 3-second metrics collection (super fast)
     java_memory_mb = 0
     player_data = {'count': 0, 'max': 20, 'names': []}
     try:
@@ -538,23 +538,32 @@ def monitoring_metrics():
             except Exception:
                 pass
             
-            # Quick server status check (skip expensive query() call)
+            # Get player data from our fast 3-second metrics collection (no mcstatus call needed)
             try:
-                from mcstatus import JavaServer
-                server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-                server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
+                from services.metrics_storage import metrics_storage
+                import sqlite3
                 
-                server = JavaServer(server_host, server_port)
-                # Only use status() which is faster than query()
-                query_status = server.status()
-                if query_status:
-                    player_data['count'] = query_status.players.online
-                    player_data['max'] = query_status.players.max
-                    # Get sample player names (limited list, but fast)
-                    if query_status.players.sample:
-                        player_data['names'] = [p.name for p in query_status.players.sample]
-            except Exception:
-                pass  # Server not responding, use defaults
+                with sqlite3.connect(metrics_storage.db_path) as conn:
+                    cursor = conn.cursor()
+                    # Get latest player count metric
+                    cursor.execute('''
+                        SELECT value, metadata FROM metrics 
+                        WHERE metric_type = 'player_count' 
+                        ORDER BY timestamp DESC LIMIT 1
+                    ''')
+                    row = cursor.fetchone()
+                    if row:
+                        import json
+                        player_count, metadata_json = row
+                        metadata = json.loads(metadata_json or '{}')
+                        
+                        player_data['count'] = int(player_count)
+                        player_data['max'] = metadata.get('max_players', 20)
+                        player_data['names'] = metadata.get('player_names', [])
+                        
+            except Exception as e:
+                current_app.logger.warning(f'Failed to get player data from metrics: {e}')
+                # Fallback to empty data
                 
         current_app.logger.info(f'Java memory: {java_memory_mb}MB, Players: {player_data["count"]}/{player_data["max"]}')
     except Exception as e:

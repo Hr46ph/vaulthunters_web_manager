@@ -703,7 +703,6 @@ class MetricsStorage:
                     # Store placeholder on any error to keep metrics consistent
                     self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_error'})
             
-            # Player count collection moved to 3-second TPS cycle for better responsiveness
             
             # Hardware temperature monitoring
             if config.get('METRICS_COLLECT_TEMPERATURE', True):
@@ -860,7 +859,6 @@ class MetricsStorage:
             except Exception as e:
                 self._log_warning(f'Failed to collect Java process metrics: {e}')
             
-            # Player count collection moved to 3-second TPS cycle for better responsiveness
         
         except Exception as e:
             self._log_error(f'Failed to collect memory metrics: {e}')

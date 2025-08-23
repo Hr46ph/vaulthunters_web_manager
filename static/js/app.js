@@ -791,18 +791,8 @@ function showPlayerDetails(username) {
     document.getElementById('playerModalContent').style.display = 'none';
     document.getElementById('playerModalError').style.display = 'none';
     
-    // Reset modal state - show session history by default
+    // Reset modal state - show session history (only option now)
     document.getElementById('sessionHistoryBtn').classList.add('active');
-    document.getElementById('deathHistoryBtn').classList.remove('active');
-    document.getElementById('sessionHistoryCard').style.display = 'block';
-    document.getElementById('deathHistoryCard').style.display = 'none';
-    
-    // Clear death data cache
-    const deathsList = document.getElementById('playerDeathsList');
-    if (deathsList) {
-        deathsList.removeAttribute('data-loaded');
-        deathsList.innerHTML = '';
-    }
     
     // Show modal
     modal.show();
@@ -889,137 +879,15 @@ function showPlayerDetails(username) {
 
 // Functions to switch between views in player modal
 function showSessionHistory() {
-    // Update button states
+    // Update button states (only session history available now)
     document.getElementById('sessionHistoryBtn').classList.add('active');
-    document.getElementById('deathHistoryBtn').classList.remove('active');
-    
-    // Show/hide cards
-    document.getElementById('sessionHistoryCard').style.display = 'block';
-    document.getElementById('deathHistoryCard').style.display = 'none';
 }
 
-function showDeathHistory() {
-    // Update button states
-    document.getElementById('sessionHistoryBtn').classList.remove('active');
-    document.getElementById('deathHistoryBtn').classList.add('active');
-    
-    // Show/hide cards
-    document.getElementById('sessionHistoryCard').style.display = 'none';
-    document.getElementById('deathHistoryCard').style.display = 'block';
-    
-    // Load death data if not already loaded
-    const username = document.getElementById('playerModalUsername').textContent;
-    loadPlayerDeaths(username);
-}
-
-function loadPlayerDeaths(username) {
-    // Check if deaths are already loaded
-    const deathsList = document.getElementById('playerDeathsList');
-    if (deathsList.getAttribute('data-loaded') === 'true') {
-        return; // Already loaded
-    }
-    
-    // Show loading in deaths list
-    deathsList.innerHTML = '<tr><td colspan="2" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading deaths...</td></tr>';
-    
-    // Fetch death data
-    fetch(`/api/player/${encodeURIComponent(username)}/deaths`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            
-            // Update death statistics
-            document.getElementById('playerTotalDeaths').textContent = data.total_deaths || 0;
-            document.getElementById('playerMostCommonDeath').textContent = data.most_common_method || 'None';
-            
-            // Clear loading and populate deaths list
-            deathsList.innerHTML = '';
-            
-            if (data.deaths && data.deaths.length > 0) {
-                data.deaths.forEach(death => {
-                    const row = document.createElement('tr');
-                    
-                    // Choose badge color based on death method
-                    let badgeColor = 'bg-danger';
-                    let icon = 'fas fa-skull';
-                    
-                    switch (death.death_method) {
-                        case 'Vault Defeat':
-                            badgeColor = 'bg-purple';
-                            icon = 'fas fa-dungeon';
-                            break;
-                        case 'Fall Damage':
-                            badgeColor = 'bg-warning';
-                            icon = 'fas fa-arrow-down';
-                            break;
-                        case 'Slain':
-                            badgeColor = 'bg-danger';
-                            icon = 'fas fa-sword';
-                            break;
-                        case 'Explosion':
-                            badgeColor = 'bg-orange';
-                            icon = 'fas fa-bomb';
-                            break;
-                        case 'Burned':
-                            badgeColor = 'bg-danger';
-                            icon = 'fas fa-fire';
-                            break;
-                        case 'Suffocation':
-                            badgeColor = 'bg-secondary';
-                            icon = 'fas fa-cube';
-                            break;
-                        case 'Projectile':
-                            badgeColor = 'bg-info';
-                            icon = 'fas fa-bow-arrow';
-                            break;
-                        default:
-                            badgeColor = 'bg-dark';
-                            icon = 'fas fa-question';
-                    }
-                    
-                    row.innerHTML = `
-                        <td class="text-nowrap">${escapeHtml(death.death_time)}</td>
-                        <td>
-                            <span class="badge ${badgeColor}">
-                                <i class="${icon}"></i> ${escapeHtml(death.death_method)}
-                            </span>
-                        </td>
-                        <td class="text-muted">${escapeHtml(death.death_cause)}</td>
-                    `;
-                    deathsList.appendChild(row);
-                });
-            } else {
-                // No deaths found
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td colspan="3" class="text-center text-muted py-3">
-                        <i class="fas fa-heart text-success"></i> No deaths found - this player is doing great!
-                    </td>
-                `;
-                deathsList.appendChild(row);
-            }
-            
-            // Mark as loaded
-            deathsList.setAttribute('data-loaded', 'true');
-        })
-        .catch(error => {
-            console.error('Error fetching player deaths:', error);
-            deathsList.innerHTML = `
-                <tr>
-                    <td colspan="3" class="text-center text-danger py-3">
-                        <i class="fas fa-exclamation-triangle"></i> Failed to load death data: ${escapeHtml(error.message)}
-                    </td>
-                </tr>
-            `;
-        });
-}
+// Death tracking removed - only session history available
 
 // Make functions globally available
 window.showPlayerDetails = showPlayerDetails;
 window.showSessionHistory = showSessionHistory;
-window.showDeathHistory = showDeathHistory;
 
 // Helper function to escape HTML
 function escapeHtml(text) {
