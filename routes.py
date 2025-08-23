@@ -569,15 +569,15 @@ def monitoring_metrics():
         # Optimized query to get only unique players with their latest session
         with sqlite3.connect(metrics_storage.db_path) as conn:
             cursor = conn.cursor()
-            # Get latest session for each unique player
+            # Get latest session for each unique player (handles ties properly)
             cursor.execute('''
                 SELECT username, login_time, logout_time, is_online
-                FROM players p1
-                WHERE login_time = (
-                    SELECT MAX(login_time) 
-                    FROM players p2 
-                    WHERE p2.username = p1.username
-                )
+                FROM (
+                    SELECT username, login_time, logout_time, is_online,
+                           ROW_NUMBER() OVER (PARTITION BY username ORDER BY login_time DESC, id DESC) as rn
+                    FROM players
+                ) ranked
+                WHERE rn = 1
                 ORDER BY login_time DESC
                 LIMIT 50
             ''')
@@ -1949,67 +1949,7 @@ def get_player_history(username):
             'sessions': []
         }), 500
 
-@main_bp.route('/api/player/<username>/deaths')
-def get_player_deaths(username):
-    """Get vault death history for a specific player"""
-    try:
-        from services.metrics_storage import metrics_storage
-        
-        # Get all deaths for this player
-        with sqlite3.connect(metrics_storage.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT death_time, death_cause, death_method
-                FROM player_deaths 
-                WHERE username = ?
-                ORDER BY death_time DESC
-            ''', (username,))
-            
-            deaths = []
-            method_counts = {}
-            cause_counts = {}
-            
-            for row in cursor.fetchall():
-                death_time_str, death_cause, death_method = row
-                
-                # Format death time for display
-                try:
-                    death_time = datetime.fromisoformat(death_time_str)
-                    death_display = death_time.strftime('%Y-%m-%d %H:%M:%S')
-                except:
-                    death_display = death_time_str
-                
-                deaths.append({
-                    'death_time': death_display,
-                    'death_cause': death_cause or 'Unknown',
-                    'death_method': death_method or 'Unknown'
-                })
-                
-                # Count death methods and causes
-                method = death_method or 'Unknown'
-                cause = death_cause or 'Unknown'
-                method_counts[method] = method_counts.get(method, 0) + 1
-                cause_counts[cause] = cause_counts.get(cause, 0) + 1
-            
-            # Get most common death method
-            most_common_method = max(method_counts, key=method_counts.get) if method_counts else 'None'
-            
-            return jsonify({
-                'username': username,
-                'total_deaths': len(deaths),
-                'deaths': deaths,
-                'method_counts': method_counts,
-                'cause_counts': cause_counts,
-                'most_common_method': most_common_method
-            })
-            
-    except Exception as e:
-        current_app.logger.error(f'Failed to get player deaths for {username}: {e}')
-        return jsonify({
-            'error': 'Failed to retrieve player deaths',
-            'username': username,
-            'deaths': []
-        }), 500
+# Death tracking removed - only tracking player sessions now
 
 @main_bp.route('/health')
 def health_check():
