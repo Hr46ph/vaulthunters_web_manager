@@ -1960,6 +1960,26 @@ def get_player_history(username):
 
 # Death tracking removed - only tracking player sessions now
 
+@main_bp.route('/admin/cleanup-duplicate-sessions', methods=['POST'])
+def cleanup_duplicate_sessions():
+    """Admin endpoint to clean up duplicate player sessions"""
+    try:
+        from services.metrics_storage import metrics_storage
+        removed_count = metrics_storage.remove_duplicate_sessions()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully removed {removed_count} duplicate sessions',
+            'removed_count': removed_count
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Failed to cleanup duplicate sessions: {e}')
+        return jsonify({
+            'success': False,
+            'error': 'Failed to cleanup duplicate sessions'
+        }), 500
+
 @main_bp.route('/health')
 def health_check():
     """Health check endpoint"""

@@ -418,10 +418,11 @@ class PlayerLogParser:
                 login_time = session['login_time']
                 logout_time = session.get('logout_time')
                 
-                # Check if this exact session already exists
+                # Check if a similar session already exists (within 30 seconds to handle log timing variations)
                 cursor.execute('''
                     SELECT id FROM players 
-                    WHERE username = ? AND login_time = ?
+                    WHERE username = ? 
+                    AND ABS(julianday(?) - julianday(login_time)) * 24 * 60 * 60 <= 30
                 ''', (username, login_time))
                 
                 if cursor.fetchone():
@@ -442,7 +443,14 @@ class PlayerLogParser:
     
     def parse_all_logs(self, log_dir: str) -> Dict:
         """Parse all logs and import to database"""
-        self.logger.info(f"Starting log parsing from {log_dir}")
+        return self.parse_all_logs_exclude_current(log_dir, exclude_players=set())
+    
+    def parse_all_logs_exclude_current(self, log_dir: str, exclude_players: set = None) -> Dict:
+        """Parse all logs and import to database, excluding sessions for specified players"""
+        if exclude_players is None:
+            exclude_players = set()
+            
+        self.logger.info(f"Starting log parsing from {log_dir}, excluding {len(exclude_players)} current players")
         
         log_files = self.get_all_log_files(log_dir)
         self.logger.info(f"Found {len(log_files)} log files to process")
@@ -468,6 +476,13 @@ class PlayerLogParser:
         sessions = self.create_session_from_events(unique_events)
         self.logger.info(f"Created {len(sessions)} player sessions")
         
+        # Filter out sessions for currently online players (real-time tracker handles those)
+        if exclude_players:
+            original_count = len(sessions)
+            sessions = [s for s in sessions if s['username'] not in exclude_players]
+            excluded_count = original_count - len(sessions)
+            self.logger.info(f"Excluded {excluded_count} sessions for current players, {len(sessions)} remaining")
+        
         # Death tracking disabled - skip death extraction
         deaths = []
         self.logger.info(f"Death tracking disabled - skipping death events")
@@ -491,7 +506,8 @@ class PlayerLogParser:
             'deaths_found': len(deaths),
             'deaths_imported': deaths_imported,
             'deaths_skipped': deaths_skipped,
-            'player_variations': dict(self.player_variations)
+            'player_variations': dict(self.player_variations),
+            'excluded_players': len(exclude_players) if exclude_players else 0
         }
     
     def recalculate_player_sessions(self, log_dir: str, player_name: Optional[str] = None) -> Dict:

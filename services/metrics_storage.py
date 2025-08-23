@@ -65,8 +65,8 @@ class MetricsStorage:
         # Initialize database
         self._init_database()
         
-        # Run startup log parser to sync player sessions
-        self._startup_log_sync()
+        # Run smart startup reconciliation to sync missed activity
+        self._startup_reconciliation()
         
         # Start collection thread if enabled
         if app.config.get('METRICS_ENABLED', True):
@@ -134,34 +134,91 @@ class MetricsStorage:
             # Drop legacy death tracking table if it exists (death tracking removed)
             cursor.execute('DROP TABLE IF EXISTS player_deaths')
             
+            # Create app state table for tracking shutdown times and reconciliation
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS app_state (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             conn.commit()
             self._log_info(f'Initialized metrics database at {self.db_path}')
             
             # Note: Simple log position tracking initialized in init_app()
     
-    def _startup_log_sync(self):
-        """Run log parser on startup to synchronize player sessions"""
+    def _startup_reconciliation(self):
+        """Smart startup reconciliation to sync missed activity without duplicates"""
         try:
-            self._log_info('Starting up - synchronizing player sessions from logs...')
+            self._log_info('Starting up - reconciling player sessions from downtime...')
             
-            # Import and run the log parser
+            # Step 1: Close any stale online sessions first
+            stale_count = self._close_stale_online_sessions()
+            self._log_info(f'Closed {stale_count} stale online sessions')
+            
+            # Step 2: Parse logs for missed activity, but exclude currently online players
+            # (real-time tracker will handle currently online players)
             from scripts.log_parser import PlayerLogParser
             
-            server_path = self.app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
+            # Get server path from TOML config
+            from config import load_toml_config
+            config = load_toml_config()
+            server_path = config['server']['minecraft_server_path']
             log_dir = os.path.join(server_path, 'logs')
             
             if not os.path.exists(log_dir):
                 self._log_warning(f'Log directory not found: {log_dir}')
                 return
             
-            parser = PlayerLogParser(self.db_path)
-            results = parser.parse_all_logs(log_dir)
+            # Get current online players to exclude from log parsing
+            current_players = self._get_current_online_players()
+            current_usernames = {p.get('name', '') for p in current_players} if current_players else set()
             
-            self._log_info(f'Startup log sync complete: {results["sessions_imported"]} sessions imported, {results["sessions_skipped"]} skipped')
+            parser = PlayerLogParser(self.db_path)
+            results = parser.parse_all_logs_exclude_current(log_dir, exclude_players=current_usernames)
+            
+            self._log_info(f'Startup reconciliation complete: {results["sessions_imported"]} sessions imported, {results["sessions_skipped"]} skipped, {len(current_usernames)} current players excluded')
             
         except Exception as e:
-            self._log_error(f'Startup log sync failed: {e}')
-            # Don't fail startup if log sync fails
+            self._log_error(f'Startup reconciliation failed: {e}')
+            # Don't fail startup if reconciliation fails
+    
+    def _close_stale_online_sessions(self):
+        """Close sessions that are marked online but player is no longer on server"""
+        try:
+            # Get current online players from server
+            current_players = self._get_current_online_players()
+            current_usernames = {p.get('name', '') for p in current_players} if current_players else set()
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Find sessions marked as online
+                cursor.execute('SELECT id, username FROM players WHERE is_online = 1')
+                online_sessions = cursor.fetchall()
+                
+                closed_count = 0
+                current_time = datetime.now()
+                
+                for session_id, username in online_sessions:
+                    if username not in current_usernames:
+                        # Player not actually online - close stale session
+                        cursor.execute('''
+                            UPDATE players 
+                            SET is_online = 0, logout_time = ? 
+                            WHERE id = ?
+                        ''', (current_time, session_id))
+                        closed_count += 1
+                        self._log_info(f'Closed stale session for {username}')
+                
+                conn.commit()
+                return closed_count
+                
+        except Exception as e:
+            self._log_error(f'Failed to close stale sessions: {e}')
+            return 0
     
     def _normalize_player_name(self, display_name: str) -> str:
         """Normalize player names to handle achievement titles (cached version)"""
@@ -1042,11 +1099,19 @@ class MetricsStorage:
                             WHERE username = ? AND is_online = 1
                         ''', (current_time, current_time, username))
                         
-                        # Insert new login session
+                        # Check if a session with similar login time already exists (within 10 seconds)
                         cursor.execute('''
-                            INSERT INTO players (username, login_time, is_online)
-                            VALUES (?, ?, 1)
+                            SELECT id FROM players 
+                            WHERE username = ? 
+                            AND ABS(julianday(?) - julianday(login_time)) * 24 * 60 * 60 <= 10
                         ''', (username, current_time))
+                        
+                        # Only insert if no session exists within 10 seconds of this login time
+                        if not cursor.fetchone():
+                            cursor.execute('''
+                                INSERT INTO players (username, login_time, is_online)
+                                VALUES (?, ?, 1)
+                            ''', (username, current_time))
                     
                     # Find players who just logged out
                     logged_out_players = db_online_players - current_player_set
@@ -1133,6 +1198,80 @@ class MetricsStorage:
         # Player data is intentionally preserved forever to maintain complete server history
         self._log_info('Player cleanup skipped - preserving all historical login/logout data')
         return
+    
+    def remove_duplicate_sessions(self):
+        """Remove duplicate player sessions based on username and similar login_time (within 1 second)"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Get all sessions ordered by username and login_time
+                cursor.execute('''
+                    SELECT id, username, login_time, logout_time, is_online
+                    FROM players
+                    ORDER BY username, login_time
+                ''')
+                
+                sessions = cursor.fetchall()
+                to_delete = []
+                total_removed = 0
+                
+                i = 0
+                while i < len(sessions):
+                    current_session = sessions[i]
+                    current_id, username, login_time_str, logout_time_str, is_online = current_session
+                    
+                    # Parse current login time
+                    try:
+                        current_login = datetime.fromisoformat(login_time_str)
+                    except:
+                        i += 1
+                        continue
+                    
+                    # Look for duplicates within 1 second
+                    duplicates = [current_session]
+                    j = i + 1
+                    
+                    while j < len(sessions) and sessions[j][1] == username:  # Same username
+                        next_session = sessions[j]
+                        next_id, _, next_login_str, _, _ = next_session
+                        
+                        try:
+                            next_login = datetime.fromisoformat(next_login_str)
+                            # If within 1 second, it's a duplicate
+                            if abs((next_login - current_login).total_seconds()) <= 1:
+                                duplicates.append(next_session)
+                                j += 1
+                            else:
+                                break
+                        except:
+                            j += 1
+                    
+                    # If we found duplicates, keep the one with the highest ID and mark others for deletion
+                    if len(duplicates) > 1:
+                        duplicates.sort(key=lambda x: x[0], reverse=True)  # Sort by ID desc
+                        keep_session = duplicates[0]
+                        delete_sessions = duplicates[1:]
+                        
+                        for delete_session in delete_sessions:
+                            to_delete.append(delete_session[0])  # Add ID to deletion list
+                        
+                        self._log_info(f"Found {len(duplicates)} duplicate sessions for {username} at {login_time_str}, keeping ID {keep_session[0]}")
+                    
+                    i = j  # Move to next group
+                
+                # Delete duplicates
+                for session_id in to_delete:
+                    cursor.execute('DELETE FROM players WHERE id = ?', (session_id,))
+                    total_removed += 1
+                
+                conn.commit()
+                self._log_info(f"Cleaned up {total_removed} duplicate player sessions")
+                return total_removed
+                
+        except Exception as e:
+            self._log_error(f'Failed to remove duplicate sessions: {e}')
+            return 0
     
 
 # Global instance
