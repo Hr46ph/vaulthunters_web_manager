@@ -171,6 +171,9 @@
                             <button class="btn btn-primary btn-sm" onclick="refreshServerLogs()">
                                 <i class="fas fa-sync"></i> Refresh Server Logs
                             </button>
+                            <button class="btn btn-info btn-sm" onclick="openJournalctlModal()">
+                                <i class="fas fa-terminal"></i> System Journal
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -180,6 +183,43 @@
 {% endblock %}
 
 {% block modals %}
+<!-- Journalctl Modal -->
+<div class="modal fade" id="journalctlModal" tabindex="-1" aria-labelledby="journalctlModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="log-header w-100">
+                    <h6 class="log-title">System Journal</h6>
+                    <div class="log-controls">
+                        <div class="input-group input-group-sm me-2" style="width: 200px;">
+                            <input type="text" class="form-control" id="search-journal" placeholder="Search logs...">
+                            <button class="btn btn-outline-secondary" type="button" onclick="clearSearch('journal')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="filter-journal" title="Show only matching lines">
+                            <label class="form-check-label" for="filter-journal">Filter</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="follow-journal">
+                            <label class="form-check-label" for="follow-journal">Follow</label>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm" onclick="refreshJournal()">
+                            <i class="fas fa-sync"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="btn-close ms-2" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="journal-log" class="log-window" style="height: 500px; margin: 0; border: none; border-radius: 0;">
+                    Loading system journal...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -187,7 +227,8 @@
     // Global variables for SSE connections
     const sseConnections = {
         latest: null,
-        debug: null
+        debug: null,
+        journal: null
     };
     
     // Global variable for current debug mode
@@ -196,13 +237,15 @@
     // Track auto-scroll state for each log window
     const autoScrollState = {
         latest: true,
-        debug: true
+        debug: true,
+        journal: true
     };
     
     // Store original log content for search functionality
     const originalLogContent = {
         latest: '',
-        debug: ''
+        debug: '',
+        journal: ''
     };
     
     // Helper function to check if user is at bottom of log window
@@ -214,6 +257,10 @@
     // Helper function to scroll to bottom only if auto-scroll is enabled
     function smartScroll(logType, element) {
         if (autoScrollState[logType]) {
+            element.scrollTop = element.scrollHeight;
+        }
+        // Always force scroll for journal regardless of auto-scroll state
+        if (logType === 'journal') {
             element.scrollTop = element.scrollHeight;
         }
     }
@@ -300,6 +347,13 @@
         if (logElement) {
             logElement.textContent = content;
             searchLogs(logType); // Apply current search
+            
+            // Force scroll to bottom for journal
+            if (logType === 'journal') {
+                setTimeout(() => {
+                    logElement.scrollTop = logElement.scrollHeight;
+                }, 100);
+            }
         }
     }
     
@@ -407,8 +461,9 @@
         // Stop existing connection if any
         stopFollow(logType);
         
-        // Create SSE connection
-        const eventSource = new EventSource(`/logs/stream/${logType}`);
+        // Create SSE connection - journal has different stream endpoint
+        const streamUrl = logType === 'journal' ? '/logs/journal/stream' : `/logs/stream/${logType}`;
+        const eventSource = new EventSource(streamUrl);
         sseConnections[logType] = eventSource;
         
         const logElement = document.getElementById(`${logType}-log`);
@@ -450,8 +505,10 @@
         };
         
         eventSource.onerror = function(event) {
+            console.log(`SSE error for ${logType}:`, event);
             // Only handle actual connection failures, ignore normal SSE events
             if (eventSource.readyState === 2) {
+                console.log(`SSE connection closed for ${logType}, attempting reconnect`);
                 // Auto-reconnect after 3 seconds if checkbox is still checked
                 setTimeout(() => {
                     const checkbox = document.getElementById(`follow-${logType}`);
@@ -508,6 +565,12 @@
             
             if (checkbox) {
                 checkbox.addEventListener('change', function() {
+                    // Prevent following when in crash mode for debug log
+                    if (logType === 'debug' && debugMode === 'crash' && this.checked) {
+                        this.checked = false;
+                        return;
+                    }
+                    
                     if (this.checked) {
                         autoScrollState[logType] = true; // Re-enable auto-scroll when follow is turned on
                         startFollow(logType);
@@ -565,6 +628,12 @@
         crashRadio.addEventListener('change', function() {
             if (this.checked) {
                 debugMode = 'crash';
+                // Stop following debug log when switching to crash mode
+                const followCheckbox = document.getElementById('follow-debug');
+                if (followCheckbox && followCheckbox.checked) {
+                    followCheckbox.checked = false;
+                    stopFollow('debug');
+                }
                 loadLatestCrashReport();
             }
         });
@@ -582,6 +651,110 @@
             });
         }, 100);
         
+    });
+    
+    // Journalctl functions
+    function openJournalctlModal() {
+        const modal = new bootstrap.Modal(document.getElementById('journalctlModal'));
+        modal.show();
+        
+        // Load initial journal content
+        refreshJournal();
+    }
+    
+    function refreshJournal() {
+        const logElement = document.getElementById('journal-log');
+        
+        if (!logElement) return;
+        
+        logElement.textContent = 'Loading system journal...';
+        
+        fetch('/logs/journal')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    updateLogContent('journal', `Error loading system journal: ${data.error}`);
+                } else {
+                    updateLogContent('journal', data.content || 'No journal data available');
+                    // Force scroll to bottom for journal
+                    setTimeout(() => {
+                        logElement.scrollTop = logElement.scrollHeight;
+                    }, 50);
+                }
+            })
+            .catch(error => {
+                updateLogContent('journal', `Network error loading system journal: ${error.message}`);
+                console.error('Journal fetch error:', error);
+            });
+    }
+    
+    // Initialize journal functionality when modal is shown
+    document.addEventListener('DOMContentLoaded', function() {
+        const journalModal = document.getElementById('journalctlModal');
+        if (journalModal) {
+            journalModal.addEventListener('shown.bs.modal', function() {
+                const journalCheckbox = document.getElementById('follow-journal');
+                const journalLogElement = document.getElementById('journal-log');
+                const journalSearchInput = document.getElementById('search-journal');
+                const journalFilterCheckbox = document.getElementById('filter-journal');
+                
+                // Setup follow checkbox
+                if (journalCheckbox && !journalCheckbox.hasAttribute('data-initialized')) {
+                    journalCheckbox.setAttribute('data-initialized', 'true');
+                    journalCheckbox.addEventListener('change', function() {
+                        if (this.checked) {
+                            autoScrollState['journal'] = true;
+                            startFollow('journal');
+                        } else {
+                            stopFollow('journal');
+                        }
+                    });
+                }
+                
+                // Setup scroll listener
+                if (journalLogElement && !journalLogElement.hasAttribute('data-initialized')) {
+                    journalLogElement.setAttribute('data-initialized', 'true');
+                    journalLogElement.addEventListener('scroll', function() {
+                        if (!isAtBottom(journalLogElement)) {
+                            autoScrollState['journal'] = false;
+                        } else {
+                            autoScrollState['journal'] = true;
+                        }
+                    });
+                }
+                
+                // Setup search functionality
+                if (journalSearchInput && !journalSearchInput.hasAttribute('data-initialized')) {
+                    journalSearchInput.setAttribute('data-initialized', 'true');
+                    journalSearchInput.addEventListener('input', function() {
+                        searchLogs('journal');
+                    });
+                    
+                    journalSearchInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape') {
+                            clearSearch('journal');
+                        }
+                    });
+                }
+                
+                // Setup filter checkbox
+                if (journalFilterCheckbox && !journalFilterCheckbox.hasAttribute('data-initialized')) {
+                    journalFilterCheckbox.setAttribute('data-initialized', 'true');
+                    journalFilterCheckbox.addEventListener('change', function() {
+                        searchLogs('journal');
+                    });
+                }
+            });
+            
+            // Cleanup on modal hide
+            journalModal.addEventListener('hidden.bs.modal', function() {
+                stopFollow('journal');
+                const journalCheckbox = document.getElementById('follow-journal');
+                if (journalCheckbox) {
+                    journalCheckbox.checked = false;
+                }
+            });
+        }
     });
     
     // Cleanup SSE connections when page is unloaded

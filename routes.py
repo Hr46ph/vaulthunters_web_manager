@@ -1354,6 +1354,101 @@ def rotate_log(log_type):
         current_app.logger.error(f'Unexpected error in log rotation: {e}', exc_info=True)
         return jsonify({'success': False, 'error': f'Failed to rotate log file: {str(e)}'}), 500
 
+@main_bp.route('/logs/journal')
+def journal_content():
+    """API endpoint for system journal content"""
+    try:
+        result = subprocess.run(
+            ['sudo', '/bin/journalctl', '-xeu', 'vaulthunters-web.service', '--no-pager'],
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'content': result.stdout
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Journal command failed: {result.stderr}'
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f'Journal content error: {e}')
+        return jsonify({'error': 'Failed to read journal'}), 500
+
+@main_bp.route('/logs/journal/stream')
+def journal_stream():
+    """Server-Sent Events endpoint for real-time journal streaming"""
+    try:
+        from flask import Response
+        import subprocess
+        import threading
+        import queue
+        
+        def generate():
+            try:
+                # Start with recent journal entries
+                initial_result = subprocess.run(
+                    ['sudo', '/bin/journalctl', '-xeu', 'vaulthunters-web.service', '--no-pager'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                
+                if initial_result.returncode == 0:
+                    data = json.dumps({'type': 'initial', 'content': initial_result.stdout})
+                    yield f"data: {data}\n\n"
+                else:
+                    data = json.dumps({'type': 'error', 'error': f'Failed to read initial journal: {initial_result.stderr}'})
+                    yield f"data: {data}\n\n"
+                
+                # Start following the journal (use -u without -xe for cleaner follow output)
+                process = subprocess.Popen(
+                    ['sudo', '/bin/journalctl', '-u', 'vaulthunters-web.service', '--follow'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True
+                )
+                
+                try:
+                    for line in iter(process.stdout.readline, ''):
+                        if line:
+                            line = line.rstrip('\n\r')
+                            if line.strip():  # Only send non-empty lines
+                                data = json.dumps({'type': 'line', 'line': line})
+                                yield f"data: {data}\n\n"
+                except Exception as e:
+                    data = json.dumps({'type': 'error', 'error': str(e)})
+                    yield f"data: {data}\n\n"
+                finally:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        
+        return Response(
+            generate(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'
+            }
+        )
+    except Exception as e:
+        current_app.logger.error(f'Journal stream error: {e}')
+        return jsonify({'error': 'Failed to start journal stream'}), 500
+
 @main_bp.route('/config')
 def config_editor():
     """Configuration editor page"""
