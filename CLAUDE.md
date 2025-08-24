@@ -27,8 +27,7 @@ Direct process management architecture:
 - **Configuration Management**: Multi-category config editor with atomic file operations and automatic backups
 - **Backup Management**: List, download, and inspect backups from configured backup directory
 - **Real-time Monitoring**: Accurate server status and player counts using mcstatus and process statistics
-- **Performance Monitoring**: System load averages, detailed memory breakdown (used/buffers/cache), swap usage, per-core CPU monitoring with real-time charts
-- **Dashboard Metrics**: Live Java CPU and memory usage with loading indicators, system health status indicators, and performance analytics
+- **Real-time Status**: Live server status, Java process CPU and memory usage for dashboard display
 - **Security**: Custom CSRF protection, input validation, file access restrictions
 - **User Context**: Run as minecraft user with direct process control (no systemd or root required)
 
@@ -84,41 +83,13 @@ pip install -r requirements.txt
 - Player tracking with login/logout session management
 - Production-ready security and error handling throughout all services
 
-## Monitoring Implementation
+## Status Monitoring
 
-**Philosophy**: Monitoring is a secondary feature for server management convenience, not a primary monitoring solution.
+The application provides real-time status information without historical data collection:
 
-### Hardcoded Monitoring Settings
+- **Server Status**: Running/stopped state via process detection
+- **Resource Usage**: Live Java process CPU and memory usage for dashboard display
+- **Player Information**: Current online player count and names via mcstatus
+- **System Information**: Java version, kernel version, and basic system details
 
-**Data Retention**: 3 days maximum (automatic cleanup)
-**Time Ranges**: 1min, 5min, 15min, 30min, 1hour, 3hours, 6hours, 12hours, 24hours, 3 days
-
-#### Collection Intervals by Metric Type
-- **CPU & Hardware Temps**: 5 seconds (high volatility metrics)
-- **Memory & Player Count**: 10 seconds (moderate change metrics)  
-- **TPS & Lag Spikes**: 3 seconds (critical performance metrics)
-
-#### Implementation Details
-- **No user configuration**: All monitoring settings hardcoded for simplicity
-- **Automatic cleanup**: Purge database records older than 3 days
-- **Database storage**: `data/metrics.db` with metric_type-based collection timing
-- **Performance target**: All time ranges load in <5 seconds with current approach
-
-### Future Enhancement: Metric-Specific 300-Sample Optimization
-
-**Phase 1 (Current)**: Hardcoded intervals, 3-day retention, basic sampling
-**Phase 2 (Future)**: Implement 300-sample strategy per metric type based on collection intervals:
-
-#### Revised Sampling Strategy
-| Metric Type | Collection | 15min | 3hours | 24hours | 3days | Target |
-|-------------|------------|-------|--------|---------|-------|---------|
-| TPS/Lag | 3s | 300 raw | 900 → 300 | 28k → 300 | 259k → 300 | ⚡ Fast |
-| CPU/Temp | 5s | 180 raw | 540 → 300 | 17k → 300 | 155k → 300 | ⚡ Fast |
-| Memory/Players | 10s | 90 raw | 270 → 300 | 8.6k → 300 | 77k → 300 | ⚡ Fast |
-
-**Benefits**:
-- Metric-appropriate sampling based on actual collection rates
-- Consistent 300-sample performance across all charts
-- Preserves high-resolution data where it matters (TPS spikes)
-
-**Status**: Phase 1 implemented. Phase 2 ready for future optimization when needed.
+No metrics database or historical data retention is implemented. Status information is fetched in real-time for dashboard updates.

@@ -9,7 +9,7 @@ A Flask-based web application for managing VaultHunters Minecraft servers. Provi
 - **Log Monitoring**: Real-time log viewing with Server-Sent Events
 - **Configuration Editor**: Edit server.properties and mod configurations
 - **Backup Management**: Download and manage server backups
-- **Performance Monitoring**: Server status, player counts, and system metrics
+- **Status Monitoring**: Real-time server status and player counts
 - **Security**: CSRF protection and input validation
 
 ## Requirements
