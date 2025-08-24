@@ -25,7 +25,7 @@ class MetricsStorage:
         self._lock = threading.Lock()
         self._logger = logging.getLogger(__name__)
         
-        # Player name cache for normalization (still used by startup log parser)
+        # Player name cache for normalization
         self.player_name_cache = {}
         
         if app is not None:
@@ -65,9 +65,6 @@ class MetricsStorage:
         # Initialize database
         self._init_database()
         
-        # Run smart startup reconciliation to sync missed activity
-        self._startup_reconciliation()
-        
         # Start collection thread if enabled
         if app.config.get('METRICS_ENABLED', True):
             self.start_collection()
@@ -104,34 +101,8 @@ class MetricsStorage:
                 )
             ''')
             
-            # Create players table for login/logout tracking
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS players (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT NOT NULL,
-                    login_time DATETIME NOT NULL,
-                    logout_time DATETIME NULL,
-                    is_online BOOLEAN DEFAULT 1,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Create indexes for faster player queries
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_players_username 
-                ON players(username)
-            ''')
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_players_online 
-                ON players(is_online)
-            ''')
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_players_login_time 
-                ON players(login_time)
-            ''')
-            
-            # Drop legacy death tracking table if it exists (death tracking removed)
+            # Drop legacy tracking tables if they exist (tracking removed)
+            cursor.execute('DROP TABLE IF EXISTS players')
             cursor.execute('DROP TABLE IF EXISTS player_deaths')
             
             # Create app state table for tracking shutdown times and reconciliation
@@ -149,76 +120,6 @@ class MetricsStorage:
             
             # Note: Simple log position tracking initialized in init_app()
     
-    def _startup_reconciliation(self):
-        """Smart startup reconciliation to sync missed activity without duplicates"""
-        try:
-            self._log_info('Starting up - reconciling player sessions from downtime...')
-            
-            # Step 1: Close any stale online sessions first
-            stale_count = self._close_stale_online_sessions()
-            self._log_info(f'Closed {stale_count} stale online sessions')
-            
-            # Step 2: Parse logs for missed activity, but exclude currently online players
-            # (real-time tracker will handle currently online players)
-            from scripts.log_parser import PlayerLogParser
-            
-            # Get server path from TOML config
-            from config import load_toml_config
-            config = load_toml_config()
-            server_path = config['server']['minecraft_server_path']
-            log_dir = os.path.join(server_path, 'logs')
-            
-            if not os.path.exists(log_dir):
-                self._log_warning(f'Log directory not found: {log_dir}')
-                return
-            
-            # Get current online players to exclude from log parsing
-            current_players = self._get_current_online_players()
-            current_usernames = {p.get('name', '') for p in current_players} if current_players else set()
-            
-            parser = PlayerLogParser(self.db_path)
-            results = parser.parse_all_logs_exclude_current(log_dir, exclude_players=current_usernames)
-            
-            self._log_info(f'Startup reconciliation complete: {results["sessions_imported"]} sessions imported, {results["sessions_skipped"]} skipped, {len(current_usernames)} current players excluded')
-            
-        except Exception as e:
-            self._log_error(f'Startup reconciliation failed: {e}')
-            # Don't fail startup if reconciliation fails
-    
-    def _close_stale_online_sessions(self):
-        """Close sessions that are marked online but player is no longer on server"""
-        try:
-            # Get current online players from server
-            current_players = self._get_current_online_players()
-            current_usernames = {p.get('name', '') for p in current_players} if current_players else set()
-            
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Find sessions marked as online
-                cursor.execute('SELECT id, username FROM players WHERE is_online = 1')
-                online_sessions = cursor.fetchall()
-                
-                closed_count = 0
-                current_time = datetime.now()
-                
-                for session_id, username in online_sessions:
-                    if username not in current_usernames:
-                        # Player not actually online - close stale session
-                        cursor.execute('''
-                            UPDATE players 
-                            SET is_online = 0, logout_time = ? 
-                            WHERE id = ?
-                        ''', (current_time, session_id))
-                        closed_count += 1
-                        self._log_info(f'Closed stale session for {username}')
-                
-                conn.commit()
-                return closed_count
-                
-        except Exception as e:
-            self._log_error(f'Failed to close stale sessions: {e}')
-            return 0
     
     def _normalize_player_name(self, display_name: str) -> str:
         """Normalize player names to handle achievement titles (cached version)"""
@@ -260,13 +161,12 @@ class MetricsStorage:
             self._log_warning(f"Failed to parse timestamp '{timestamp_str}': {e}")
             return datetime.now()
     
-    def _get_current_online_players(self):
-        """Get current online players from the server (helper method for startup reconciliation)"""
+    def get_current_online_players(self):
+        """Get current online players from the server (simplified for display only)"""
         try:
             player_status = self._collect_player_status_via_mcstatus()
             if player_status['success']:
-                # Return players in the expected format: list of dicts with 'name' key
-                return [{'name': name} for name in player_status.get('players', [])]
+                return player_status.get('players', [])
             else:
                 return []
         except Exception as e:
@@ -274,7 +174,7 @@ class MetricsStorage:
             return []
 
     def _collect_player_status_via_mcstatus(self):
-        """Collect current player status using mcstatus and update database"""
+        """Collect current player status using mcstatus (simplified - no database updates)"""
         try:
             from mcstatus import JavaServer
             
@@ -284,20 +184,15 @@ class MetricsStorage:
             server = JavaServer(server_host, server_port)
             query_result = server.query()
             
-            # Get current online players
+            # Get current online players with normalization for display
             current_players = query_result.players.names or []
-            
-            # Normalize player names to match database format
             normalized_players = [self._normalize_player_name(name) for name in current_players]
-            
-            # Update player status in database
-            self.update_player_status(normalized_players)
             
             return {
                 'success': True,
                 'player_count': query_result.players.online,
                 'max_players': query_result.players.max,
-                'players': current_players
+                'players': normalized_players
             }
             
         except Exception as e:
@@ -362,16 +257,12 @@ class MetricsStorage:
         """Retrieve all metrics within the specified time range with metric-specific 300-sample optimization"""
         start_time = datetime.now() - timedelta(hours=hours)
         
-        # Metric collection intervals (from _collection_worker hardcoded values)
+        # Metric collection intervals (server status metrics only)
         METRIC_INTERVALS = {
             # TPS/Lag metrics: 3-second collection (includes all server_tps_* dimension metrics)
             'tps_lag_metrics': ['server_tps', 'server_tick_time'],
-            # CPU/Temperature metrics: 5-second collection  
-            'cpu_temp_metrics': ['system_cpu_percent', 'system_load_1min', 'system_load_5min', 'system_load_15min', 
-                               'temperature_cpu_celsius', 'temperature_gpu_celsius', 'temperature_nvme_celsius'],
-            # Memory/Player metrics: 10-second collection
-            'memory_player_metrics': ['system_memory_used_mb', 'system_memory_percent', 'system_swap_used_mb', 
-                                    'java_memory_mb', 'java_cpu_percent', 'player_count']
+            # Java process metrics: 10-second collection
+            'java_player_metrics': ['java_memory_mb', 'java_cpu_percent', 'player_count']
         }
         
         try:
@@ -470,10 +361,8 @@ class MetricsStorage:
             if metric_type in metrics or any(metric_type.startswith(m) for m in metrics):
                 if interval_type == 'tps_lag_metrics':
                     return 3  # TPS/Lag: 3 seconds
-                elif interval_type == 'cpu_temp_metrics':
-                    return 5  # CPU/Temperature: 5 seconds 
-                elif interval_type == 'memory_player_metrics':
-                    return 10  # Memory/Player: 10 seconds
+                elif interval_type == 'java_player_metrics':
+                    return 10  # Java/Player: 10 seconds
         
         # Default to 10 seconds for unknown metrics
         return 10
@@ -707,238 +596,19 @@ class MetricsStorage:
             return None
 
     def collect_system_metrics(self):
-        """Collect current system metrics"""
-        config = self.app.config
-        
-        try:
-            # System memory
-            if config.get('METRICS_COLLECT_SYSTEM_MEMORY', True):
-                memory = psutil.virtual_memory()
-                self.store_metric('system_memory_used_mb', memory.used / (1024**2))
-                self.store_metric('system_memory_percent', memory.percent)
-                
-                # Store detailed memory breakdown if available
-                if hasattr(memory, 'buffers') and hasattr(memory, 'cached'):
-                    self.store_metric('system_memory_buffers_mb', memory.buffers / (1024**2))
-                    self.store_metric('system_memory_cache_mb', memory.cached / (1024**2))
-                
-                # Swap memory
-                swap = psutil.swap_memory()
-                self.store_metric('system_swap_used_mb', swap.used / (1024**2))
-                self.store_metric('system_swap_percent', swap.percent)
-            
-            # System CPU
-            if config.get('METRICS_COLLECT_SYSTEM_CPU', True):
-                cpu_percent = psutil.cpu_percent(interval=None)
-                self.store_metric('system_cpu_percent', cpu_percent)
-                
-                # Per-core CPU usage
-                cpu_per_core = psutil.cpu_percent(percpu=True, interval=None)
-                for i, core_usage in enumerate(cpu_per_core):
-                    self.store_metric(f'system_cpu_core_{i}_percent', core_usage)
-            
-            # System load
-            if config.get('METRICS_COLLECT_SYSTEM_LOAD', True):
-                try:
-                    load_avg = os.getloadavg()
-                    self.store_metric('system_load_1min', load_avg[0])
-                    self.store_metric('system_load_5min', load_avg[1])
-                    self.store_metric('system_load_15min', load_avg[2])
-                except (OSError, AttributeError):
-                    pass  # getloadavg not available on all platforms
-            
-            # Java process metrics
-            if config.get('METRICS_COLLECT_JAVA_PROCESS', True):
-                try:
-                    from services.system_control import SystemControlService
-                    system_control = SystemControlService()
-                    status = system_control.get_server_status()
-                    
-                    if status.get('running'):
-                        if status.get('memory_usage'):
-                            self.store_metric('java_memory_mb', status['memory_usage'])
-                        if status.get('cpu_usage'):
-                            self.store_metric('java_cpu_percent', status['cpu_usage'])
-                        if status.get('pid'):
-                            self.store_metric('java_pid', status['pid'])
-                except Exception as e:
-                    self._log_warning(f'Failed to collect Java process metrics: {e}')
-            
-            # Server TPS via RCON (only if server is running)
-            if config.get('METRICS_COLLECT_SERVER_TPS', True):
-                # Check if server is running first
-                from services.system_control import SystemControlService
-                system_control = SystemControlService()
-                server_status = system_control.get_server_status()
-                
-                if server_status.get('running', False):
-                    try:
-                        tps_data = self._collect_server_tps_safe()
-                        if tps_data:
-                            self.store_metric('server_tps', tps_data['overall_tps'], {
-                                'source': 'rcon_forge_tps',
-                                'dimensions': tps_data['dimensions']
-                            })
-                            
-                            # Store individual dimension TPS
-                            for dim_name, dim_data in tps_data['dimensions'].items():
-                                self.store_metric(f'server_tps_{dim_name}', dim_data['tps'], {
-                                    'source': 'rcon_forge_tps',
-                                    'dimension': dim_name,
-                                    'mean_tick_time': dim_data['mean_tick_time']
-                                })
-                        else:
-                            # Fallback to placeholder when RCON fails
-                            self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_failed'})
-                    except Exception as e:
-                        self._log_warning(f'Failed to collect server TPS via RCON: {e}')
-                        # Store placeholder on any error to keep metrics consistent
-                        self.store_metric('server_tps', 20.0, {'source': 'placeholder_rcon_error'})
-                else:
-                    # Server is stopped - skip TPS collection entirely
-                    pass
-            
-            
-            # Hardware temperature monitoring
-            if config.get('METRICS_COLLECT_TEMPERATURE', True):
-                try:
-                    from services.temperature_monitor import get_temperature_monitor
-                    temp_monitor = get_temperature_monitor()
-                    readings = temp_monitor.get_temperature_readings()
-                    
-                    if readings.get('status') == 'success':
-                        # Store CPU temperature
-                        if readings.get('cpu'):
-                            self.store_metric('temperature_cpu_celsius', readings['cpu']['current'], {
-                                'sensor': readings['cpu']['sensor'],
-                                'label': readings['cpu']['label'],
-                                'high_threshold': readings['cpu']['high'],
-                                'critical_threshold': readings['cpu']['critical']
-                            })
-                        
-                        # Store GPU temperature
-                        if readings.get('gpu'):
-                            self.store_metric('temperature_gpu_celsius', readings['gpu']['current'], {
-                                'sensor': readings['gpu']['sensor'],
-                                'label': readings['gpu']['label'],
-                                'high_threshold': readings['gpu']['high'],
-                                'critical_threshold': readings['gpu']['critical']
-                            })
-                        
-                        # Store NVMe temperature (composite)
-                        if readings.get('nvme', {}).get('composite'):
-                            nvme_data = readings['nvme']['composite']
-                            self.store_metric('temperature_nvme_celsius', nvme_data['current'], {
-                                'sensor': nvme_data['sensor'],
-                                'label': nvme_data['label'],
-                                'high_threshold': nvme_data['high'],
-                                'critical_threshold': nvme_data['critical']
-                            })
-                        
-                        # Store NVMe Sensor 1 temperature if available
-                        if readings.get('nvme', {}).get('sensor1'):
-                            nvme_sensor1 = readings['nvme']['sensor1']
-                            self.store_metric('temperature_nvme_sensor1_celsius', nvme_sensor1['current'], {
-                                'sensor': nvme_sensor1['sensor'],
-                                'label': nvme_sensor1['label'],
-                                'high_threshold': nvme_sensor1['high'],
-                                'critical_threshold': nvme_sensor1['critical']
-                            })
-                    else:
-                        self._log_warning(f"Temperature reading failed: {readings.get('error', 'Unknown error')}")
-                except Exception as e:
-                    self._log_warning(f'Failed to collect temperature data: {e}')
-                
-        except Exception as e:
-            self._log_error(f'Failed to collect system metrics: {e}')
+        """DISABLED: System metrics collection removed - only server status metrics are collected"""
+        # System monitoring metrics removed - use collect_java_process_metrics and collect_tps_and_lag_metrics instead
+        pass
     
     def collect_cpu_and_temperature_metrics(self):
-        """Collect CPU and temperature metrics (5-second interval)"""
-        try:
-            # System CPU
-            cpu_percent = psutil.cpu_percent(interval=None)
-            self.store_metric('system_cpu_percent', cpu_percent)
-            
-            # Per-core CPU usage
-            cpu_per_core = psutil.cpu_percent(percpu=True, interval=None)
-            for i, core_usage in enumerate(cpu_per_core):
-                self.store_metric(f'system_cpu_core_{i}_percent', core_usage)
-            
-            # System load
-            try:
-                load_avg = os.getloadavg()
-                self.store_metric('system_load_1min', load_avg[0])
-                self.store_metric('system_load_5min', load_avg[1])
-                self.store_metric('system_load_15min', load_avg[2])
-            except (OSError, AttributeError):
-                pass  # getloadavg not available on all platforms
-            
-            # Hardware temperature monitoring
-            try:
-                from services.temperature_monitor import get_temperature_monitor
-                temp_monitor = get_temperature_monitor()
-                readings = temp_monitor.get_temperature_readings()
-                
-                if readings.get('status') == 'success':
-                    # Store CPU temperature
-                    if readings.get('cpu'):
-                        self.store_metric('temperature_cpu_celsius', readings['cpu']['current'], {
-                            'sensor': readings['cpu']['sensor'],
-                            'label': readings['cpu']['label'],
-                            'high_threshold': readings['cpu']['high'],
-                            'critical_threshold': readings['cpu']['critical']
-                        })
-                    
-                    # Store GPU temperature
-                    if readings.get('gpu'):
-                        self.store_metric('temperature_gpu_celsius', readings['gpu']['current'], {
-                            'sensor': readings['gpu']['sensor'],
-                            'label': readings['gpu']['label'],
-                            'high_threshold': readings['gpu']['high'],
-                            'critical_threshold': readings['gpu']['critical']
-                        })
-                    
-                    # Store NVMe temperature (composite and individual sensors)
-                    if readings.get('nvme', {}).get('composite'):
-                        self.store_metric('temperature_nvme_celsius', readings['nvme']['composite']['current'], {
-                            'sensor': 'nvme_composite',
-                            'label': readings['nvme']['composite']['label'],
-                            'high_threshold': readings['nvme']['composite']['high'],
-                            'critical_threshold': readings['nvme']['composite']['critical']
-                        })
-                    
-                    # Additional NVMe sensor readings
-                    if readings.get('nvme', {}).get('sensors'):
-                        for i, sensor in enumerate(readings['nvme']['sensors'], 1):
-                            self.store_metric(f'temperature_nvme_sensor{i}_celsius', sensor['current'], {
-                                'sensor': sensor['sensor'],
-                                'label': sensor['label']
-                            })
-            except Exception as e:
-                self._log_warning(f'Failed to collect temperature metrics: {e}')
-        
-        except Exception as e:
-            self._log_error(f'Failed to collect CPU and temperature metrics: {e}')
+        """DISABLED: CPU and temperature metrics collection removed"""
+        # System monitoring metrics removed - only server status metrics are collected
+        pass
     
-    def collect_memory_metrics(self):
-        """Collect memory metrics (10-second interval)"""
+    def collect_java_process_metrics(self):
+        """Collect Java process metrics only (10-second interval)"""
         try:
-            # System memory
-            memory = psutil.virtual_memory()
-            self.store_metric('system_memory_used_mb', memory.used / (1024**2))
-            self.store_metric('system_memory_percent', memory.percent)
-            
-            # Store detailed memory breakdown if available
-            if hasattr(memory, 'buffers') and hasattr(memory, 'cached'):
-                self.store_metric('system_memory_buffers_mb', memory.buffers / (1024**2))
-                self.store_metric('system_memory_cache_mb', memory.cached / (1024**2))
-            
-            # Swap memory
-            swap = psutil.swap_memory()
-            self.store_metric('system_swap_used_mb', swap.used / (1024**2))
-            self.store_metric('system_swap_percent', swap.percent)
-            
-            # Java process metrics
+            # Java process metrics only - system memory/swap metrics removed
             try:
                 from services.system_control import SystemControlService
                 system_control = SystemControlService()
@@ -953,10 +623,9 @@ class MetricsStorage:
                         self.store_metric('java_pid', status['pid'])
             except Exception as e:
                 self._log_warning(f'Failed to collect Java process metrics: {e}')
-            
         
         except Exception as e:
-            self._log_error(f'Failed to collect memory metrics: {e}')
+            self._log_error(f'Failed to collect Java process metrics: {e}')
     
     def collect_tps_and_lag_metrics(self):
         """Collect TPS and lag spike metrics (3-second interval)"""
@@ -1014,8 +683,7 @@ class MetricsStorage:
                             'server_running': True
                         })
                     else:
-                        # Server running but mcstatus failed - clear all online players
-                        self.update_player_status([])  # Clear all online players
+                        # Server running but mcstatus failed
                         self.store_metric('player_count', 0, {
                             'source': 'mcstatus_failed',
                             'error': player_status.get('error', 'Unknown error'),
@@ -1024,16 +692,14 @@ class MetricsStorage:
                         
                 except Exception as e:
                     self._log_warning(f'Failed to collect player count via mcstatus: {e}')
-                    # Clear all online players when collection fails
-                    self.update_player_status([])
+                    # Store 0 when collection fails
                     self.store_metric('player_count', 0, {
                         'source': 'error',
                         'error': str(e),
                         'server_running': True
                     })
             else:
-                # Server is stopped - clear all online players and set count to 0
-                self.update_player_status([])  # Clear all online players
+                # Server is stopped - set count to 0
                 self.store_metric('player_count', 0, {
                     'source': 'server_stopped',
                     'server_running': False
@@ -1044,19 +710,16 @@ class MetricsStorage:
     
     def _collection_worker(self):
         """Background thread worker for metric collection with staggered intervals per metric type"""
-        # Hardcoded collection intervals (in seconds)
+        # Hardcoded collection intervals (in seconds) - server status metrics only
         COLLECTION_INTERVALS = {
-            # High volatility - CPU and temperature metrics (5s)
-            'cpu_temp_interval': 5,
-            # Moderate change - Memory metrics only (10s) 
-            'memory_interval': 10,
+            # Java process metrics (10s) 
+            'java_interval': 10,
             # Critical performance - TPS, lag spikes, and player count (3s)
             'tps_lag_player_interval': 3
         }
         
         last_collection = {
-            'cpu_temp': 0,
-            'memory': 0, 
+            'java': 0, 
             'tps_lag_player': 0
         }
         
@@ -1066,22 +729,17 @@ class MetricsStorage:
                     current_time = time.time()
                     
                     # Check if it's time to collect each metric group
-                    if current_time - last_collection['cpu_temp'] >= COLLECTION_INTERVALS['cpu_temp_interval']:
-                        self.collect_cpu_and_temperature_metrics()
-                        last_collection['cpu_temp'] = current_time
-                    
-                    if current_time - last_collection['memory'] >= COLLECTION_INTERVALS['memory_interval']:
-                        self.collect_memory_metrics()
-                        last_collection['memory'] = current_time
+                    if current_time - last_collection['java'] >= COLLECTION_INTERVALS['java_interval']:
+                        self.collect_java_process_metrics()
+                        last_collection['java'] = current_time
                     
                     if current_time - last_collection['tps_lag_player'] >= COLLECTION_INTERVALS['tps_lag_player_interval']:
                         self.collect_tps_and_lag_metrics()
                         last_collection['tps_lag_player'] = current_time
                     
-                    # Cleanup old metrics and player data every hour (check every 60 seconds)
+                    # Cleanup old metrics every hour (check every 60 seconds)
                     if int(current_time) % 3600 < 60:
                         self.cleanup_old_metrics()
-                        self.cleanup_old_player_data()
                 
             except Exception as e:
                 self._log_error(f'Error in metrics collection: {e}')
@@ -1134,204 +792,6 @@ class MetricsStorage:
         except Exception as e:
             self._log_error(f'Failed to set config value {key}: {e}')
     
-    def update_player_status(self, current_players: List[str]):
-        """Update player login/logout status based on current online players"""
-        current_time = datetime.now()
-        
-        with self._lock:
-            try:
-                with sqlite3.connect(self.db_path) as conn:
-                    cursor = conn.cursor()
-                    
-                    # Get currently online players from database
-                    cursor.execute('SELECT username FROM players WHERE is_online = 1')
-                    db_online_players = set(row[0] for row in cursor.fetchall())
-                    
-                    current_player_set = set(current_players)
-                    
-                    # Find players who just logged in
-                    new_players = current_player_set - db_online_players
-                    for username in new_players:
-                        # Mark any previous sessions as offline first
-                        cursor.execute('''
-                            UPDATE players 
-                            SET is_online = 0, logout_time = ?, updated_at = ?
-                            WHERE username = ? AND is_online = 1
-                        ''', (current_time, current_time, username))
-                        
-                        # Check if a session with similar login time already exists (within 10 seconds)
-                        cursor.execute('''
-                            SELECT id FROM players 
-                            WHERE username = ? 
-                            AND ABS(julianday(?) - julianday(login_time)) * 24 * 60 * 60 <= 10
-                        ''', (username, current_time))
-                        
-                        # Only insert if no session exists within 10 seconds of this login time
-                        if not cursor.fetchone():
-                            cursor.execute('''
-                                INSERT INTO players (username, login_time, is_online)
-                                VALUES (?, ?, 1)
-                            ''', (username, current_time))
-                    
-                    # Find players who just logged out
-                    logged_out_players = db_online_players - current_player_set
-                    for username in logged_out_players:
-                        cursor.execute('''
-                            UPDATE players 
-                            SET is_online = 0, logout_time = ?, updated_at = ?
-                            WHERE username = ? AND is_online = 1
-                        ''', (current_time, current_time, username))
-                    
-                    conn.commit()
-                    
-                    if new_players:
-                        self._log_info(f'Players logged in: {", ".join(new_players)}')
-                    if logged_out_players:
-                        self._log_info(f'Players logged out: {", ".join(logged_out_players)}')
-                        
-            except Exception as e:
-                self._log_error(f'Failed to update player status: {e}')
-    
-    def get_players_status(self, hours: int = None) -> Dict:
-        """Get player login/logout status for all players (ignores hours parameter for backward compatibility)"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Get ALL player sessions (no time restriction)
-                cursor.execute('''
-                    SELECT username, login_time, logout_time, is_online
-                    FROM players 
-                    ORDER BY login_time DESC
-                ''')
-                
-                players_data = []
-                online_players = []
-                offline_players = []
-                
-                for row in cursor.fetchall():
-                    username, login_time_str, logout_time_str, is_online = row
-                    
-                    player_info = {
-                        'username': username,
-                        'login_time': login_time_str,
-                        'logout_time': logout_time_str,
-                        'is_online': bool(is_online)
-                    }
-                    
-                    players_data.append(player_info)
-                    
-                    if is_online:
-                        online_players.append(player_info)
-                    else:
-                        offline_players.append(player_info)
-                
-                # Get unique players (latest session for each)
-                unique_players = {}
-                for player in players_data:
-                    username = player['username']
-                    if username not in unique_players or player['login_time'] > unique_players[username]['login_time']:
-                        unique_players[username] = player
-                
-                return {
-                    'online_players': online_players,
-                    'offline_players': offline_players,
-                    'all_sessions': players_data,
-                    'unique_players': list(unique_players.values()),
-                    'total_online': len(online_players),
-                    'total_sessions': len(players_data)
-                }
-                
-        except Exception as e:
-            self._log_error(f'Failed to get players status: {e}')
-            return {
-                'online_players': [],
-                'offline_players': [],
-                'all_sessions': [],
-                'unique_players': [],
-                'total_online': 0,
-                'total_sessions': 0
-            }
-    
-    def cleanup_old_player_data(self):
-        """DISABLED: Player login/logout history is preserved forever"""
-        # Player data is intentionally preserved forever to maintain complete server history
-        self._log_info('Player cleanup skipped - preserving all historical login/logout data')
-        return
-    
-    def remove_duplicate_sessions(self):
-        """Remove duplicate player sessions based on username and similar login_time (within 1 second)"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Get all sessions ordered by username and login_time
-                cursor.execute('''
-                    SELECT id, username, login_time, logout_time, is_online
-                    FROM players
-                    ORDER BY username, login_time
-                ''')
-                
-                sessions = cursor.fetchall()
-                to_delete = []
-                total_removed = 0
-                
-                i = 0
-                while i < len(sessions):
-                    current_session = sessions[i]
-                    current_id, username, login_time_str, logout_time_str, is_online = current_session
-                    
-                    # Parse current login time
-                    try:
-                        current_login = datetime.fromisoformat(login_time_str)
-                    except:
-                        i += 1
-                        continue
-                    
-                    # Look for duplicates within 1 second
-                    duplicates = [current_session]
-                    j = i + 1
-                    
-                    while j < len(sessions) and sessions[j][1] == username:  # Same username
-                        next_session = sessions[j]
-                        next_id, _, next_login_str, _, _ = next_session
-                        
-                        try:
-                            next_login = datetime.fromisoformat(next_login_str)
-                            # If within 1 second, it's a duplicate
-                            if abs((next_login - current_login).total_seconds()) <= 1:
-                                duplicates.append(next_session)
-                                j += 1
-                            else:
-                                break
-                        except:
-                            j += 1
-                    
-                    # If we found duplicates, keep the one with the highest ID and mark others for deletion
-                    if len(duplicates) > 1:
-                        duplicates.sort(key=lambda x: x[0], reverse=True)  # Sort by ID desc
-                        keep_session = duplicates[0]
-                        delete_sessions = duplicates[1:]
-                        
-                        for delete_session in delete_sessions:
-                            to_delete.append(delete_session[0])  # Add ID to deletion list
-                        
-                        self._log_info(f"Found {len(duplicates)} duplicate sessions for {username} at {login_time_str}, keeping ID {keep_session[0]}")
-                    
-                    i = j  # Move to next group
-                
-                # Delete duplicates
-                for session_id in to_delete:
-                    cursor.execute('DELETE FROM players WHERE id = ?', (session_id,))
-                    total_removed += 1
-                
-                conn.commit()
-                self._log_info(f"Cleaned up {total_removed} duplicate player sessions")
-                return total_removed
-                
-        except Exception as e:
-            self._log_error(f'Failed to remove duplicate sessions: {e}')
-            return 0
     
 
 # Global instance

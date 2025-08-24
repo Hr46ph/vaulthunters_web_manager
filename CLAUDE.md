@@ -80,9 +80,8 @@ pip install -r requirements.txt
 - AJAX for real-time server status updates in `static/js/app.js`
 - Log viewing with real-time streaming in `services/log_service.py`
 - RCON custom socket client avoiding signal issues
-- System monitoring with Chart.js charts in `templates/monitoring.html`
-- Performance analytics API endpoint `/api/monitoring/metrics` with psutil system data
-- Dashboard indicators with loading states and real-time updates every 5-10 seconds
+- Server status dashboard with real-time updates every 5-10 seconds
+- Player tracking with login/logout session management
 - Production-ready security and error handling throughout all services
 
 ## Monitoring Implementation

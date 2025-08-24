@@ -1,97 +1,5 @@
 // VaultHunters Web Manager JavaScript
 
-// Performance monitoring data
-const performanceData = {
-    lagSpikes: [], // Array of timestamps
-    maxHistoryMinutes: 10 // Keep 10 minutes of history
-};
-
-// Performance monitoring functions
-function addLagSpike(msDelay, ticksDelay) {
-    const now = Date.now();
-    performanceData.lagSpikes.push({
-        timestamp: now,
-        msDelay: msDelay,
-        ticksDelay: ticksDelay
-    });
-    
-    // Clean old data (older than maxHistoryMinutes)
-    const cutoff = now - (performanceData.maxHistoryMinutes * 60 * 1000);
-    performanceData.lagSpikes = performanceData.lagSpikes.filter(spike => spike.timestamp > cutoff);
-    
-    updatePerformanceIndicators();
-}
-
-function getRecentLagSpikes(seconds = 5) {
-    const now = Date.now();
-    const cutoff = now - (seconds * 1000);
-    return performanceData.lagSpikes.filter(spike => spike.timestamp > cutoff);
-}
-
-function getAverageSpikesPerMinute() {
-    if (performanceData.lagSpikes.length === 0) return 0;
-    
-    const now = Date.now();
-    const oneMinuteAgo = now - (60 * 1000);
-    const recentSpikes = performanceData.lagSpikes.filter(spike => spike.timestamp > oneMinuteAgo);
-    
-    return recentSpikes.length;
-}
-
-function updatePerformanceIndicators() {
-    // Recent lag spikes (5 second window)
-    const recentSpikes = getRecentLagSpikes(5);
-    const spikeCount = recentSpikes.length;
-    
-    let spikeStatus = 'success'; // green
-    if (spikeCount === 3) spikeStatus = 'warning'; // yellow
-    else if (spikeCount >= 4) spikeStatus = 'danger'; // red
-    
-    // Frequency (per minute)
-    const frequency = getAverageSpikesPerMinute();
-    
-    // Severity based on frequency
-    let severityStatus = 'success'; // green
-    if (frequency >= 37 && frequency <= 48) severityStatus = 'warning'; // yellow
-    else if (frequency >= 49) severityStatus = 'danger'; // red
-    
-    // Update UI elements
-    const spikeElement = document.getElementById('lag-spikes-indicator');
-    const frequencyElement = document.getElementById('frequency-indicator');
-    const severityElement = document.getElementById('severity-indicator');
-    
-    if (spikeElement) {
-        spikeElement.className = `badge bg-${spikeStatus}`;
-        spikeElement.textContent = spikeCount;
-        spikeElement.title = `${spikeCount} lag spikes in last 5 seconds`;
-    }
-    
-    if (frequencyElement) {
-        frequencyElement.textContent = `${frequency}/min`;
-        frequencyElement.title = `${frequency} lag spikes per minute (average)`;
-    }
-    
-    if (severityElement) {
-        severityElement.className = `badge bg-${severityStatus} rounded-circle`;
-        severityElement.innerHTML = '●';
-        severityElement.title = `Severity: ${frequency} spikes/min`;
-    }
-}
-
-// Parse lag spike from log line
-function parseLagSpike(logLine) {
-    // Pattern: "Can't keep up! Is the server overloaded? Running 2325ms or 46 ticks behind"
-    const lagPattern = /Can't keep up.*?Running (\d+)ms or (\d+) ticks behind/i;
-    const match = logLine.match(lagPattern);
-    
-    if (match) {
-        const msDelay = parseInt(match[1]);
-        const ticksDelay = parseInt(match[2]);
-        addLagSpike(msDelay, ticksDelay);
-        return true;
-    }
-    return false;
-}
 
 // Get CSRF token
 function getCSRFToken() {
@@ -533,9 +441,6 @@ window.appendToConsole = function(text) {
     
     output.innerHTML += text + '\n';
     
-    // Check for lag spikes in the console text
-    const textContent = text.replace(/<[^>]*>/g, ''); // Strip HTML tags
-    parseLagSpike(textContent);
     
     if (autoScroll) {
         output.scrollTop = output.scrollHeight;
@@ -685,97 +590,47 @@ function setupConsole() {
     });
 }
 
-// Update player list from monitoring API
+// Update player list from online players API (simplified)
 function updatePlayerList() {
-    fetch('/api/monitoring/metrics')
+    // Get online players directly
+    fetch('/api/players/online')
     .then(response => response.json())
     .then(data => {
-        const playerCount = data.players || 0;
-        const maxPlayers = data.max_players || 20;
-        const playerNames = data.player_names || [];
-        const playerStatus = data.player_status || { online_players: [], offline_players: [], unique_players: [] };
+        const playerNames = data.players || [];
+        const playerCount = data.count || 0;
         
         // Update player count badge and statistics
         const countBadge = document.getElementById('player-count-badge');
         const currentPlayersEl = document.getElementById('current-players');
-        const maxPlayersEl = document.getElementById('max-players');
         
         if (countBadge) countBadge.textContent = playerCount;
         if (currentPlayersEl) currentPlayersEl.textContent = playerCount;
-        if (maxPlayersEl) maxPlayersEl.textContent = maxPlayers;
         
-        // Update player list with online/offline status
+        // Update player list (online only)
         const playerListEl = document.getElementById('player-list');
         const noPlayersMessage = document.getElementById('no-players-message');
         
-        // Check if we should show offline players
+        // Hide offline players checkbox since we only show online players
         const showOfflineCheckbox = document.getElementById('show-offline-checkbox');
-        let showOffline = false;
-        
         if (showOfflineCheckbox) {
-            showOffline = showOfflineCheckbox.checked;
+            showOfflineCheckbox.style.display = 'none';
         }
         
-        // Get all unique players (latest session for each)
-        const allPlayers = playerStatus.unique_players || [];
-        const onlinePlayers = allPlayers.filter(p => p.is_online);
-        const offlinePlayers = allPlayers.filter(p => !p.is_online);
-        
-        // Build player list
-        let playersToShow = onlinePlayers;
-        if (showOffline) {
-            playersToShow = [...onlinePlayers, ...offlinePlayers];
-        }
-        
-        if (playersToShow.length > 0) {
+        if (playerNames.length > 0) {
             // Show player list, hide no players message
             if (noPlayersMessage) noPlayersMessage.style.display = 'none';
             if (playerListEl) {
                 playerListEl.style.display = 'block';
                 playerListEl.innerHTML = '';
                 
-                playersToShow.forEach(player => {
+                playerNames.forEach(playerName => {
                     const listItem = document.createElement('li');
-                    const isOnline = player.is_online;
-                    const opacity = isOnline ? '1' : '0.5';
-                    const iconClass = isOnline ? 'text-success' : 'text-muted';
-                    const statusText = isOnline ? 'Online' : 'Offline';
-                    
                     listItem.className = 'list-group-item d-flex align-items-center py-2';
-                    listItem.style.opacity = opacity;
-                    
-                    // Format login time for tooltip
-                    let loginTime = '';
-                    if (player.login_time) {
-                        try {
-                            const date = new Date(player.login_time);
-                            loginTime = date.toLocaleString();
-                        } catch (e) {
-                            loginTime = player.login_time;
-                        }
-                    }
-                    
-                    // Format logout time for tooltip
-                    let logoutTime = '';
-                    if (player.logout_time && !isOnline) {
-                        try {
-                            const date = new Date(player.logout_time);
-                            logoutTime = date.toLocaleString();
-                        } catch (e) {
-                            logoutTime = player.logout_time;
-                        }
-                    }
-                    
-                    const tooltipText = isOnline 
-                        ? `Last login: ${loginTime}` 
-                        : `Last seen: ${logoutTime}`;
                     
                     listItem.innerHTML = `
-                        <i class="fas fa-user-circle ${iconClass} me-2"></i>
-                        <span class="fw-medium player-name-clickable" title="${tooltipText}" 
-                              style="cursor: pointer; text-decoration: underline;" 
-                              onclick="showPlayerDetails('${escapeHtml(player.username)}')">${escapeHtml(player.username)}</span>
-                        <small class="text-muted ms-auto">${statusText}</small>
+                        <i class="fas fa-user-circle text-success me-2"></i>
+                        <span class="fw-medium">${escapeHtml(playerName)}</span>
+                        <small class="text-muted ms-auto">Online</small>
                     `;
                     playerListEl.appendChild(listItem);
                 });
@@ -788,118 +643,20 @@ function updatePlayerList() {
     })
     .catch(error => {
         console.error('Error updating player list:', error);
+        // Show no players on error
+        const playerListEl = document.getElementById('player-list');
+        const noPlayersMessage = document.getElementById('no-players-message');
+        const countBadge = document.getElementById('player-count-badge');
+        
+        if (countBadge) countBadge.textContent = '0';
+        if (playerListEl) playerListEl.style.display = 'none';
+        if (noPlayersMessage) noPlayersMessage.style.display = 'block';
     });
 }
 
-// Player details modal functions
-function showPlayerDetails(username) {
-    const modal = new bootstrap.Modal(document.getElementById('playerDetailsModal'));
-    
-    // Set username in modal title
-    document.getElementById('playerModalUsername').textContent = username;
-    
-    // Show loading state
-    document.getElementById('playerModalLoading').style.display = 'block';
-    document.getElementById('playerModalContent').style.display = 'none';
-    document.getElementById('playerModalError').style.display = 'none';
-    
-    // Reset modal state - show session history (only option now)
-    document.getElementById('sessionHistoryBtn').classList.add('active');
-    
-    // Show modal
-    modal.show();
-    
-    // Fetch player data
-    fetch(`/api/player/${encodeURIComponent(username)}/history`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            
-            // Hide loading, show content
-            document.getElementById('playerModalLoading').style.display = 'none';
-            document.getElementById('playerModalContent').style.display = 'block';
-            
-            // Update statistics
-            document.getElementById('playerTotalPlaytime').textContent = data.total_playtime || '0s';
-            document.getElementById('playerTotalSessions').textContent = data.total_sessions || 0;
-            
-            // Update status
-            const isCurrentlyOnline = data.sessions.length > 0 && data.sessions[0].is_online;
-            const statusElement = document.getElementById('playerCurrentStatus');
-            const statusTextElement = document.getElementById('playerStatusText');
-            
-            if (isCurrentlyOnline) {
-                statusElement.className = 'text-success';
-                statusElement.querySelector('i').className = 'fas fa-circle text-success';
-                statusTextElement.textContent = 'Online';
-            } else {
-                statusElement.className = 'text-muted';
-                statusElement.querySelector('i').className = 'fas fa-circle text-muted';
-                statusTextElement.textContent = 'Offline';
-            }
-            
-            // Update sessions list
-            const sessionsList = document.getElementById('playerSessionsList');
-            sessionsList.innerHTML = '';
-            
-            if (data.sessions && data.sessions.length > 0) {
-                data.sessions.forEach(session => {
-                    const row = document.createElement('tr');
-                    
-                    // Add styling for current session
-                    if (session.is_online) {
-                        row.className = 'table-success';
-                    }
-                    
-                    row.innerHTML = `
-                        <td class="text-nowrap">${escapeHtml(session.login_time)}</td>
-                        <td class="text-nowrap">${escapeHtml(session.logout_time)}</td>
-                        <td class="text-nowrap">${escapeHtml(session.duration)}</td>
-                        <td>
-                            ${session.is_online 
-                                ? '<span class="badge bg-success"><i class="fas fa-circle"></i> Online</span>'
-                                : '<span class="badge bg-secondary"><i class="fas fa-circle"></i> Offline</span>'
-                            }
-                        </td>
-                    `;
-                    
-                    sessionsList.appendChild(row);
-                });
-            } else {
-                // No sessions found
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td colspan="4" class="text-center text-muted py-3">
-                        <i class="fas fa-info-circle"></i> No session history found
-                    </td>
-                `;
-                sessionsList.appendChild(row);
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching player details:', error);
-            
-            // Hide loading, show error
-            document.getElementById('playerModalLoading').style.display = 'none';
-            document.getElementById('playerModalContent').style.display = 'none';
-            document.getElementById('playerModalError').style.display = 'block';
-            document.getElementById('playerModalErrorText').textContent = error.message || 'Failed to load player data';
-        });
-}
+// Player details functionality removed - only showing online players now
 
-// Functions to switch between views in player modal
-function showSessionHistory() {
-    // Update button states (only session history available now)
-    document.getElementById('sessionHistoryBtn').classList.add('active');
-}
-
-// Death tracking removed - only session history available
-
-// Make functions globally available
-window.showPlayerDetails = showPlayerDetails;
-window.showSessionHistory = showSessionHistory;
+// Player modal functions removed - simplified to only show online players
 
 // Helper function to escape HTML
 function escapeHtml(text) {
@@ -922,8 +679,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up periodic status updates (every 10 seconds)
     setInterval(updateServerStatus, 10000);
     
-    // Set up periodic performance indicator updates (every 2 seconds)
-    setInterval(updatePerformanceIndicators, 2000);
     
     // Set up player list updates (every 10 seconds) if player list is present
     if (document.getElementById('player-list')) {

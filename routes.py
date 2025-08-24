@@ -1,22 +1,16 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app, session
-from flask_wtf import FlaskForm
-import secrets
-import hmac
-import hashlib
-from wtforms import StringField, TextAreaField, SelectField, SubmitField
-from wtforms.validators import DataRequired, Length
 from services.system_control import SystemControlService
 from services.log_service import LogService
 from services.config_manager import ConfigManager
 from services.backup_manager import BackupManager
 from services.server_properties import ServerPropertiesParser
 from services.log_watcher import get_log_watcher
+from services.rcon_client import RconClient
 import os
 import logging
 import subprocess
 import json
 import time
-import sqlite3
 from datetime import datetime
 
 def _execute_rcon_server_control(action):
@@ -47,13 +41,11 @@ def _execute_rcon_server_control(action):
                 'error': 'RCON password not set in server.properties'
             }
         
-        from services.rcon_client import RconClient
         
         if action == 'stop':
             # Use direct process control for reliable stop
             try:
                 current_app.logger.info('Stopping server using direct process control')
-                from services.system_control import SystemControlService
                 system_control = SystemControlService()
                 result = system_control.stop_server()
                 
@@ -70,7 +62,6 @@ def _execute_rcon_server_control(action):
             # Use direct process control for reliable restart
             try:
                 current_app.logger.info('Restarting server using direct process control')
-                from services.system_control import SystemControlService
                 system_control = SystemControlService()
                 
                 # First stop the server
@@ -139,30 +130,6 @@ def _execute_rcon_server_control(action):
 # Create blueprint
 main_bp = Blueprint('main', __name__)
 
-# Simple CSRF token functions
-def generate_csrf_token():
-    """Generate a simple CSRF token"""
-    if 'csrf_token' not in session:
-        session['csrf_token'] = secrets.token_urlsafe(32)
-    return session['csrf_token']
-
-def validate_csrf_token(token):
-    """Validate CSRF token"""
-    if not token:
-        return False
-    session_token = session.get('csrf_token')
-    if not session_token:
-        return False
-    return hmac.compare_digest(session_token, token)
-
-class ServerControlForm(FlaskForm):
-    action = StringField('Action', validators=[DataRequired()])
-    submit = SubmitField('Execute')
-
-class ConfigEditForm(FlaskForm):
-    config_file = SelectField('Configuration File', choices=[])
-    content = TextAreaField('Content', validators=[DataRequired()])
-    submit = SubmitField('Save Configuration')
 
 # Monitoring helper functions
 def get_tps_data():
@@ -314,9 +281,7 @@ def get_recent_performance_events():
 def index():
     """Main dashboard - lightweight initial load"""
     try:
-        # Generate CSRF token for the session
-        csrf_token = generate_csrf_token()
-        return render_template('index.html', csrf_token=csrf_token)
+        return render_template('index.html')
     except Exception as e:
         current_app.logger.error(f'Dashboard error: {e}')
         flash('Error loading dashboard', 'error')
@@ -407,602 +372,16 @@ def system_info():
         current_app.logger.error(f'System info error: {e}')
         return jsonify({'error': 'Failed to get system info'}), 500
 
-@main_bp.route('/monitoring')
-def monitoring():
-    """Monitoring page with charts and metrics"""
-    try:
-        csrf_token = generate_csrf_token()
-        return render_template('monitoring.html', csrf_token=csrf_token)
-    except Exception as e:
-        current_app.logger.error(f'Monitoring page error: {e}')
-        flash('Error loading monitoring page', 'error')
-        return redirect(url_for('main.index'))
 
-@main_bp.route('/api/monitoring/metrics')
-def monitoring_metrics():
-    """API endpoint for monitoring metrics"""
-    # Check server status first - NO metrics collection if server not green
-    try:
-        system_control = SystemControlService()
-        server_status = system_control.get_server_status()
-        
-        if not server_status.get('running', False) or server_status.get('status') != 'running':
-            # Return minimal safe data when server is stopped or starting
-            return jsonify({
-                'server_running': False,
-                'server_status': server_status.get('status', 'stopped'),
-                'players': 0,
-                'max_players': 20,
-                'player_names': [],
-                'java_memory_mb': 0,
-                'java_cpu_percent': 0,
-                'player_status': {'online_players': [], 'offline_players': [], 'unique_players': [], 'total_online': 0},
-                'system_memory': {'used_gb': 0, 'total_gb': 0, 'percent': 0},
-                'detailed_memory': {'used_mb': 0, 'buffers_mb': 0, 'cache_mb': 0, 'swap_used_mb': 0, 'total_mb': 0, 'percent': 0},
-                'system_load': 0,
-                'cpu_system_avg': 0,
-                'cpu_count': 4,
-                'cpu_per_core': [0, 0, 0, 0],
-                'events': [{'type': 'Server Status', 'message': f'Server {server_status.get("status", "stopped")} - metrics collection disabled', 'timestamp': datetime.now().isoformat(), 'severity': 'info'}],
-                'message': 'Metrics collection disabled - server not running'
-            })
-    except Exception as e:
-        current_app.logger.error(f'Error checking server status for metrics: {e}')
-        # Return safe fallback data
-        return jsonify({
-            'server_running': False,
-            'server_status': 'unknown',
-            'players': 0,
-            'max_players': 20,
-            'player_names': [],
-            'java_memory_mb': 0,
-            'java_cpu_percent': 0,
-            'player_status': {'online_players': [], 'offline_players': [], 'unique_players': [], 'total_online': 0},
-            'system_memory': {'used_gb': 0, 'total_gb': 0, 'percent': 0},
-            'detailed_memory': {'used_mb': 0, 'buffers_mb': 0, 'cache_mb': 0, 'swap_used_mb': 0, 'total_mb': 0, 'percent': 0},
-            'system_load': 0,
-            'cpu_system_avg': 0,
-            'cpu_count': 4,
-            'cpu_per_core': [0, 0, 0, 0],
-            'events': [{'type': 'Error', 'message': 'Status check failed - metrics collection disabled', 'timestamp': datetime.now().isoformat(), 'severity': 'error'}],
-            'error': 'Status check failed'
-        })
-    
-    current_app.logger.info('=== MONITORING METRICS API CALLED - SERVER RUNNING ===')
-    
-    # Get system memory data (not just Minecraft process)
-    system_memory = {'used_gb': 0, 'total_gb': 0, 'percent': 0}
-    try:
-        import psutil
-        memory = psutil.virtual_memory()
-        system_memory = {
-            'used_gb': round(memory.used / (1024**3), 1),
-            'total_gb': round(memory.total / (1024**3), 1),
-            'percent': memory.percent
-        }
-        current_app.logger.info(f'System memory: {system_memory["used_gb"]}GB / {system_memory["total_gb"]}GB ({system_memory["percent"]}%)')
-    except Exception as e:
-        current_app.logger.warning(f'Failed to get system memory: {e}')
-    
-    # Get real CPU data (carefully, non-blocking)
-    cpu_system_avg = 15.5  # Default
-    cpu_count = 4  # Safe default if detection fails
-    cpu_per_core = []  # Will be populated based on actual detection
-    
-    try:
-        import psutil
-        # Always get actual core count first
-        cpu_count = psutil.cpu_count()
-        
-        # Non-blocking calls (interval=None means use cached data from previous call)
-        cpu_system_avg = psutil.cpu_percent(interval=None)
-        cpu_per_core = psutil.cpu_percent(percpu=True, interval=None)
-        
-        # Ensure per-core list matches actual core count
-        if len(cpu_per_core) != cpu_count:
-            current_app.logger.warning(f'Core count mismatch: detected {cpu_count} but got {len(cpu_per_core)} usage values')
-            cpu_per_core = [cpu_system_avg] * cpu_count  # Use average for all cores as fallback
-        
-        current_app.logger.info(f'Real CPU: {cpu_count} cores, avg: {cpu_system_avg}%, per-core samples: {len(cpu_per_core)}')
-    except Exception as e:
-        current_app.logger.warning(f'CPU monitoring failed, using defaults: {e}')
-        # Create default per-core data based on detected or fallback core count
-        cpu_per_core = [cpu_system_avg] * cpu_count
-    
-    # Get performance events (simplified to avoid blocking)
-    events = [{
-        'type': 'Monitoring',
-        'message': 'System monitoring active',
-        'timestamp': datetime.now().isoformat(),
-        'severity': 'info'
-    }]
-    
-    # Get system load average
-    system_load = 0.5  # Default
-    try:
-        load_avg = os.getloadavg()
-        system_load = load_avg[0]  # 1-minute load average
-        current_app.logger.info(f'System load: {system_load} (1min: {load_avg[0]}, 5min: {load_avg[1]}, 15min: {load_avg[2]})')
-    except Exception as e:
-        current_app.logger.warning(f'Failed to get system load: {e}')
-    
-    # Get detailed memory information
-    detailed_memory = {}
-    try:
-        import psutil
-        memory = psutil.virtual_memory()
-        swap = psutil.swap_memory()
-        
-        detailed_memory = {
-            'used_mb': round(memory.used / (1024**2)),
-            'buffers_mb': round(memory.buffers / (1024**2)) if hasattr(memory, 'buffers') else 0,
-            'cache_mb': round(memory.cached / (1024**2)) if hasattr(memory, 'cached') else 0,
-            'swap_used_mb': round(swap.used / (1024**2)),
-            'swap_free_mb': round(swap.free / (1024**2)),
-            'total_mb': round(memory.total / (1024**2)),
-            'used_gb': round(memory.used / (1024**3), 1),
-            'total_gb': round(memory.total / (1024**3), 1),
-            'percent': memory.percent
-        }
-    except Exception as e:
-        current_app.logger.warning(f'Failed to get detailed memory: {e}')
-        detailed_memory = system_memory  # Fallback to basic memory
-    
-    # Get Java process memory and player data from our 3-second metrics collection (super fast)
-    java_memory_mb = 0
-    player_data = {'count': 0, 'max': 20, 'names': []}
-    try:
-        system_control = SystemControlService()
-        minecraft_proc = system_control._get_minecraft_process()
-        
-        if minecraft_proc and minecraft_proc.is_running():
-            # Get process memory
-            try:
-                proc_info = minecraft_proc.as_dict(attrs=['memory_info'])
-                if proc_info['memory_info']:
-                    java_memory_mb = round(proc_info['memory_info'].rss / 1024 / 1024)
-            except Exception:
-                pass
-            
-            # Get player data from our fast 3-second metrics collection (no mcstatus call needed)
-            try:
-                from services.metrics_storage import metrics_storage
-                import sqlite3
-                
-                with sqlite3.connect(metrics_storage.db_path) as conn:
-                    cursor = conn.cursor()
-                    # Get latest player count metric
-                    cursor.execute('''
-                        SELECT value, metadata FROM metrics 
-                        WHERE metric_type = 'player_count' 
-                        ORDER BY timestamp DESC LIMIT 1
-                    ''')
-                    row = cursor.fetchone()
-                    if row:
-                        import json
-                        player_count, metadata_json = row
-                        metadata = json.loads(metadata_json or '{}')
-                        
-                        player_data['count'] = int(player_count)
-                        player_data['max'] = metadata.get('max_players', 20)
-                        player_data['names'] = metadata.get('player_names', [])
-                        
-            except Exception as e:
-                current_app.logger.warning(f'Failed to get player data from metrics: {e}')
-                # Fallback to empty data
-                
-        current_app.logger.info(f'Java memory: {java_memory_mb}MB, Players: {player_data["count"]}/{player_data["max"]}')
-    except Exception as e:
-        current_app.logger.warning(f'Failed to get server status: {e}')
-    
-    # Get simplified player status (optimized for API performance)
-    player_status_data = {'online_players': [], 'offline_players': [], 'unique_players': [], 'total_online': 0}
-    try:
-        from services.metrics_storage import metrics_storage
-        import sqlite3
-        
-        # Optimized query to get only unique players with their latest session
-        with sqlite3.connect(metrics_storage.db_path) as conn:
-            cursor = conn.cursor()
-            # Get latest session for each unique player (handles ties properly)
-            cursor.execute('''
-                SELECT username, login_time, logout_time, is_online
-                FROM (
-                    SELECT username, login_time, logout_time, is_online,
-                           ROW_NUMBER() OVER (PARTITION BY username ORDER BY login_time DESC, id DESC) as rn
-                    FROM players
-                ) ranked
-                WHERE rn = 1
-                ORDER BY login_time DESC
-                LIMIT 50
-            ''')
-            
-            unique_players = []
-            total_online = 0
-            for row in cursor.fetchall():
-                username, login_time_str, logout_time_str, is_online = row
-                player_info = {
-                    'username': username,
-                    'login_time': login_time_str,
-                    'logout_time': logout_time_str,
-                    'is_online': bool(is_online)
-                }
-                unique_players.append(player_info)
-                if is_online:
-                    total_online += 1
-            
-            player_status_data = {
-                'online_players': [p for p in unique_players if p['is_online']],
-                'offline_players': [p for p in unique_players if not p['is_online']],
-                'unique_players': unique_players,
-                'total_online': total_online
-            }
-        
-        current_app.logger.info(f'Player status (optimized): {player_status_data["total_online"]} online, {len(player_status_data["unique_players"])} unique players')
-    except Exception as e:
-        current_app.logger.warning(f'Failed to get player status: {e}')
-    
-    # Get hardware temperature data
-    temperature_data = {}
-    try:
-        from services.temperature_monitor import get_temperature_monitor
-        temp_monitor = get_temperature_monitor()
-        temperature_data = temp_monitor.get_temperature_summary()
-        current_app.logger.info(f'Temperature readings: CPU={temperature_data.get("temperatures", {}).get("cpu", "N/A")}°C, '
-                              f'GPU={temperature_data.get("temperatures", {}).get("gpu", "N/A")}°C, '
-                              f'NVMe={temperature_data.get("temperatures", {}).get("nvme", "N/A")}°C')
-    except Exception as e:
-        current_app.logger.warning(f'Failed to get temperature data: {e}')
-        temperature_data = {
-            'temperatures': {},
-            'alerts': [],
-            'status': 'error',
-            'error': str(e)
-        }
-    
-    # Get real TPS and tick time data from metrics storage
-    current_tps = 20.0  # Default fallback
-    current_tick_time = 50.0  # Default fallback (50ms = 20 TPS)
-    try:
-        from services.metrics_storage import metrics_storage
-        latest_tps = metrics_storage.get_latest_metric('server_tps')
-        latest_tick_time = metrics_storage.get_latest_metric('server_tick_time')
-        
-        if latest_tps and latest_tps.get('value') is not None:
-            # Only use real data if it's not a placeholder
-            metadata = latest_tps.get('metadata', {})
-            if metadata.get('source') != 'placeholder_rcon_failed' and metadata.get('source') != 'placeholder_rcon_error':
-                current_tps = latest_tps['value']
-                # Try to get tick time from TPS metadata first
-                if metadata.get('overall_tick_time') is not None:
-                    current_tick_time = metadata['overall_tick_time']
-                current_app.logger.info(f'Using real TPS data: {current_tps} TPS, {current_tick_time}ms (source: {metadata.get("source", "unknown")})')
-            else:
-                current_app.logger.info(f'Ignoring placeholder TPS data, using fallback: {current_tps}')
-        
-        # Use separate tick time metric if available
-        if latest_tick_time and latest_tick_time.get('value') is not None:
-            tick_metadata = latest_tick_time.get('metadata', {})
-            if tick_metadata.get('source') != 'placeholder_rcon_failed':
-                current_tick_time = latest_tick_time['value']
-        
-        if latest_tps is None and latest_tick_time is None:
-            current_app.logger.info(f'No TPS/tick time data available, using fallback: {current_tps} TPS, {current_tick_time}ms')
-    except Exception as e:
-        current_app.logger.warning(f'Failed to get real TPS/tick time data: {e}')
-    
-    # Get dimension-specific TPS data (dynamic discovery with optimized query)
-    dimension_tps_data = {}
-    dimension_tick_time_data = {}
-    try:
-        from services.metrics_storage import metrics_storage
-        import sqlite3
-        
-        # Get all available dimensions from database (optimized with indexes)
-        query = """
-        SELECT DISTINCT 
-            REPLACE(metric_type, 'server_tps_', '') as dimension_name
-        FROM metrics 
-        WHERE metric_type LIKE 'server_tps_%' 
-          AND json_extract(metadata, '$.source') = 'rcon_forge_tps'
-        ORDER BY dimension_name
-        """
-        
-        dimensions = []
-        with sqlite3.connect(metrics_storage.db_path) as conn:
-            cursor = conn.execute(query)
-            for row in cursor.fetchall():
-                dimensions.append(row[0])
-        
-        current_app.logger.info(f'Found dimensions for API: {dimensions}')
-        
-        for dimension in dimensions:
-            # Get latest TPS for this dimension
-            latest_dim_tps = metrics_storage.get_latest_metric(f'server_tps_{dimension}')
-            if latest_dim_tps and latest_dim_tps.get('value') is not None:
-                metadata = latest_dim_tps.get('metadata', {})
-                if metadata.get('source') == 'rcon_forge_tps':
-                    dimension_tps_data[f'current_tps_{dimension}'] = latest_dim_tps['value']
-                    # Get tick time from metadata
-                    if metadata.get('mean_tick_time') is not None:
-                        dimension_tick_time_data[f'current_tick_time_{dimension}'] = metadata['mean_tick_time']
-        
-        current_app.logger.info(f'Retrieved dimension data: {len(dimension_tps_data)} dimensions with TPS data')
-    except Exception as e:
-        current_app.logger.warning(f'Failed to get dimension TPS data: {e}')
-    
-    # Get RCON status (with actual connection test)
-    rcon_status = 'unknown'
-    try:
-        from services.server_properties import ServerPropertiesParser
-        
-        # Get RCON details from server.properties
-        server_props = ServerPropertiesParser()
-        if server_props.load_properties() and server_props.is_rcon_enabled():
-            # RCON is configured, now test actual connection
-            server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-            rcon_port = server_props.get_rcon_port()
-            rcon_password = server_props.get_rcon_password()
-            
-            if rcon_password:
-                try:
-                    from services.rcon_client import test_rcon_connection
-                    connected, error = test_rcon_connection(server_host, rcon_port, rcon_password)
-                    if connected:
-                        rcon_status = 'connected'
-                    else:
-                        rcon_status = 'error'  # RCON configured but not connected
-                        current_app.logger.warning(f'RCON connection failed: {error}')
-                except Exception as e:
-                    rcon_status = 'error'
-                    current_app.logger.warning(f'RCON connection test failed: {e}')
-            else:
-                rcon_status = 'error'  # RCON enabled but no password
-        else:
-            rcon_status = 'disabled'  # RCON not enabled
-        current_app.logger.info(f'RCON status: {rcon_status}')
-    except Exception as e:
-        current_app.logger.warning(f'Failed to check RCON status: {e}')
-        rcon_status = 'error'
-    
-    # Get disk space information
-    disk_data = {}
-    try:
-        import shutil
-        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
-        
-        # Get disk usage for the server directory
-        total, used, free = shutil.disk_usage(server_path)
-        
-        # Convert to GB
-        total_gb = round(total / (1024**3), 1)
-        used_gb = round(used / (1024**3), 1)
-        free_gb = round(free / (1024**3), 1)
-        used_percent = round((used / total) * 100, 1)
-        
-        # Determine disk status based on free space
-        if free_gb >= 10:
-            disk_status = 'good'
-        elif free_gb >= 1:
-            disk_status = 'warning'
-        else:
-            disk_status = 'danger'
-        
-        disk_data = {
-            'total_gb': total_gb,
-            'used_gb': used_gb,
-            'free_gb': free_gb,
-            'used_percent': used_percent,
-            'status': disk_status
-        }
-        
-        current_app.logger.info(f'Disk space: {free_gb}GB free / {total_gb}GB total ({used_percent}% used) - Status: {disk_status}')
-    except Exception as e:
-        current_app.logger.warning(f'Failed to get disk space: {e}')
-        disk_data = {
-            'total_gb': 0,
-            'used_gb': 0,
-            'free_gb': 0,
-            'used_percent': 0,
-            'status': 'error'
-        }
-    
-    # Return mixed real and test data
-    test_metrics = {
-        'current_tps': current_tps,  # Now using real TPS data when available
-        'current_tick_time': current_tick_time,  # Real tick time data
-        'lag_spikes_5min': 0,
-        'system_memory': detailed_memory,  # Enhanced memory data
-        'system_load': system_load,  # Real system load
-        'java_memory_mb': java_memory_mb,  # Real Java memory
-        'players': player_data['count'],  # Player count for status
-        'max_players': player_data['max'],  # Max players
-        'player_names': player_data['names'],  # List of player names
-        'player_status': player_status_data,  # Detailed player login/logout data
-        'recent_lag_spikes': [],
-        'events': events,  # Real events
-        'rcon_status': rcon_status,  # Real RCON status
-        'cpu_system_avg': cpu_system_avg,  # Real CPU average
-        'cpu_count': cpu_count,  # Real CPU count
-        'cpu_per_core': cpu_per_core,  # Real per-core data
-        'temperatures': temperature_data,  # Real temperature data
-        'disk_space': disk_data  # Real disk space data
-    }
-    
-    # Add dimension-specific TPS and tick time data
-    test_metrics.update(dimension_tps_data)
-    test_metrics.update(dimension_tick_time_data)
-    
-    return jsonify(test_metrics)
 
-@main_bp.route('/api/monitoring/dimensions')
-def get_available_dimensions():
-    """Get list of available dimensions from database"""
-    try:
-        from services.metrics_storage import metrics_storage
-        
-        # Query database for all dimension TPS metrics
-        query = """
-        SELECT DISTINCT 
-            REPLACE(metric_type, 'server_tps_', '') as dimension_name
-        FROM metrics 
-        WHERE metric_type LIKE 'server_tps_%' 
-          AND json_extract(metadata, '$.source') = 'rcon_forge_tps'
-        ORDER BY dimension_name
-        """
-        
-        import sqlite3
-        dimensions = []
-        with sqlite3.connect(metrics_storage.db_path) as conn:
-            cursor = conn.execute(query)
-            for row in cursor.fetchall():
-                dimensions.append(row[0])
-        
-        current_app.logger.info(f'Found {len(dimensions)} dimensions in database: {dimensions}')
-        
-        return jsonify({
-            'dimensions': dimensions,
-            'count': len(dimensions)
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f'Failed to get dimensions from database: {e}')
-        return jsonify({
-            'error': str(e),
-            'dimensions': [],
-            'count': 0
-        }), 500
 
-@main_bp.route('/api/monitoring/history/<metric_type>')
-def get_metric_history(metric_type):
-    """Get historical data for a specific metric type"""
-    try:
-        from services.metrics_storage import metrics_storage
-        
-        # Get time range parameter (default to 1 hour)
-        hours = request.args.get('hours', 1, type=float)
-        if hours <= 0 or hours > 72:  # Limit to 3 days max
-            hours = 1
-        
-        # Get historical data
-        history = metrics_storage.get_metrics(metric_type, hours=hours)
-        
-        current_app.logger.info(f'Retrieved {len(history)} data points for {metric_type} over {hours} hours')
-        
-        return jsonify({
-            'metric_type': metric_type,
-            'hours': hours,
-            'data_points': len(history),
-            'data': history
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f'Failed to get metric history for {metric_type}: {e}')
-        return jsonify({
-            'error': 'Failed to retrieve metric history',
-            'metric_type': metric_type,
-            'data': []
-        }), 500
-
-@main_bp.route('/api/monitoring/history/bulk')
-def get_bulk_metric_history():
-    """Get historical data for all metrics in a single query"""
-    try:
-        from services.metrics_storage import metrics_storage
-        
-        # Get time range parameter (default to 1 hour)
-        hours = request.args.get('hours', 1, type=float)
-        if hours <= 0 or hours > 72:  # Limit to 3 days max
-            hours = 1
-        
-        # Get all historical data in one query
-        bulk_history = metrics_storage.get_bulk_metrics(hours=hours)
-        
-        # Count total data points and analyze sampling efficiency
-        total_points = sum(len(metric_data) for metric_data in bulk_history.values())
-        avg_points_per_metric = total_points / len(bulk_history) if bulk_history else 0
-        current_app.logger.info(f'Retrieved {total_points} total points ({avg_points_per_metric:.0f} avg/metric) across {len(bulk_history)} metrics over {hours}h - 300-sample optimization active')
-        
-        return jsonify({
-            'hours': hours,
-            'metric_count': len(bulk_history),
-            'total_data_points': total_points,
-            'data': bulk_history
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f'Failed to get bulk metric history: {e}')
-        return jsonify({
-            'error': 'Failed to retrieve bulk metric history',
-            'data': {}
-        }), 500
-
-@main_bp.route('/api/monitoring/config', methods=['GET', 'POST'])
-def monitoring_config():
-    """Get or update monitoring configuration"""
-    try:
-        from services.metrics_storage import metrics_storage
-        
-        if request.method == 'GET':
-            # Return current configuration (collection_interval is read-only from config.toml)
-            config_interval = current_app.config.get('METRICS_COLLECTION_INTERVAL', 5)
-            actual_interval = max(3, min(10, config_interval))  # Apply same bounds as metrics collection
-            config = {
-                'collection_interval': actual_interval,
-                'collection_interval_source': 'config.toml (read-only)',
-                'retention_days': current_app.config.get('METRICS_RETENTION_DAYS', 7),
-                'enabled': current_app.config.get('METRICS_ENABLED', True),
-                'collect_system_memory': current_app.config.get('METRICS_COLLECT_SYSTEM_MEMORY', True),
-                'collect_system_cpu': current_app.config.get('METRICS_COLLECT_SYSTEM_CPU', True),
-                'collect_system_load': current_app.config.get('METRICS_COLLECT_SYSTEM_LOAD', True),
-                'collect_java_process': current_app.config.get('METRICS_COLLECT_JAVA_PROCESS', True),
-                'collect_server_tps': current_app.config.get('METRICS_COLLECT_SERVER_TPS', True),
-                'collect_player_count': current_app.config.get('METRICS_COLLECT_PLAYER_COUNT', True)
-            }
-            return jsonify(config)
-        
-        elif request.method == 'POST':
-            # Update configuration (stored in database for runtime changes)
-            data = request.get_json()
-            if not data:
-                return jsonify({'error': 'No data provided'}), 400
-            
-            # Validate and store configuration (collection_interval is read-only from config.toml)
-            valid_keys = ['retention_days', 'enabled']  # Removed collection_interval
-            updated_keys = []
-            
-            # Warn if someone tries to change collection_interval
-            if 'collection_interval' in data:
-                current_app.logger.warning('Attempt to change collection_interval via API ignored - use config.toml instead')
-            
-            for key in valid_keys:
-                if key in data:
-                    metrics_storage.set_config_value(key, data[key])
-                    updated_keys.append(f"{key}={data[key]}")
-            
-            current_app.logger.info(f'Metrics configuration updated: {", ".join(updated_keys)}')
-            
-            return jsonify({
-                'success': True, 
-                'message': 'Configuration updated',
-                'updated': updated_keys
-            })
-            
-    except Exception as e:
-        current_app.logger.error(f'Failed to handle monitoring config: {e}')
-        return jsonify({'error': 'Configuration operation failed'}), 500
 
 @main_bp.route('/server/control', methods=['POST'])
 def server_control():
     """Handle server control actions (start/stop/restart)"""
     try:
         current_app.logger.info(f'Server control request received - Method: {request.method}')
-        current_app.logger.info(f'Form data: {dict(request.form)}')
-        current_app.logger.info(f'Request cookies: {dict(request.cookies)}')
-        current_app.logger.info(f'Headers: {dict(request.headers)}')
         
-        # Skip CSRF validation for server control route
-        current_app.logger.info('CSRF validation skipped for server control')
         
         # Get and validate action
         action = request.form.get('action', '').strip()
@@ -1070,8 +449,7 @@ def server_control():
 def logs():
     """Enhanced log viewer page with 3 separate content windows"""
     try:
-        csrf_token = generate_csrf_token()
-        return render_template('logs.html', csrf_token=csrf_token)
+        return render_template('logs.html')
     except Exception as e:
         current_app.logger.error(f'Logs page error: {e}')
         flash('Error loading logs page', 'error')
@@ -1389,21 +767,6 @@ def rotate_log(log_type):
         current_app.logger.info(f'Request headers: {dict(request.headers)}')
         current_app.logger.info(f'Request form data: {dict(request.form)}')
         
-        # Skip CSRF validation for now to isolate the issue
-        csrf_token = request.headers.get('X-CSRFToken') or request.form.get('csrf_token')
-        
-        # TODO: Re-enable CSRF validation after fixing the core issue
-        # from flask_wtf.csrf import validate_csrf
-        # try:
-        #     if csrf_token:
-        #         validate_csrf(csrf_token)
-        #         current_app.logger.info('CSRF token validation successful')
-        #     else:
-        #         current_app.logger.warning('No CSRF token provided in headers or form')
-        #         return jsonify({'success': False, 'error': 'CSRF token required'}), 400
-        # except Exception as e:
-        #     current_app.logger.error(f'CSRF validation failed: {e}', exc_info=True)
-        #     return jsonify({'success': False, 'error': f'CSRF token validation failed: {str(e)}'}), 400
         
         if log_type not in ['latest', 'debug']:  # Removed 'crash' from rotation
             current_app.logger.error(f'Invalid log type requested: {log_type}')
@@ -1951,8 +1314,6 @@ def console_status():
 def console_execute():
     """Execute RCON command"""
     try:
-        # Skip CSRF validation for console commands (consistent with server control)
-        current_app.logger.info('CSRF validation skipped for console execute')
         
         data = request.get_json()
         command = data.get('command', '').strip()
@@ -2120,115 +1481,28 @@ def console_disconnect():
             'error': str(e)
         }), 500
 
-@main_bp.route('/api/player/<username>/history')
-def get_player_history(username):
-    """Get detailed login/logout history for a specific player"""
+@main_bp.route('/api/players/online')
+def get_online_players():
+    """API endpoint to get current online players (simplified)"""
     try:
         from services.metrics_storage import metrics_storage
         
-        # Get all sessions for this player
-        with sqlite3.connect(metrics_storage.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT login_time, logout_time, is_online
-                FROM players 
-                WHERE username = ?
-                ORDER BY login_time DESC
-            ''', (username,))
-            
-            sessions = []
-            total_playtime_seconds = 0
-            
-            for row in cursor.fetchall():
-                login_time_str, logout_time_str, is_online = row
-                
-                login_time = datetime.fromisoformat(login_time_str) if login_time_str else None
-                logout_time = datetime.fromisoformat(logout_time_str) if logout_time_str else None
-                
-                # Calculate session duration
-                session_duration = 0
-                if login_time:
-                    if logout_time:
-                        # Completed session
-                        session_duration = (logout_time - login_time).total_seconds()
-                    elif is_online:
-                        # Currently online session
-                        session_duration = (datetime.now() - login_time).total_seconds()
-                
-                total_playtime_seconds += session_duration
-                
-                # Format times for display
-                login_display = login_time.strftime('%Y-%m-%d %H:%M:%S') if login_time else 'Unknown'
-                logout_display = logout_time.strftime('%Y-%m-%d %H:%M:%S') if logout_time else ('Still online' if is_online else 'Unknown')
-                
-                # Format session duration
-                hours = int(session_duration // 3600)
-                minutes = int((session_duration % 3600) // 60)
-                seconds = int(session_duration % 60)
-                
-                if hours > 0:
-                    duration_display = f"{hours}h {minutes}m {seconds}s"
-                elif minutes > 0:
-                    duration_display = f"{minutes}m {seconds}s"
-                else:
-                    duration_display = f"{seconds}s"
-                
-                sessions.append({
-                    'login_time': login_display,
-                    'logout_time': logout_display,
-                    'is_online': bool(is_online),
-                    'duration': duration_display,
-                    'duration_seconds': session_duration
-                })
-            
-            # Format total playtime
-            total_hours = int(total_playtime_seconds // 3600)
-            total_minutes = int((total_playtime_seconds % 3600) // 60)
-            total_seconds = int(total_playtime_seconds % 60)
-            
-            if total_hours > 0:
-                total_playtime_display = f"{total_hours}h {total_minutes}m {total_seconds}s"
-            elif total_minutes > 0:
-                total_playtime_display = f"{total_minutes}m {total_seconds}s"
-            else:
-                total_playtime_display = f"{total_seconds}s"
-            
-            return jsonify({
-                'username': username,
-                'total_sessions': len(sessions),
-                'total_playtime': total_playtime_display,
-                'total_playtime_seconds': total_playtime_seconds,
-                'sessions': sessions
-            })
-            
-    except Exception as e:
-        current_app.logger.error(f'Failed to get player history for {username}: {e}')
-        return jsonify({
-            'error': 'Failed to retrieve player history',
-            'username': username,
-            'sessions': []
-        }), 500
-
-# Death tracking removed - only tracking player sessions now
-
-@main_bp.route('/admin/cleanup-duplicate-sessions', methods=['POST'])
-def cleanup_duplicate_sessions():
-    """Admin endpoint to clean up duplicate player sessions"""
-    try:
-        from services.metrics_storage import metrics_storage
-        removed_count = metrics_storage.remove_duplicate_sessions()
+        # Get current online players directly from mcstatus
+        online_players = metrics_storage.get_current_online_players()
         
         return jsonify({
             'success': True,
-            'message': f'Successfully removed {removed_count} duplicate sessions',
-            'removed_count': removed_count
+            'players': online_players,
+            'count': len(online_players)
         })
         
     except Exception as e:
-        current_app.logger.error(f'Failed to cleanup duplicate sessions: {e}')
+        current_app.logger.error(f'Failed to get online players: {e}')
         return jsonify({
             'success': False,
-            'error': 'Failed to cleanup duplicate sessions'
+            'error': 'Failed to retrieve online players',
+            'players': [],
+            'count': 0
         }), 500
 
 @main_bp.route('/api/server-properties/validate')
@@ -2255,8 +1529,6 @@ def validate_server_properties():
 def apply_server_properties():
     """API endpoint to auto-configure server.properties"""
     try:
-        # Skip CSRF validation for consistency with other routes
-        current_app.logger.info('CSRF validation skipped for server properties apply')
         
         data = request.get_json()
         if not data:
