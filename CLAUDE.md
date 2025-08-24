@@ -13,7 +13,7 @@ Direct process management architecture:
 - **Flask Application** (`app.py`): Main web server with routes for server control, log viewing, config editing, backup management, RCON console, and system monitoring
 - **Configuration** (`config.py.example`): Configuration template with Java/JVM settings, server paths, web interface settings, and Minecraft connection details
 - **Process Management** (`services/system_control.py`): Direct Java process launching with detached execution, monitoring, and control with psutil integration
-- **Templates** (`templates/`): Jinja2 templates with logs page, crash report dropdown selector, and monitoring dashboard with Chart.js integration
+- **Templates** (`templates/`): Jinja2 templates with logs page, radio button log type selector, and server status dashboard
 - **Static Files** (`static/`): CSS and JavaScript for Bootstrap-based responsive UI with RCON functionality
 - **Requirements** (`requirements.txt`): Python dependencies including Flask, mcstatus, mcrcon, and psutil
 
@@ -23,7 +23,7 @@ Direct process management architecture:
 - **Integrated RCON Console**: Dashboard-embedded console with custom socket client and VaultHunters-specific commands
 - **Smart Process Detection**: Accurate Java process identification (not bash wrappers) with PID display and dynamic MB/GB memory formatting
 - **Real-time Log Monitoring**: Server-Sent Events (SSE) for instant log updates with `tail -F` log rotation support
-- **Log Interface**: 2-window log viewer (latest + debug/crash toggle) with follow controls
+- **Log Interface**: Unified log viewer with radio button selection (Latest, Debug, Latest Crash, System Journal) and follow controls
 - **Configuration Management**: Multi-category config editor with atomic file operations and automatic backups
 - **Backup Management**: List, download, and inspect backups from configured backup directory
 - **Real-time Monitoring**: Accurate server status and player counts using mcstatus and process statistics
@@ -80,7 +80,7 @@ pip install -r requirements.txt
 - Log viewing with real-time streaming in `services/log_service.py`
 - RCON custom socket client avoiding signal issues
 - Server status dashboard with real-time updates every 5-10 seconds
-- Player tracking with login/logout session management
+- Real-time player status display (no historical tracking)
 - Production-ready security and error handling throughout all services
 
 ## Status Monitoring
