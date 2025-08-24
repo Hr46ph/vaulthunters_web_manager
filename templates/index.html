@@ -303,7 +303,7 @@
                             <ul class="mb-0">
                                 <li><strong>Query Protocol:</strong> Only forward TCP traffic to the query port when exposing to internet (UDP can be used for DDoS amplification)</li>
                                 <li><strong>RCON:</strong> Never expose RCON port to the internet. Use strong passwords and restrict access to localhost/VPN only</li>
-                                <li><strong>Generated passwords:</strong> Will be cryptographically secure (16 characters with letters, numbers, and symbols)</li>
+                                <li><strong>Generated passwords:</strong> Will be cryptographically secure (16 characters with letters and numbers)</li>
                             </ul>
                         </div>
 
@@ -319,7 +319,7 @@
                                     <input class="form-check-input" type="radio" name="passwordOption" id="generatePassword" value="generate" checked>
                                     <label class="form-check-label" for="generatePassword">
                                         <strong>Generate secure password automatically</strong>
-                                        <small class="text-muted d-block">Recommended: Creates a 16-character cryptographically secure password</small>
+                                        <small class="text-muted d-block">Recommended: Creates a 16-character password with letters and numbers</small>
                                     </label>
                                 </div>
                                 <div class="form-check mb-3">
@@ -327,6 +327,13 @@
                                     <label class="form-check-label" for="customPassword">
                                         <strong>Use custom password</strong>
                                         <small class="text-muted d-block">Enter your own RCON password</small>
+                                    </label>
+                                </div>
+                                <div class="form-check mb-3" id="keepPasswordOption" style="display: none;">
+                                    <input class="form-check-input" type="radio" name="passwordOption" id="keepPassword" value="keep">
+                                    <label class="form-check-label" for="keepPassword">
+                                        <strong>Keep existing password</strong>
+                                        <small class="text-muted d-block">Do not change the current RCON password</small>
                                     </label>
                                 </div>
                                 <div id="customPasswordInput" class="mt-3" style="display: none;">
@@ -341,7 +348,7 @@
                                             <i class="fas fa-eye" id="passwordToggleIcon"></i>
                                         </button>
                                     </div>
-                                    <div class="form-text">Password should be at least 8 characters long with mixed case, numbers, and symbols.</div>
+                                    <div class="form-text">Password should be at least 8 characters long with mixed case and numbers.</div>
                                 </div>
                             </div>
                         </div>

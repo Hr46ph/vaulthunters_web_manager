@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Security Validation Failed{% endblock %}
+
+{% block main_content %}
+<div class="container-fluid mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <i class="fas fa-shield-alt me-2"></i>
+                        Security Validation Failed
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <strong>CSRF Protection:</strong> The security token for your request was invalid or expired.
+                    </div>
+                    
+                    <p class="text-muted">
+                        This security measure protects against Cross-Site Request Forgery (CSRF) attacks.
+                        Your request could not be completed because the security token was missing or invalid.
+                    </p>
+                    
+                    <h5 class="mt-4">What to do:</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-arrow-right text-primary me-2"></i>Refresh the page and try again</li>
+                        <li><i class="fas fa-arrow-right text-primary me-2"></i>Make sure your browser accepts cookies</li>
+                        <li><i class="fas fa-arrow-right text-primary me-2"></i>If the problem persists, clear your browser cache</li>
+                    </ul>
+                    
+                    <div class="mt-4">
+                        <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+                            <i class="fas fa-home me-2"></i>Return to Dashboard
+                        </a>
+                        <button onclick="history.back()" class="btn btn-secondary ms-2">
+                            <i class="fas fa-arrow-left me-2"></i>Go Back
+                        </button>
+                        <button onclick="location.reload()" class="btn btn-outline-primary ms-2">
+                            <i class="fas fa-redo me-2"></i>Refresh Page
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

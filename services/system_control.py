@@ -6,7 +6,7 @@ import os
 import signal
 import threading
 from datetime import datetime, timedelta
-from flask import current_app
+from flask import current_app, has_app_context
 import logging
 from .server_properties import ServerPropertiesParser
 
@@ -27,6 +27,8 @@ class SystemControlService:
         self.server_path = None
         self.java_executable = None
         self.server_jar = None
+        # Player name cache for normalization
+        self.player_name_cache = {}
         self._initialize_server_config()
     
     def _initialize_server_config(self):
@@ -469,6 +471,118 @@ class SystemControlService:
             days = int(seconds / 86400)
             hours = int((seconds % 86400) / 3600)
             return f"{days} day{'s' if days != 1 else ''}, {hours} hour{'s' if hours != 1 else ''}"
+
+    def _normalize_player_name(self, display_name: str) -> str:
+        """Normalize player names to handle achievement titles (cached version)"""
+        if display_name in self.player_name_cache:
+            return self.player_name_cache[display_name]
+        
+        # Simple normalization - remove common title patterns
+        # "Slayer MadSavage69 of the Ancients" -> "MadSavage69"
+        title_patterns = [
+            r'^[A-Za-z\s]+ ([A-Za-z0-9_]+) of the .+$',  # "Title Name of the Something"
+            r'^[A-Za-z\s]+ ([A-Za-z0-9_]+)$',            # "Title Name"
+        ]
+        
+        for pattern in title_patterns:
+            match = re.match(pattern, display_name)
+            if match:
+                base_name = match.group(1)
+                self.player_name_cache[display_name] = base_name
+                return base_name
+        
+        # If no pattern matches, assume it's already a base name
+        self.player_name_cache[display_name] = display_name
+        return display_name
+    
+    def get_current_online_players(self):
+        """Get current online players from the server (simplified for display only)"""
+        try:
+            player_status = self._collect_player_status_via_mcstatus()
+            if player_status['success']:
+                return player_status.get('players', [])
+            else:
+                return []
+        except Exception as e:
+            self.logger.warning(f'Failed to get current online players: {e}')
+            return []
+    
+    def _collect_player_status_via_mcstatus(self):
+        """Collect current player status using mcstatus (simplified - no database updates)"""
+        try:
+            from mcstatus import JavaServer
+            
+            server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+            server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
+            
+            server = JavaServer(server_host, server_port)
+            query_result = server.query()
+            
+            # Get current online players with normalization for display
+            current_players = query_result.players.names or []
+            normalized_players = [self._normalize_player_name(name) for name in current_players]
+            
+            return {
+                'success': True,
+                'player_count': query_result.players.online,
+                'max_players': query_result.players.max,
+                'players': normalized_players
+            }
+            
+        except Exception as e:
+            self.logger.warning(f'Failed to collect player status via mcstatus: {e}')
+            return {
+                'success': False,
+                'error': str(e),
+                'player_count': 0,
+                'max_players': 20,
+                'players': []
+            }
+    
+    def _get_rcon_port(self) -> int:
+        """Get RCON port from server.properties or config"""
+        try:
+            # Try config first
+            config_rcon_port = current_app.config.get('RCON_PORT')
+            if config_rcon_port:
+                return int(config_rcon_port)
+            
+            # Try reading from server.properties
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
+            if server_path:
+                props_file = os.path.join(server_path, 'server.properties')
+                if os.path.exists(props_file):
+                    with open(props_file, 'r') as f:
+                        for line in f:
+                            if line.startswith('rcon.port='):
+                                return int(line.split('=')[1].strip())
+            
+            return 25575  # Default RCON port
+        except Exception:
+            return 25575  # Default RCON port
+    
+    def _get_rcon_password(self) -> str:
+        """Get RCON password from server.properties"""
+        try:
+            # Try config first (though it's usually not stored there for security)
+            config_password = current_app.config.get('RCON_PASSWORD')
+            if config_password:
+                return config_password
+            
+            # Read from server.properties
+            server_path = current_app.config.get('MINECRAFT_SERVER_PATH')
+            if server_path:
+                props_file = os.path.join(server_path, 'server.properties')
+                if os.path.exists(props_file):
+                    with open(props_file, 'r') as f:
+                        for line in f:
+                            if line.startswith('rcon.password='):
+                                password = line.split('=', 1)[1].strip()
+                                return password if password else ''
+            
+            return ''
+        except Exception:
+            return ''
 
     # Compatibility methods for existing code
     def get_service_status(self):

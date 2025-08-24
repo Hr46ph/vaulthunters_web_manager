@@ -113,6 +113,10 @@ class ServerPropertiesValidator:
                         })
                         missing_settings.append(setting_key)
             
+            # Check if RCON password already exists (for UI logic)
+            current_password = all_properties.get('rcon.password', '').strip()
+            has_rcon_password = bool(current_password)
+            
             return {
                 'valid': len(issues) == 0,
                 'file_exists': True,
@@ -120,7 +124,8 @@ class ServerPropertiesValidator:
                 'missing_settings': missing_settings,
                 'total_issues': len(issues),
                 'critical_issues': len([i for i in issues if i['severity'] == 'critical']),
-                'warning_issues': len([i for i in issues if i['severity'] == 'warning'])
+                'warning_issues': len([i for i in issues if i['severity'] == 'warning']),
+                'has_rcon_password': has_rcon_password
             }
             
         except Exception as e:
@@ -133,7 +138,7 @@ class ServerPropertiesValidator:
                 'missing_settings': list(self.REQUIRED_SETTINGS.keys())
             }
     
-    def auto_configure_properties(self, restart_server: bool = False, custom_rcon_password: Optional[str] = None) -> Dict:
+    def auto_configure_properties(self, restart_server: bool = False, custom_rcon_password: Optional[str] = None, keep_existing_password: bool = False) -> Dict:
         """Auto-configure required properties with optional server restart."""
         try:
             validation_result = self.validate_properties()
@@ -172,14 +177,33 @@ class ServerPropertiesValidator:
                 
                 # Special handling for RCON password
                 if setting_key == 'rcon.password':
+                    # Check if user wants to keep existing password
+                    if keep_existing_password:
+                        # Skip password update entirely
+                        continue
+                    
+                    # Only update password if it's actually empty/unset
+                    # The issue is only added when password is empty, so we should update it
                     if custom_rcon_password:
                         new_value = custom_rcon_password
                     else:
-                        # Generate secure random password
-                        import secrets
-                        import string
-                        chars = string.ascii_letters + string.digits + '!@#$%^&*'
-                        new_value = ''.join(secrets.choice(chars) for _ in range(16))
+                        # Check current RCON state to determine if we need to generate a password
+                        all_properties = self.parser.get_all_properties()
+                        enable_rcon = all_properties.get('enable-rcon', 'false')
+                        current_password = all_properties.get('rcon.password', '').strip()
+                        
+                        # Only generate password if:
+                        # 1. RCON is being enabled (enable-rcon=true in issues) OR already enabled
+                        # 2. AND password is actually empty
+                        if not current_password:
+                            # Generate secure random password
+                            import secrets
+                            import string
+                            chars = string.ascii_letters + string.digits
+                            new_value = ''.join(secrets.choice(chars) for _ in range(16))
+                        else:
+                            # Password already exists, skip this update
+                            continue
                     
                     changes_made.append({
                         'setting': setting_key,
@@ -378,6 +402,6 @@ class ServerPropertiesValidator:
         import secrets
         import string
         
-        # Use a mix of letters, numbers, and safe special characters
-        chars = string.ascii_letters + string.digits + '!@#$%^&*'
+        # Use a mix of uppercase, lowercase letters, and numbers
+        chars = string.ascii_letters + string.digits
         return ''.join(secrets.choice(chars) for _ in range(16))

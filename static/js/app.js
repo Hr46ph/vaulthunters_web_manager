@@ -791,6 +791,7 @@ function loadServerPropertiesModal() {
                 
                 if (!validation.valid && validation.issues) {
                     populatePropertiesIssues(validation.issues);
+                    configurePasswordOptions(validation);
                     modalContent.style.display = 'block';
                     applyBtn.disabled = false;
                 } else {
@@ -862,6 +863,63 @@ function populatePropertiesIssues(issues) {
     issuesContainer.innerHTML = html;
 }
 
+function configurePasswordOptions(validation) {
+    const keepPasswordOption = document.getElementById('keepPasswordOption');
+    const generatePasswordOption = document.getElementById('generatePassword');
+    const customPasswordOption = document.getElementById('customPassword');
+    const keepPasswordRadio = document.getElementById('keepPassword');
+    
+    // Check if there's an RCON password issue and if password already exists
+    const hasRconPasswordIssue = validation.issues && validation.issues.some(issue => issue.setting === 'rcon.password');
+    const hasExistingPassword = validation.has_rcon_password;
+    
+    if (hasRconPasswordIssue && hasExistingPassword) {
+        // Password exists but there's still an issue - show keep password option
+        // This shouldn't normally happen with our fixed logic, but just in case
+        keepPasswordOption.style.display = 'block';
+        keepPasswordRadio.checked = true;
+        generatePasswordOption.checked = false;
+    } else if (hasRconPasswordIssue && !hasExistingPassword) {
+        // No password exists - hide keep password option, default to generate
+        keepPasswordOption.style.display = 'none';
+        generatePasswordOption.checked = true;
+    } else if (hasExistingPassword) {
+        // Password exists and no issue - show keep password option as default
+        keepPasswordOption.style.display = 'block';
+        keepPasswordRadio.checked = true;
+        generatePasswordOption.checked = false;
+    } else {
+        // No password and no issue - hide keep password option
+        keepPasswordOption.style.display = 'none';
+        generatePasswordOption.checked = true;
+    }
+    
+    // Set up event listeners for password options (needed for dynamically shown options)
+    setupPasswordOptionListeners();
+}
+
+function setupPasswordOptionListeners() {
+    // Remove existing listeners first to prevent duplicates
+    const passwordOptions = document.querySelectorAll('input[name="passwordOption"]');
+    passwordOptions.forEach(option => {
+        // Clone node to remove existing event listeners
+        const newOption = option.cloneNode(true);
+        option.parentNode.replaceChild(newOption, option);
+    });
+    
+    // Add fresh event listeners
+    document.querySelectorAll('input[name="passwordOption"]').forEach(option => {
+        option.addEventListener('change', function() {
+            const customInput = document.getElementById('customPasswordInput');
+            if (this.value === 'custom') {
+                customInput.style.display = 'block';
+            } else {
+                customInput.style.display = 'none';
+            }
+        });
+    });
+}
+
 function togglePasswordVisibility() {
     const passwordInput = document.getElementById('customRconPassword');
     const toggleIcon = document.getElementById('passwordToggleIcon');
@@ -896,7 +954,8 @@ function applyServerProperties() {
     
     const requestData = {
         restart_server: restartOption === 'restart',
-        custom_rcon_password: passwordOption === 'custom' ? customPassword : null
+        custom_rcon_password: passwordOption === 'custom' ? customPassword : null,
+        keep_existing_password: passwordOption === 'keep'
     };
     
     fetch('/api/server-properties/apply', {

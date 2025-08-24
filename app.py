@@ -16,8 +16,15 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config.get(config_name, config['default']))
     
-    # Initialize extensions - disable automatic CSRF for manual control
-    # csrf = CSRFProtect(app)  # Disabled - using manual CSRF validation
+    # Initialize CSRF protection based on config
+    csrf = None
+    if app.config.get('CSRF_ENABLED', True):
+        csrf = CSRFProtect(app)
+        
+        # Configure CSRF settings from config.toml
+        app.config['WTF_CSRF_TIME_LIMIT'] = app.config.get('CSRF_TIME_LIMIT', 3600)
+        
+        app.logger.info(f'CSRF protection enabled (time limit: {app.config["WTF_CSRF_TIME_LIMIT"]}s)')
     
     # Configure logging
     if not app.debug and not app.testing:
@@ -46,6 +53,19 @@ def create_app(config_name=None):
     def forbidden_error(error):
         return render_template('errors/403.html'), 403
     
+    # CSRF error handler
+    @app.errorhandler(400)
+    def csrf_error(error):
+        # Check if this is a CSRF error
+        if 'CSRF' in str(error.description):
+            app.logger.warning(f'CSRF validation failed: {error.description}')
+            if request.is_json:
+                return jsonify({'error': 'CSRF token validation failed'}), 400
+            else:
+                flash('Security validation failed. Please try again.', 'error')
+                return render_template('errors/csrf.html'), 400
+        return render_template('errors/400.html'), 400
+    
     @app.errorhandler(HTTPException)
     def handle_http_exception(error):
         app.logger.error(f'HTTP Error {error.code}: {error.description}')
@@ -61,14 +81,25 @@ def create_app(config_name=None):
     # Context processors
     @app.context_processor
     def inject_common_vars():
-        return {
+        from flask_wtf.csrf import generate_csrf
+        context_vars = {
             'current_year': datetime.now().year,
             'app_name': 'VaultHunters Web Manager'
         }
+        
+        # Add CSRF token if CSRF is enabled
+        if app.config.get('CSRF_ENABLED', True):
+            try:
+                context_vars['csrf_token'] = generate_csrf()
+            except Exception as e:
+                app.logger.warning(f'Failed to generate CSRF token: {e}')
+                context_vars['csrf_token'] = ''
+        else:
+            context_vars['csrf_token'] = ''
+            
+        return context_vars
     
-    # Initialize metrics storage
-    from services.metrics_storage import metrics_storage
-    metrics_storage.init_app(app)
+    # Metrics storage functionality moved to system_control.py
     
     # Register routes
     from routes import main_bp

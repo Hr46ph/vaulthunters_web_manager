@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Bad Request{% endblock %}
+
+{% block main_content %}
+<div class="container-fluid mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Bad Request
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <strong>Error 400:</strong> The request could not be processed due to invalid data.
+                    </div>
+                    
+                    <p class="text-muted">
+                        The server could not understand your request. This usually happens when:
+                    </p>
+                    
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-arrow-right text-danger me-2"></i>Required information is missing</li>
+                        <li><i class="fas fa-arrow-right text-danger me-2"></i>The data format is incorrect</li>
+                        <li><i class="fas fa-arrow-right text-danger me-2"></i>Security validation failed</li>
+                    </ul>
+                    
+                    <div class="mt-4">
+                        <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+                            <i class="fas fa-home me-2"></i>Return to Dashboard
+                        </a>
+                        <button onclick="history.back()" class="btn btn-secondary ms-2">
+                            <i class="fas fa-arrow-left me-2"></i>Go Back
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

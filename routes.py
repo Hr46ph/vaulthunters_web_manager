@@ -1,4 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app, session
+from flask_wtf.csrf import validate_csrf
+from werkzeug.exceptions import BadRequest
 from services.system_control import SystemControlService
 from services.log_service import LogService
 from services.config_manager import ConfigManager
@@ -12,6 +14,35 @@ import subprocess
 import json
 import time
 from datetime import datetime
+
+def validate_csrf_token():
+    """Validate CSRF token for the current request if CSRF is enabled"""
+    if not current_app.config.get('CSRF_ENABLED', True):
+        return True
+    
+    try:
+        # For JSON requests, check X-CSRFToken header
+        if request.is_json:
+            token = request.headers.get('X-CSRFToken')
+            if token:
+                validate_csrf(token)
+                return True
+        
+        # For form requests, check csrf_token field
+        token = request.form.get('csrf_token')
+        if token:
+            validate_csrf(token)
+            return True
+            
+        # If no token found, raise CSRF error
+        current_app.logger.warning(f'CSRF token missing in {request.method} request to {request.endpoint}')
+        raise BadRequest('CSRF token missing')
+        
+    except Exception as e:
+        current_app.logger.warning(f'CSRF validation failed: {str(e)}')
+        if 'CSRF' in str(e) or 'expired' in str(e).lower():
+            raise BadRequest('CSRF token validation failed')
+        raise BadRequest('Security validation failed')
 
 def _execute_rcon_server_control(action):
     """Execute server control via RCON commands"""
@@ -382,6 +413,8 @@ def server_control():
     try:
         current_app.logger.info(f'Server control request received - Method: {request.method}')
         
+        # Validate CSRF token
+        validate_csrf_token()
         
         # Get and validate action
         action = request.form.get('action', '').strip()
@@ -767,6 +800,8 @@ def rotate_log(log_type):
         current_app.logger.info(f'Request headers: {dict(request.headers)}')
         current_app.logger.info(f'Request form data: {dict(request.form)}')
         
+        # Validate CSRF token
+        validate_csrf_token()
         
         if log_type not in ['latest', 'debug']:  # Removed 'crash' from rotation
             current_app.logger.error(f'Invalid log type requested: {log_type}')
@@ -975,6 +1010,9 @@ def config_content(config_file):
 def save_config():
     """Save configuration file"""
     try:
+        # Validate CSRF token
+        validate_csrf_token()
+        
         config_file = request.form.get('config_file')
         content = request.form.get('content')
         
@@ -1034,6 +1072,9 @@ def get_jvm_config(file_type):
 def save_jvm_config():
     """Save JVM configuration file"""
     try:
+        # Validate CSRF token
+        validate_csrf_token()
+        
         file_type = request.form.get('file_type')
         content = request.form.get('content')
         
@@ -1065,6 +1106,9 @@ def save_jvm_config():
 def apply_aikars_flags():
     """Generate Aikar's flags content (without saving)"""
     try:
+        # Validate CSRF token
+        validate_csrf_token()
+        
         config_manager = ConfigManager()
         result = config_manager.generate_aikars_flags_content()
         
@@ -1314,6 +1358,8 @@ def console_status():
 def console_execute():
     """Execute RCON command"""
     try:
+        # Validate CSRF token
+        validate_csrf_token()
         
         data = request.get_json()
         command = data.get('command', '').strip()
@@ -1405,6 +1451,9 @@ def console_execute():
 def console_connect():
     """Force RCON reconnection"""
     try:
+        # Validate CSRF token
+        validate_csrf_token()
+        
         from services.rcon_client import force_rcon_reconnect
         
         # Get server connection details from server.properties
@@ -1457,6 +1506,9 @@ def console_connect():
 def console_disconnect():
     """Disconnect RCON connection"""
     try:
+        # Validate CSRF token
+        validate_csrf_token()
+        
         from services.rcon_client import RconConnectionManager
         
         # Get server connection details
@@ -1485,10 +1537,11 @@ def console_disconnect():
 def get_online_players():
     """API endpoint to get current online players (simplified)"""
     try:
-        from services.metrics_storage import metrics_storage
+        from services.system_control import SystemControlService
         
         # Get current online players directly from mcstatus
-        online_players = metrics_storage.get_current_online_players()
+        system_control = SystemControlService()
+        online_players = system_control.get_current_online_players()
         
         return jsonify({
             'success': True,
@@ -1529,6 +1582,8 @@ def validate_server_properties():
 def apply_server_properties():
     """API endpoint to auto-configure server.properties"""
     try:
+        # Validate CSRF token
+        validate_csrf_token()
         
         data = request.get_json()
         if not data:
@@ -1536,6 +1591,7 @@ def apply_server_properties():
         
         restart_server = data.get('restart_server', False)
         custom_password = data.get('custom_rcon_password', None)
+        keep_existing_password = data.get('keep_existing_password', False)
         
         # Validate custom password if provided
         if custom_password and len(custom_password.strip()) < 8:
@@ -1550,7 +1606,8 @@ def apply_server_properties():
         validator = ServerPropertiesValidator()
         result = validator.auto_configure_properties(
             restart_server=restart_server,
-            custom_rcon_password=custom_password
+            custom_rcon_password=custom_password,
+            keep_existing_password=keep_existing_password
         )
         
         current_app.logger.info(f'Server properties apply result: {result}')
