@@ -14,9 +14,111 @@ from .server_properties import ServerPropertiesParser
 _status_cache = {}
 _cache_duration = 5  # Cache for 5 seconds
 
-# Global process tracking
+# Global process tracking and background monitoring
 _minecraft_process = None
+_minecraft_pid = None
+_cached_cpu_usage = 0.0
+_cached_memory_usage = 0
+_last_cpu_update = 0
+_cpu_monitor_thread = None
+_monitor_running = False
 _process_lock = threading.Lock()
+
+def start_cpu_monitoring():
+    """Start background thread for CPU monitoring with 5-second interval"""
+    global _cpu_monitor_thread, _monitor_running
+    
+    if _monitor_running:
+        return  # Already running
+    
+    def monitor_loop():
+        global _minecraft_pid, _cached_cpu_usage, _cached_memory_usage, _last_cpu_update, _monitor_running
+        
+        logger = logging.getLogger(__name__)
+        logger.info("Starting CPU monitoring thread with 5-second interval")
+        _monitor_running = True
+        
+        while _monitor_running:
+            try:
+                if _minecraft_pid:
+                    try:
+                        proc = psutil.Process(_minecraft_pid)
+                        if proc.is_running():
+                            # 5-second blocking measurement - this happens in background
+                            _cached_cpu_usage = proc.cpu_percent(interval=5.0)
+                            _cached_memory_usage = round(proc.memory_info().rss / 1024 / 1024)  # MB
+                            _last_cpu_update = time.time()
+                            logger.debug(f"Updated CPU: {_cached_cpu_usage:.1f}%, Memory: {_cached_memory_usage}MB")
+                        else:
+                            # Process died, clear cache
+                            logger.info(f"Minecraft process PID {_minecraft_pid} no longer running")
+                            _minecraft_pid = None
+                            _cached_cpu_usage = 0.0
+                            _cached_memory_usage = 0
+                    except psutil.NoSuchProcess:
+                        logger.info(f"Minecraft process PID {_minecraft_pid} not found")
+                        _minecraft_pid = None
+                        _cached_cpu_usage = 0.0
+                        _cached_memory_usage = 0
+                else:
+                    # Search for new process
+                    new_pid = _find_minecraft_pid_lightweight()
+                    if new_pid:
+                        logger.info(f"Found new Minecraft process: PID {new_pid}")
+                        _minecraft_pid = new_pid
+                        # Prime the CPU measurement (first call returns 0)
+                        try:
+                            proc = psutil.Process(_minecraft_pid)
+                            proc.cpu_percent()  # Prime for next measurement
+                        except:
+                            pass
+                    else:
+                        # No process found, sleep and continue
+                        time.sleep(5.0)
+                        
+            except Exception as e:
+                logger.error(f"CPU monitoring error: {e}")
+                time.sleep(5.0)
+    
+    _cpu_monitor_thread = threading.Thread(target=monitor_loop, daemon=True, name="CPUMonitor")
+    _cpu_monitor_thread.start()
+
+def stop_cpu_monitoring():
+    """Stop the background CPU monitoring thread"""
+    global _monitor_running, _cpu_monitor_thread
+    _monitor_running = False
+    if _cpu_monitor_thread:
+        _cpu_monitor_thread = None
+
+def _find_minecraft_pid_lightweight():
+    """Lightweight PID search - returns PID only"""
+    try:
+        # Use pids() for faster iteration than process_iter()
+        for pid in psutil.pids():
+            try:
+                proc = psutil.Process(pid)
+                cmdline = proc.cmdline()
+                name = proc.name()
+                
+                if not cmdline:
+                    continue
+                
+                # Look for Java process with Forge arguments
+                if (any('java' in arg.lower() for arg in cmdline) and
+                    (any('user_jvm_args.txt' in arg for arg in cmdline) or
+                     any('unix_args.txt' in arg for arg in cmdline) or
+                     any('forge' in arg.lower() for arg in cmdline))):
+                    
+                    # Prioritize actual java processes
+                    if name == 'java':
+                        return pid
+                        
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        return None
+    except Exception:
+        return None
 
 class SystemControlService:
     """Service for managing Minecraft server process directly"""
@@ -30,6 +132,9 @@ class SystemControlService:
         # Player name cache for normalization
         self.player_name_cache = {}
         self._initialize_server_config()
+        
+        # Start CPU monitoring if not already running
+        start_cpu_monitoring()
     
     def _initialize_server_config(self):
         """Initialize server configuration from Flask config"""
@@ -55,7 +160,9 @@ class SystemControlService:
             ]
     
     def get_server_status(self):
-        """Get detailed server status with startup detection and caching"""
+        """Get detailed server status using cached CPU/memory data"""
+        global _minecraft_pid, _cached_cpu_usage, _cached_memory_usage, _last_cpu_update
+        
         # Check cache first
         cache_key = f"status_{self.server_name}"
         now = time.time()
@@ -80,33 +187,30 @@ class SystemControlService:
                 'server_ready': False
             }
             
-            # Check if Minecraft process is running
-            minecraft_proc = self._get_minecraft_process()
-            
-            if minecraft_proc and minecraft_proc.is_running():
-                status_info['running'] = True
-                status_info['pid'] = minecraft_proc.pid
-                
+            # Use cached PID instead of expensive process search
+            if _minecraft_pid:
                 try:
-                    # Get process info
-                    proc_info = minecraft_proc.as_dict(attrs=['pid', 'create_time', 'memory_info', 'cpu_percent'])
-                    
-                    # Calculate uptime
-                    create_time = datetime.fromtimestamp(proc_info['create_time'])
-                    uptime_seconds = (datetime.now() - create_time).total_seconds()
-                    status_info['uptime'] = self._format_uptime(uptime_seconds)
-                    
-                    # Get memory usage (in MB)
-                    if proc_info['memory_info']:
-                        status_info['memory_usage'] = round(proc_info['memory_info'].rss / 1024 / 1024)
-                    
-                    # Get CPU usage
-                    cpu_percent = proc_info.get('cpu_percent', 0)
-                    if cpu_percent is not None:
-                        status_info['cpu_usage'] = cpu_percent
+                    proc = psutil.Process(_minecraft_pid)
+                    if proc.is_running():
+                        status_info['running'] = True
+                        status_info['pid'] = _minecraft_pid
                         
-                except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-                    self.logger.warning(f"Error getting process info: {e}")
+                        # Use cached CPU and memory values from background thread
+                        status_info['cpu_usage'] = _cached_cpu_usage
+                        status_info['memory_usage'] = _cached_memory_usage
+                        
+                        # Calculate uptime (this is lightweight)
+                        create_time = datetime.fromtimestamp(proc.create_time())
+                        uptime_seconds = (datetime.now() - create_time).total_seconds()
+                        status_info['uptime'] = self._format_uptime(uptime_seconds)
+                        
+                    else:
+                        # Process died, clear cached PID
+                        _minecraft_pid = None
+                        
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    # Process died, clear cached PID
+                    _minecraft_pid = None
                 
                 # Always get max_players from server.properties first
                 try:
@@ -149,27 +253,33 @@ class SystemControlService:
                 except Exception as e:
                     self.logger.warning(f"mcstatus connection to {server_host}:{server_port} failed: {type(e).__name__}: {e}")
                 
-                if not server_ready:
+                if not server_ready and status_info['running']:
                     # Show "?" for online players when mcstatus fails
                     status_info['players'] = "?"
                     status_info['player_names'] = []
                     
                     # Check process uptime to distinguish between starting vs connection issues
-                    proc_info = minecraft_proc.as_dict(attrs=['create_time'])
-                    create_time = datetime.fromtimestamp(proc_info['create_time'])
-                    uptime_seconds = (datetime.now() - create_time).total_seconds()
-                    
-                    # If server has been running for more than 5 minutes, it's likely a connection issue, not startup
-                    if uptime_seconds > 300:  # 5 minutes
-                        self.logger.warning(f"Server process running for {uptime_seconds:.1f}s but mcstatus failed - assuming running with connection issues")
-                        status_info['server_ready'] = False
-                        status_info['status'] = 'running'  # Assume running but with connection problems
-                    else:
-                        # Server process exists but can't connect and hasn't been running long - it's starting up
-                        status_info['server_ready'] = False
-                        status_info['status'] = 'starting'
-            else:
-                # No process running
+                    try:
+                        proc = psutil.Process(_minecraft_pid)
+                        create_time = datetime.fromtimestamp(proc.create_time())
+                        uptime_seconds = (datetime.now() - create_time).total_seconds()
+                        
+                        # If server has been running for more than 5 minutes, it's likely a connection issue, not startup
+                        if uptime_seconds > 300:  # 5 minutes
+                            self.logger.warning(f"Server process running for {uptime_seconds:.1f}s but mcstatus failed - assuming running with connection issues")
+                            status_info['server_ready'] = False
+                            status_info['status'] = 'running'  # Assume running but with connection problems
+                        else:
+                            # Server process exists but can't connect and hasn't been running long - it's starting up
+                            status_info['server_ready'] = False
+                            status_info['status'] = 'starting'
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        # Process check failed, assume stopped
+                        status_info['running'] = False
+                        status_info['status'] = 'stopped'
+            
+            # Set status based on process state
+            if not status_info['running']:
                 status_info['status'] = 'stopped'
             
             # Cache the result
@@ -193,44 +303,24 @@ class SystemControlService:
             }
     
     def _get_minecraft_process(self):
-        """Find the running Minecraft server process"""
-        global _minecraft_process
+        """Get Minecraft process using cached PID (legacy compatibility)"""
+        global _minecraft_pid, _minecraft_process
         
         with _process_lock:
-            # Check if we have a cached process and it's still running
-            if _minecraft_process and _minecraft_process.is_running():
-                return _minecraft_process
-            
-            # Search for Minecraft process - prioritize actual Java process over bash wrapper
-            java_processes = []
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            if _minecraft_pid:
                 try:
-                    cmdline = proc.info['cmdline']
-                    name = proc.info['name']
-                    if not cmdline:
-                        continue
-                    
-                    # Look for Java process with Forge arguments
-                    if (any('java' in arg.lower() for arg in cmdline) and
-                        (any('user_jvm_args.txt' in arg for arg in cmdline) or
-                         any('unix_args.txt' in arg for arg in cmdline) or
-                         any('forge' in arg.lower() for arg in cmdline))):
-                        
-                        # Prioritize actual java processes over bash wrappers
-                        if name == 'java':
-                            _minecraft_process = proc
-                            self.logger.info(f"Found Java Minecraft process: PID {proc.pid}")
-                            return _minecraft_process
-                        else:
-                            java_processes.append(proc)
-                        
+                    proc = psutil.Process(_minecraft_pid)
+                    if proc.is_running():
+                        _minecraft_process = proc
+                        return proc
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
+                    pass
             
-            # If no direct java process found, use any qualifying process
-            if java_processes:
-                _minecraft_process = java_processes[0]
-                self.logger.info(f"Found Minecraft wrapper process: PID {_minecraft_process.pid}")
+            # Fallback to process search if no cached PID
+            new_pid = _find_minecraft_pid_lightweight()
+            if new_pid:
+                _minecraft_pid = new_pid
+                _minecraft_process = psutil.Process(new_pid)
                 return _minecraft_process
             
             _minecraft_process = None
@@ -300,6 +390,8 @@ class SystemControlService:
             minecraft_proc = self._get_minecraft_process()
             
             if minecraft_proc:
+                global _minecraft_pid
+                _minecraft_pid = minecraft_proc.pid
                 self.logger.info(f"Minecraft server started successfully with PID {minecraft_proc.pid}")
                 
                 # Clear the status cache
@@ -397,10 +489,11 @@ class SystemControlService:
                     minecraft_proc.wait(timeout=10)  # Wait for force kill
                     self.logger.info("Server force killed")
             
-            # Clear cached process
-            global _minecraft_process
+            # Clear cached process and PID
+            global _minecraft_process, _minecraft_pid
             with _process_lock:
                 _minecraft_process = None
+                _minecraft_pid = None
             
             # Stop startup monitoring
             try:

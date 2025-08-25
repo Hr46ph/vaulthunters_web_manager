@@ -696,14 +696,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update system info on page load
     setTimeout(updateSystemInfo, 200);
     
-    // Set up periodic status updates (every 10 seconds)
-    setInterval(updateServerStatus, 10000);
+    // Set up periodic status updates (every 5 seconds)
+    setInterval(updateServerStatus, 5000);
     
     
-    // Set up player list updates (every 10 seconds) if player list is present
+    // Set up player list updates (every 5 seconds) if player list is present
     if (document.getElementById('player-list')) {
         updatePlayerList(); // Initial load
-        setInterval(updatePlayerList, 10000);
+        setInterval(updatePlayerList, 5000);
     }
     
     // Setup console if present on page
