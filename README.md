@@ -19,6 +19,18 @@ A Flask-based web application for managing VaultHunters Minecraft servers. Provi
 - Java 17 only! (requirement for Vaulthunters modpack)
 - Recent Linux kernel 6.x with systemd (required for systemd service, can run manually without, or init script if you make them)
 
+## Screenshots
+
+<img width="1576" height="1491" alt="image" src="https://github.com/user-attachments/assets/f3883b82-dd1f-40b4-82ba-9ed2113c1abb" />
+
+<img width="1576" height="637" alt="image" src="https://github.com/user-attachments/assets/05ac8052-61ed-403d-9aa9-76403a986a14" />
+
+<img width="1576" height="948" alt="image" src="https://github.com/user-attachments/assets/7c928280-de10-40bd-a918-bc1709728ce6" />
+
+<img width="1576" height="971" alt="image" src="https://github.com/user-attachments/assets/611a887f-8989-4ec1-9125-655c8a48e5f1" />
+
+<img width="1576" height="840" alt="image" src="https://github.com/user-attachments/assets/ad589d21-da4b-4703-ad88-c3da3e3a2c2f" />
+
 ## Installation
 
 ### Automated Installation
