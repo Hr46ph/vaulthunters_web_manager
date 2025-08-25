@@ -230,11 +230,6 @@
     function updateLogContent(content) {
         originalLogContent = content;
         
-        // Check for lag spikes in the content (for initial loads)
-        if (typeof parseLagSpike === 'function') {
-            const lines = content.split('\n');
-            lines.forEach(line => parseLagSpike(line));
-        }
         
         const logElement = document.getElementById('unified-log');
         if (logElement) {
@@ -248,10 +243,6 @@
     function appendLogContent(newContent) {
         originalLogContent += '\n' + newContent;
         
-        // Check for lag spikes in new log content
-        if (typeof parseLagSpike === 'function') {
-            parseLagSpike(newContent);
-        }
         
         searchLogs(); // Reapply search to include new content
     }

@@ -215,9 +215,16 @@ function updateStatusDisplay(status) {
             statusIcon = '<i class="fas fa-spinner fa-spin"></i> ';
             break;
         case 'running':
-            statusText = 'Running';
-            badgeColor = 'success';
-            statusIcon = '<i class="fas fa-check-circle"></i> ';
+            // Check if server is ready for connections
+            if (status.server_ready === true) {
+                statusText = 'Running';
+                badgeColor = 'success';
+                statusIcon = '<i class="fas fa-check-circle"></i> ';
+            } else {
+                statusText = 'Running';
+                badgeColor = 'warning';
+                statusIcon = '<i class="fas fa-exclamation-triangle"></i> ';
+            }
             break;
         case 'stopped':
         default:
@@ -227,29 +234,27 @@ function updateStatusDisplay(status) {
             break;
     }
     
-    const badge = statusElement.querySelector('.badge');
-    if (badge) {
-        badge.className = `badge bg-${badgeColor}`;
-        badge.innerHTML = statusIcon + statusText;
+    // Update status badge in left column
+    const statusBadge = statusElement.querySelector('.badge');
+    if (statusBadge) {
+        statusBadge.className = `badge bg-${badgeColor}`;
+        statusBadge.innerHTML = statusIcon + statusText;
     }
     
-    // Update the entire status section with new data - now using 3 columns
-    const cols = statusElement.querySelectorAll('.col-md-4');
-    const leftCol = cols[0];   // Status, Uptime, PID
-    const middleCol = cols[1]; // Players, Java CPU, Java Memory  
-    const rightCol = cols[2];  // Performance stats (handled separately)
+    // Update the entire status section with new data - now using 2 columns
+    const cols = statusElement.querySelectorAll('.col-md-6');
+    const leftCol = cols[0];   // Uptime, PID, RCON Status
+    const rightCol = cols[1];  // Players, Java CPU, Java Memory
     
     if (leftCol) {
         let html = `
-            <div class="d-flex justify-content-between align-items-center">
-                <span>Status:</span>
-                <span class="badge bg-${badgeColor}">
-                    ${statusIcon}${statusText}
-                </span>
+            <div class="d-flex justify-content-between mt-2">
+                <span>Server Status:</span>
+                <span class="badge bg-${badgeColor}">${statusIcon}${statusText}</span>
             </div>
             <div class="d-flex justify-content-between mt-2">
                 <span>Uptime:</span>
-                <span class="ms-3">${status.uptime}</span>
+                <span class="text-muted">${status.uptime}</span>
             </div>
         `;
         
@@ -257,15 +262,25 @@ function updateStatusDisplay(status) {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>PID:</span>
-                <span class="ms-3">${status.pid}</span>
+                <span class="text-muted">${status.pid}</span>
             </div>`;
         } else {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>PID:</span>
-                <span class="text-muted ms-3">N/A</span>
+                <span class="text-muted">N/A</span>
             </div>`;
         }
+        
+        // Preserve existing RCON status or show checking if it doesn't exist
+        const existingRconStatus = document.getElementById('rcon-status');
+        const rconStatusDisplay = existingRconStatus ? existingRconStatus.outerHTML : '<span id="rcon-status" class="badge bg-secondary">Checking...</span>';
+        
+        html += `
+            <div class="d-flex justify-content-between mt-2">
+                <span>RCON Status:</span>
+                ${rconStatusDisplay}
+            </div>`;
         
         // Show additional info for starting status
         if (status.status === 'starting') {
@@ -275,26 +290,26 @@ function updateStatusDisplay(status) {
         leftCol.innerHTML = html;
     }
     
-    if (middleCol) {
+    if (rightCol) {
         let html = '';
         
         if (status.status === 'running' && status.server_ready) {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Players:</span>
-                <span class="ms-3">${status.players}/${status.max_players}</span>
+                <span class="text-muted">${status.players}/${status.max_players}</span>
             </div>`;
         } else if (status.status === 'starting') {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Players:</span>
-                <span class="text-muted ms-3">Waiting for server...</span>
+                <span class="text-muted">Waiting for server...</span>
             </div>`;
         } else {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Players:</span>
-                <span class="text-muted ms-3">--</span>
+                <span class="text-muted">--</span>
             </div>`;
         }
         
@@ -303,19 +318,19 @@ function updateStatusDisplay(status) {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Java CPU:</span>
-                <span class="text-muted ms-3">--</span>
+                <span class="text-muted">--</span>
             </div>`;
         } else if (status.cpu_usage > 0) {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Java CPU:</span>
-                <span class="ms-3">${status.cpu_usage.toFixed(1)}%</span>
+                <span class="text-muted">${status.cpu_usage.toFixed(1)}%</span>
             </div>`;
         } else {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Java CPU:</span>
-                <span class="text-muted loading-indicator ms-3"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+                <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
             </div>`;
         }
         
@@ -324,7 +339,7 @@ function updateStatusDisplay(status) {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Java Memory:</span>
-                <span class="text-muted ms-3">--</span>
+                <span class="text-muted">--</span>
             </div>`;
         } else if (status.memory_usage > 0) {
             const memoryDisplay = status.memory_usage >= 1024 
@@ -333,21 +348,26 @@ function updateStatusDisplay(status) {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Java Memory:</span>
-                <span class="ms-3">${memoryDisplay}</span>
+                <span class="text-muted">${memoryDisplay}</span>
             </div>`;
         } else {
             html += `
             <div class="d-flex justify-content-between mt-2">
                 <span>Java Memory:</span>
-                <span class="text-muted loading-indicator ms-3"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+                <span class="text-muted loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
             </div>`;
         }
         
-        middleCol.innerHTML = html;
+        rightCol.innerHTML = html;
     }
     
     // Update button states - disable controls during startup
     updateButtonStates(status.running, status.status);
+    
+    // Check RCON status after updating server status (only if server is running)
+    if (status.running && status.status === 'running') {
+        setTimeout(checkRconStatus, 500); // Small delay to let DOM update
+    }
 }
 
 // Update button states based on server status
@@ -691,9 +711,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Check RCON status if console is present
     if (document.getElementById('rcon-status')) {
-        checkRconStatus();
-        // Check RCON status periodically
-        setInterval(checkRconStatus, 30000);
+        setTimeout(checkRconStatus, 1000); // Initial check after 1 second
+        // Check RCON status periodically (more frequently)
+        setInterval(checkRconStatus, 15000); // Every 15 seconds instead of 30
     }
     
     // Check server properties validation on startup

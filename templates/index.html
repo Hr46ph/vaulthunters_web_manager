@@ -6,53 +6,43 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Server Status</h5>
+                        <h6><i class="fas fa-info-circle"></i> System Status</h6>
                     </div>
                     <div class="card-body">
                         <div id="server-status">
                             <div class="row g-4">
-                                <div class="col-md-4">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span>Status:</span>
+                                <div class="col-md-6">
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>Server Status:</span>
                                         <span class="badge bg-secondary">
                                             <i class="fas fa-spinner fa-spin"></i> Loading...
                                         </span>
                                     </div>
                                     <div class="d-flex justify-content-between mt-2">
                                         <span>Uptime:</span>
-                                        <span class="text-muted ms-3">Loading...</span>
+                                        <span class="text-muted">Loading...</span>
                                     </div>
                                     <div class="d-flex justify-content-between mt-2">
                                         <span>PID:</span>
-                                        <span class="text-muted ms-3">Loading...</span>
+                                        <span class="text-muted">Loading...</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <span>RCON Status:</span>
+                                        <span id="rcon-status" class="badge bg-secondary">Checking...</span>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <div class="d-flex justify-content-between mt-2">
                                         <span>Players:</span>
-                                        <span class="text-muted ms-3">Loading...</span>
+                                        <span class="text-muted">Loading...</span>
                                     </div>
                                     <div class="d-flex justify-content-between mt-2">
                                         <span>Java CPU:</span>
-                                        <span class="text-muted ms-3">Loading...</span>
+                                        <span class="text-muted">Loading...</span>
                                     </div>
                                     <div class="d-flex justify-content-between mt-2">
                                         <span>Java Memory:</span>
-                                        <span class="text-muted ms-3">Loading...</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="d-flex justify-content-between mt-2">
-                                        <span>Lag Spikes (5s):</span>
-                                        <span id="lag-spikes-indicator" class="badge bg-success ms-3">0</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-2">
-                                        <span>Frequency:</span>
-                                        <span id="frequency-indicator" class="text-muted ms-3">0/min</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-2">
-                                        <span>Severity:</span>
-                                        <span id="severity-indicator" class="badge bg-success ms-3">●</span>
+                                        <span class="text-muted">Loading...</span>
                                     </div>
                                 </div>
                             </div>
@@ -147,7 +137,7 @@
         
         <div class="row mt-4">
             <div class="col-md-8">
-                <div class="card" style="height: 600px;">
+                <div class="card" style="height: 630px;">
                     <div class="card-header">
                         <h6 class="mb-0"><i class="fas fa-terminal"></i> Server Console</h6>
                     </div>
@@ -180,25 +170,13 @@
                                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="executeCommand('whitelist list')">Whitelist</button>
                             </div>
                         </div>
-                        
-                        <!-- RCON Status -->
-                        <div class="row">
-                            <div class="col-md-6">
-                                <strong>RCON Status:</strong>
-                                <span id="rcon-status" class="badge bg-secondary">Checking...</span>
-                            </div>
-                            <div class="col-md-6">
-                                <strong>Last Command:</strong>
-                                <span id="last-command" class="text-muted">None</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
             
             <!-- Player List Card -->
             <div class="col-md-4">
-                <div class="card" style="height: 600px;">
+                <div class="card" style="height: 630px;">
                     <div class="card-header">
                         <h6 class="mb-0"><i class="fas fa-users"></i> Players Online <span id="player-count-badge" class="badge bg-primary ms-2">0</span></h6>
                     </div>

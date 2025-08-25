@@ -8,6 +8,7 @@ from services.backup_manager import BackupManager
 from services.server_properties import ServerPropertiesParser
 from services.log_watcher import get_log_watcher
 from services.rcon_client import RconClient
+from services.system_info import SystemInfoService
 import os
 import logging
 import subprocess
@@ -162,41 +163,6 @@ def _execute_rcon_server_control(action):
 main_bp = Blueprint('main', __name__)
 
 
-# Monitoring helper functions
-def get_tps_data():
-    """Get TPS data via RCON command"""
-    try:
-        from services.rcon_client import execute_rcon_command
-        from services.server_properties import ServerPropertiesParser
-        
-        # Get RCON configuration
-        server_props = ServerPropertiesParser()
-        if not server_props.load_properties() or not server_props.is_rcon_enabled():
-            return {'tps': None, 'error': 'RCON not available'}
-        
-        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-        rcon_port = server_props.get_rcon_port()
-        rcon_password = server_props.get_rcon_password()
-        
-        if not rcon_password:
-            return {'tps': None, 'error': 'RCON password not set'}
-        
-        # Execute forge tps command
-        success, response = execute_rcon_command(server_host, rcon_port, rcon_password, 'forge tps')
-        
-        if success and response:
-            # Parse TPS from response like "Overall: Mean tick time: 45.123 ms. Mean TPS: 20.0"
-            import re
-            tps_match = re.search(r'Mean TPS:\s*([0-9.]+)', response)
-            if tps_match:
-                tps = float(tps_match.group(1))
-                return {'tps': tps, 'response': response}
-        
-        return {'tps': None, 'error': f'Failed to parse TPS: {response}'}
-        
-    except Exception as e:
-        current_app.logger.error(f'TPS monitoring error: {e}')
-        return {'tps': None, 'error': str(e)}
 
 def get_recent_performance_events():
     """Get recent performance events from system monitoring"""
@@ -260,34 +226,6 @@ def get_recent_performance_events():
         except Exception as e:
             current_app.logger.warning(f'Status check failed: {e}')
         
-        # Get TPS events
-        try:
-            tps_data = get_tps_data()
-            if tps_data.get('tps') is not None:
-                tps = tps_data['tps']
-                if tps < 15:
-                    events.append({
-                        'type': 'Poor Performance',
-                        'message': f'TPS dropped to {tps:.1f}',
-                        'timestamp': datetime.now().isoformat(),
-                        'severity': 'warning'
-                    })
-                elif tps < 18:
-                    events.append({
-                        'type': 'TPS Monitoring',
-                        'message': f'TPS slightly low: {tps:.1f}',
-                        'timestamp': datetime.now().isoformat(),
-                        'severity': 'info'
-                    })
-                else:
-                    events.append({
-                        'type': 'Performance',
-                        'message': f'TPS healthy: {tps:.1f}',
-                        'timestamp': datetime.now().isoformat(),
-                        'severity': 'success'
-                    })
-        except Exception as e:
-            current_app.logger.warning(f'TPS check failed: {e}')
         
         # If no events, add a default monitoring message
         if not events:
@@ -334,71 +272,8 @@ def server_status():
 def system_info():
     """API endpoint for system version information"""
     try:
-        versions = {}
-        
-        # Get Java version
-        try:
-            java_cmd = current_app.config.get('JAVA_EXECUTABLE', 'java')
-            result = subprocess.run([java_cmd, '-version'], 
-                                 capture_output=True, text=True, timeout=10)
-            java_output = result.stderr  # Java version goes to stderr
-            if java_output:
-                # Parse Java version from output
-                lines = java_output.strip().split('\n')
-                if lines:
-                    # Extract version from first line (e.g., "openjdk version "17.0.2" 2022-01-18")
-                    first_line = lines[0]
-                    if 'openjdk version' in first_line.lower():
-                        versions['java'] = 'OpenJDK ' + first_line.split('"')[1] if '"' in first_line else 'OpenJDK (version unknown)'
-                    elif 'java version' in first_line.lower():
-                        versions['java'] = 'Oracle JDK ' + first_line.split('"')[1] if '"' in first_line else 'Oracle JDK (version unknown)'
-                    else:
-                        versions['java'] = first_line.strip()
-                else:
-                    versions['java'] = 'Unknown'
-            else:
-                versions['java'] = 'Unknown'
-        except Exception as e:
-            current_app.logger.warning(f'Failed to get Java version: {e}')
-            versions['java'] = 'Unknown'
-        
-        # Get VaultHunters version from server data
-        try:
-            server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
-            data_json_path = os.path.join(server_path, 'data', 'the_vault', 'data.json')
-            if os.path.exists(data_json_path):
-                with open(data_json_path, 'r') as f:
-                    data = json.load(f)
-                    versions['vaulthunters'] = data.get('version', 'Unknown')
-            else:
-                versions['vaulthunters'] = 'Not found'
-        except Exception as e:
-            current_app.logger.warning(f'Failed to get VaultHunters version: {e}')
-            versions['vaulthunters'] = 'Unknown'
-        
-        # Get Linux kernel version
-        try:
-            result = subprocess.run(['uname', '-r'], capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                versions['kernel'] = result.stdout.strip()
-            else:
-                versions['kernel'] = 'Unknown'
-        except Exception as e:
-            current_app.logger.warning(f'Failed to get kernel version: {e}')
-            versions['kernel'] = 'Unknown'
-        
-        # Get Python version
-        try:
-            result = subprocess.run(['python3', '--version'], capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                versions['python'] = result.stdout.strip().replace('Python ', '')
-            else:
-                versions['python'] = 'Unknown'
-        except Exception as e:
-            current_app.logger.warning(f'Failed to get Python version: {e}')
-            versions['python'] = 'Unknown'
-        
-        return jsonify(versions)
+        system_info_service = SystemInfoService()
+        return jsonify(system_info_service.get_all_versions())
     except Exception as e:
         current_app.logger.error(f'System info error: {e}')
         return jsonify({'error': 'Failed to get system info'}), 500
@@ -1211,148 +1086,11 @@ def console():
 @main_bp.route('/console/status')
 def console_status():
     """Check RCON connection status"""
-    try:
-        # First check if server is running - NO RCON/mcstatus if server not green
-        system_control = SystemControlService()
-        server_status = system_control.get_server_status()
-        
-        if not server_status.get('running', False) or server_status.get('status') != 'running':
-            return jsonify({
-                'connected': False,
-                'error': f'Server not running (status: {server_status.get("status", "stopped")})'
-            })
-        
-        from mcrcon import MCRcon
-        import os
-        
-        # Get server connection details from server.properties
-        server_props = ServerPropertiesParser()
-        
-        # Check if server.properties file exists
-        server_path = current_app.config.get('MINECRAFT_SERVER_PATH', '/home/minecraft/vaulthunters')
-        props_file = os.path.join(server_path, 'server.properties')
-        current_app.logger.info(f'Looking for server.properties at: {props_file}')
-        current_app.logger.info(f'File exists: {os.path.exists(props_file)}')
-        
-        if os.path.exists(props_file):
-            current_app.logger.info(f'File size: {os.path.getsize(props_file)} bytes')
-            # Read first few lines for debugging
-            try:
-                with open(props_file, 'r') as f:
-                    first_lines = [f.readline().strip() for _ in range(5)]
-                current_app.logger.info(f'First 5 lines: {first_lines}')
-            except Exception as e:
-                current_app.logger.error(f'Could not read server.properties: {e}')
-        
-        # Load properties first
-        if not server_props.load_properties():
-            return jsonify({
-                'connected': False,
-                'error': f'Could not load server.properties file at {props_file}'
-            })
-        
-        all_props = server_props.get_all_properties()
-        current_app.logger.info(f'Loaded server.properties with {len(all_props)} properties')
-        current_app.logger.info(f'Sample properties: {dict(list(all_props.items())[:5]) if all_props else "None"}')
-        
-        # Check specific RCON properties
-        enable_rcon = server_props.get_property('enable-rcon')
-        rcon_port_prop = server_props.get_property('rcon.port')
-        rcon_password_prop = server_props.get_property('rcon.password')
-        
-        current_app.logger.info(f'Raw properties - enable-rcon: {enable_rcon}, rcon.port: {rcon_port_prop}, rcon.password: {"SET" if rcon_password_prop else "EMPTY"}')
-        
-        if not server_props.is_rcon_enabled():
-            return jsonify({
-                'connected': False,
-                'error': f'RCON is not enabled in server.properties (enable-rcon={enable_rcon}, need enable-rcon=true)'
-            })
-        
-        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-        rcon_port = server_props.get_rcon_port()
-        rcon_password = server_props.get_rcon_password()
-        
-        current_app.logger.info(f'RCON config - Host: {server_host}, Port: {rcon_port}, Password: {"SET" if rcon_password else "EMPTY"}')
-        
-        if not rcon_password:
-            return jsonify({
-                'connected': False,
-                'error': f'RCON password not set in server.properties (rcon.password="{rcon_password_prop}")'
-            })
-        
-        current_app.logger.info(f'RCON status check: attempting connection to {server_host}:{rcon_port}')
-        
-        # Test basic network connectivity first
-        import socket
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
-            result = sock.connect_ex((server_host, rcon_port))
-            sock.close()
-            
-            if result != 0:
-                return jsonify({
-                    'connected': False,
-                    'error': f'Cannot connect to {server_host}:{rcon_port} - server may not be running or RCON port blocked'
-                })
-            
-            current_app.logger.info(f'Socket connection to {server_host}:{rcon_port} successful')
-        except Exception as socket_error:
-            current_app.logger.error(f'Socket test failed: {socket_error}')
-            return jsonify({
-                'connected': False,
-                'error': f'Network connectivity test failed: {str(socket_error)}'
-            })
-        
-        # Test RCON connection using custom client to avoid signal issues
-        try:
-            
-            from services.rcon_client import get_rcon_connection_status, test_rcon_connection
-            # First check if we have an existing connection
-            connected, error = get_rcon_connection_status(server_host, rcon_port, rcon_password)
-            
-            # If not connected, try to test connection
-            if not connected:
-                connected, error = test_rcon_connection(server_host, rcon_port, rcon_password)
-            
-            if not connected:
-                raise Exception(error)
-            
-            current_app.logger.info(f'RCON connection successful with custom client')
-                
-        except Exception as rcon_error:
-            current_app.logger.error(f'RCON connection failed: {type(rcon_error).__name__}: {rcon_error}', exc_info=True)
-            
-            error_message = str(rcon_error).lower()
-            if 'refused' in error_message or 'timeout' in error_message:
-                return jsonify({
-                    'connected': False,
-                    'error': f'RCON server not responding on {server_host}:{rcon_port}. Check if Minecraft server is running and RCON is enabled.'
-                })
-            elif 'auth' in error_message or 'password' in error_message:
-                return jsonify({
-                    'connected': False,
-                    'error': f'RCON authentication failed. Check rcon.password in server.properties.'
-                })
-            else:
-                return jsonify({
-                    'connected': False,
-                    'error': f'RCON connection error: {str(rcon_error)}'
-                })
-            
-        current_app.logger.info(f'RCON status check: connection successful')
-        return jsonify({
-            'connected': True,
-            'host': server_host,
-            'port': rcon_port
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f'RCON status check failed: {str(e)} (type: {type(e).__name__})')
-        return jsonify({
-            'connected': False,
-            'error': str(e)
-        })
+    from services.rcon_status import RconStatusService
+    
+    rcon_service = RconStatusService()
+    status = rcon_service.get_rcon_status()
+    return jsonify(status)
 
 @main_bp.route('/console/execute', methods=['POST'])
 def console_execute():
@@ -1364,81 +1102,15 @@ def console_execute():
         data = request.get_json()
         command = data.get('command', '').strip()
         
-        if not command:
-            return jsonify({
-                'success': False,
-                'error': 'No command provided'
-            }), 400
+        from services.rcon_status import RconStatusService
         
-        from mcrcon import MCRcon
+        rcon_service = RconStatusService()
+        result = rcon_service.execute_command(command)
         
-        # Get server connection details from server.properties
-        server_props = ServerPropertiesParser()
-        
-        # Load properties first
-        if not server_props.load_properties():
-            return jsonify({
-                'success': False,
-                'error': 'Could not load server.properties file'
-            }), 500
-        
-        if not server_props.is_rcon_enabled():
-            return jsonify({
-                'success': False,
-                'error': 'RCON is not enabled in server.properties (enable-rcon=true required)'
-            }), 500
-        
-        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-        rcon_port = server_props.get_rcon_port()
-        rcon_password = server_props.get_rcon_password()
-        
-        current_app.logger.info(f'RCON execute - Host: {server_host}, Port: {rcon_port}, Command: {command}')
-        
-        if not rcon_password:
-            return jsonify({
-                'success': False,
-                'error': 'RCON password not set in server.properties'
-            }), 500
-        
-        # Execute command via RCON using custom client to avoid signal issues
-        try:
-            current_app.logger.info(f'Executing RCON command: {command}')
-            
-            from services.rcon_client import execute_rcon_command
-            success, response = execute_rcon_command(server_host, rcon_port, rcon_password, command)
-            
-            if not success:
-                raise Exception(response)
-            
-            current_app.logger.info(f'RCON command successful with custom client')
-                
-        except Exception as rcon_error:
-            current_app.logger.error(f'RCON command execution failed: {rcon_error}')
-            
-            error_message = str(rcon_error).lower()
-            if 'refused' in error_message or 'timeout' in error_message:
-                return jsonify({
-                    'success': False,
-                    'error': 'RCON server not responding. Check if Minecraft server is running.'
-                }), 500
-            elif 'auth' in error_message or 'password' in error_message:
-                return jsonify({
-                    'success': False,
-                    'error': 'RCON authentication failed. Check server password.'
-                }), 500
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': f'Command execution failed: {str(rcon_error)}'
-                }), 500
-            
-        current_app.logger.info(f'RCON command executed: {command}')
-        
-        return jsonify({
-            'success': True,
-            'command': command,
-            'response': response if response else 'Command executed successfully'
-        })
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400 if 'No command provided' in result.get('error', '') else 500
         
     except Exception as e:
         current_app.logger.error(f'RCON command execution failed: {e}')
@@ -1454,46 +1126,15 @@ def console_connect():
         # Validate CSRF token
         validate_csrf_token()
         
-        from services.rcon_client import force_rcon_reconnect
+        from services.rcon_status import RconStatusService
         
-        # Get server connection details from server.properties
-        server_props = ServerPropertiesParser()
+        rcon_service = RconStatusService()
+        result = rcon_service.force_reconnect()
         
-        if not server_props.load_properties():
-            return jsonify({
-                'success': False,
-                'error': 'Could not load server.properties file'
-            }), 500
-        
-        if not server_props.is_rcon_enabled():
-            return jsonify({
-                'success': False,
-                'error': 'RCON is not enabled in server.properties'
-            }), 500
-        
-        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-        rcon_port = server_props.get_rcon_port()
-        rcon_password = server_props.get_rcon_password()
-        
-        if not rcon_password:
-            return jsonify({
-                'success': False,
-                'error': 'RCON password not set in server.properties'
-            }), 500
-        
-        # Force reconnection
-        success, error = force_rcon_reconnect(server_host, rcon_port, rcon_password)
-        
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'RCON reconnected successfully'
-            })
+        if result['success']:
+            return jsonify(result)
         else:
-            return jsonify({
-                'success': False,
-                'error': error or 'Failed to reconnect'
-            }), 500
+            return jsonify(result), 500
             
     except Exception as e:
         current_app.logger.error(f'RCON connect failed: {e}')
@@ -1509,22 +1150,15 @@ def console_disconnect():
         # Validate CSRF token
         validate_csrf_token()
         
-        from services.rcon_client import RconConnectionManager
+        from services.rcon_status import RconStatusService
         
-        # Get server connection details
-        server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-        server_props = ServerPropertiesParser()
+        rcon_service = RconStatusService()
+        result = rcon_service.disconnect()
         
-        if server_props.load_properties():
-            rcon_port = server_props.get_rcon_port()
-            # Disconnect the specific connection
-            connection_key = f"{server_host}:{rcon_port}"
-            RconConnectionManager.disconnect_all()  # For simplicity, disconnect all
-        
-        return jsonify({
-            'success': True,
-            'message': 'RCON disconnected successfully'
-        })
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 500
         
     except Exception as e:
         current_app.logger.error(f'RCON disconnect failed: {e}')

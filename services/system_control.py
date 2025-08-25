@@ -72,7 +72,7 @@ class SystemControlService:
                 'status': 'stopped',  # stopped, starting, running
                 'uptime': '0 minutes',
                 'players': 0,
-                'max_players': 20,
+                'max_players': "?",
                 'last_update': datetime.now().isoformat(),
                 'memory_usage': 0,
                 'cpu_usage': 0.0,
@@ -108,15 +108,23 @@ class SystemControlService:
                 except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
                     self.logger.warning(f"Error getting process info: {e}")
                 
+                # Always get max_players from server.properties first
+                try:
+                    server_props = ServerPropertiesParser()
+                    if server_props.load_properties():
+                        status_info['max_players'] = server_props.get_max_players()
+                    else:
+                        status_info['max_players'] = "?"  # Show ? if server.properties can't be read
+                except Exception:
+                    status_info['max_players'] = "?"  # Show ? if server.properties can't be read
+                
                 # Check if server is ready for connections using mcstatus
                 server_ready = False
-                last_error = None
                 
                 try:
                     from mcstatus import JavaServer
                     server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
                     server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
-                    
                     
                     server = JavaServer(server_host, server_port)
                     query_status = server.status()
@@ -124,7 +132,6 @@ class SystemControlService:
                     if query_status:
                         server_ready = True
                         status_info['players'] = query_status.players.online
-                        status_info['max_players'] = query_status.players.max
                         
                         # Collect player names from mcstatus
                         player_names = []
@@ -132,27 +139,20 @@ class SystemControlService:
                             for player in query_status.players.sample:
                                 player_names.append(player.name)
                         
-                        # Try query method for more complete player list (if available)
-                        try:
-                            query_result = server.query()
-                            if hasattr(query_result.players, 'names') and query_result.players.names:
-                                player_names = query_result.players.names  # More complete list
-                        except:
-                            pass  # Query not available, use sample
-                        
                         status_info['player_names'] = player_names
                         status_info['server_ready'] = True
                         status_info['status'] = 'running'
                         
                         player_list_str = ", ".join(player_names) if player_names else "none"
-                        self.logger.info(f"mcstatus connected successfully - {query_status.players.online}/{query_status.players.max} players ({player_list_str})")
+                        self.logger.info(f"mcstatus connected successfully - {query_status.players.online}/{status_info['max_players']} players ({player_list_str})")
                         
                 except Exception as e:
-                    last_error = e
                     self.logger.warning(f"mcstatus connection to {server_host}:{server_port} failed: {type(e).__name__}: {e}")
                 
-                if not server_ready and last_error:
-                    self.logger.warning(f"mcstatus connection failed: {type(last_error).__name__}: {last_error}")
+                if not server_ready:
+                    # Show "?" for online players when mcstatus fails
+                    status_info['players'] = "?"
+                    status_info['player_names'] = []
                     
                     # Check process uptime to distinguish between starting vs connection issues
                     proc_info = minecraft_proc.as_dict(attrs=['create_time'])
@@ -168,15 +168,6 @@ class SystemControlService:
                         # Server process exists but can't connect and hasn't been running long - it's starting up
                         status_info['server_ready'] = False
                         status_info['status'] = 'starting'
-                    
-                    # Try to get max_players from server.properties as fallback
-                    try:
-                        server_props = ServerPropertiesParser()
-                        if server_props.load_properties():
-                            max_players = server_props.get_property('max-players', '20')
-                            status_info['max_players'] = int(max_players) if max_players.isdigit() else 20
-                    except Exception:
-                        pass
             else:
                 # No process running
                 status_info['status'] = 'stopped'
@@ -192,7 +183,7 @@ class SystemControlService:
                 'status': 'stopped',
                 'uptime': 'Unknown',
                 'players': 0,
-                'max_players': 20,
+                'max_players': "?",
                 'last_update': datetime.now().isoformat(),
                 'memory_usage': 0,
                 'cpu_usage': 0.0,
@@ -509,6 +500,16 @@ class SystemControlService:
     
     def _collect_player_status_via_mcstatus(self):
         """Collect current player status using mcstatus (simplified - no database updates)"""
+        # Always get max_players from server.properties first
+        try:
+            server_props = ServerPropertiesParser()
+            if server_props.load_properties():
+                max_players = server_props.get_max_players()
+            else:
+                max_players = "?"  # Show ? if server.properties can't be read
+        except Exception:
+            max_players = "?"  # Show ? if server.properties can't be read
+        
         try:
             from mcstatus import JavaServer
             
@@ -516,16 +517,19 @@ class SystemControlService:
             server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
             
             server = JavaServer(server_host, server_port)
-            query_result = server.query()
+            status_result = server.status()
             
-            # Get current online players with normalization for display
-            current_players = query_result.players.names or []
+            # Get current online players from status (sample)
+            current_players = []
+            if status_result and status_result.players.sample:
+                current_players = [player.name for player in status_result.players.sample]
+            
             normalized_players = [self._normalize_player_name(name) for name in current_players]
             
             return {
                 'success': True,
-                'player_count': query_result.players.online,
-                'max_players': query_result.players.max,
+                'player_count': status_result.players.online if status_result else "?",
+                'max_players': max_players,
                 'players': normalized_players
             }
             
@@ -534,8 +538,8 @@ class SystemControlService:
             return {
                 'success': False,
                 'error': str(e),
-                'player_count': 0,
-                'max_players': 20,
+                'player_count': "?",
+                'max_players': max_players,
                 'players': []
             }
     
