@@ -10,7 +10,7 @@ VaultHunters Web Manager is a Flask-based web application for managing VaultHunt
 
 Direct process management architecture:
 
-- **Flask Application** (`app.py`): Main web server with routes for server control, log viewing, config editing, backup management, RCON console, and system monitoring
+- **Flask Application** (`app.py`): Main web server with routes for server control, log viewing, config editing, backup management, RCON console, and basic system monitoring
 - **Configuration** (`config.py.example`): Configuration template with Java/JVM settings, server paths, web interface settings, and Minecraft connection details
 - **Process Management** (`services/system_control.py`): Direct Java process launching with detached execution, monitoring, and control with psutil integration
 - **Templates** (`templates/`): Jinja2 templates with logs page, radio button log type selector, and server status dashboard
@@ -23,23 +23,22 @@ Direct process management architecture:
 - **Integrated RCON Console**: Dashboard-embedded console with custom socket client and VaultHunters-specific commands
 - **Smart Process Detection**: Accurate Java process identification (not bash wrappers) with PID display and dynamic MB/GB memory formatting
 - **Real-time Log Monitoring**: Server-Sent Events (SSE) for instant log updates with `tail -F` log rotation support
-- **Log Interface**: Unified log viewer with radio button selection (Latest, Debug, Latest Crash, System Journal) and follow controls
+- **Log Interface**: Unified log viewer with button selection (Latest, Debug, Latest Crash, System Journal), keyword search, filter and follow controls
 - **Configuration Management**: Multi-category config editor with atomic file operations and automatic backups
-- **Backup Management**: List, download, and inspect backups from configured backup directory
-- **Real-time Monitoring**: Accurate server status and player counts using mcstatus and process statistics
-- **Real-time Status**: Live server status, Java process CPU and memory usage for dashboard display
+- **Backup Management**: View and download backups from configured backup directory
+- **Real-time Monitoring**: Accurate server status, player count and player names using mcstatus and process statistics
 - **Security**: Custom CSRF protection, input validation, file access restrictions
 - **User Context**: Run as minecraft user with direct process control (no systemd or root required)
 
 ## Dependencies
 
-- Python 3.7+
+- Python 3.10+
 - Flask web framework with Flask-WTF for security
 - mcstatus library for Minecraft server integration
 - mcrcon library for RCON console functionality
 - psutil for process monitoring and management
 - Bootstrap for frontend UI
-- Java 8+ for Minecraft server execution
+- Java 17 (JDK strongly recommended) for (modded) Minecraft server execution
 
 ## Virtual Environment Setup
 
@@ -59,7 +58,7 @@ pip install -r requirements.txt
 - Web interface: `0.0.0.0:8080` (configurable)
 - Virtual environment: `./venv/` (project root)
 - Minecraft server host/ports: `localhost:25565` (configurable)
-- RCON port: Automatically read from server.properties
+- RCON port and password: Automatically read from server.properties
 
 ## Development Commands
 
@@ -79,17 +78,17 @@ pip install -r requirements.txt
 - AJAX for real-time server status updates in `static/js/app.js`
 - Log viewing with real-time streaming in `services/log_service.py`
 - RCON custom socket client avoiding signal issues
-- Server status dashboard with real-time updates every 5-10 seconds
-- Real-time player status display (no historical tracking)
-- Production-ready security and error handling throughout all services
+- Server status dashboard with real-time updates every 5 seconds
+- Real-time player status display
 
 ## Status Monitoring
 
-The application provides real-time status information without historical data collection:
+The application provides real-time status information without historical data collection (no database required):
 
 - **Server Status**: Running/stopped state via process detection
 - **Resource Usage**: Live Java process CPU and memory usage for dashboard display
 - **Player Information**: Current online player count and names via mcstatus
 - **System Information**: Java version, kernel version, and basic system details
 
-No metrics database or historical data retention is implemented. Status information is fetched in real-time for dashboard updates.
+No metrics database or historical data retention is implemented. Status information is fetched only in real-time for dashboard updates.
+

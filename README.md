@@ -8,30 +8,28 @@ A Flask-based web application for managing VaultHunters Minecraft servers. Provi
 - **RCON Console**: Execute server commands through integrated console
 - **Log Monitoring**: Real-time log viewing with Server-Sent Events
 - **Configuration Editor**: Edit server.properties and mod configurations
+- **Configuration Checker**: Actively checks your server.properties for application compatibility and will ask to apply the changes 
 - **Backup Management**: Download and manage server backups
 - **Status Monitoring**: Real-time server status and player counts
 - **Security**: CSRF protection and input validation
 
 ## Requirements
 
-- Python 3.7+
-- Java 8+ (for Minecraft server)
-- Linux system with systemd (recommended)
+- Python 3.10 minimum, 3.12+ recommended
+- Java 17 only! (requirement for Vaulthunters modpack)
+- Recent Linux kernel 6.x with systemd (required for systemd service, can run manually without, or init script if you make them)
 
 ## Installation
 
 ### Automated Installation
 
-Run the installation script:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/install.sh | bash
-```
-
-Or download and run manually:
+Download and run manually:
 
 ```bash
 wget https://raw.githubusercontent.com/Hr46ph/vaulthunters_web_manager/main/install.sh
+# Reviewing the file is strongly recommended
+sh ./install.sh
+# or chmod and run directly:
 chmod +x install.sh
 ./install.sh
 ```
@@ -40,7 +38,7 @@ chmod +x install.sh
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/Hr46ph/vaulthunters_web_manager.git
+git clone --branch v1.0.0 https://github.com/Hr46ph/vaulthunters_web_manager.git
 cd vaulthunters_web_manager
 ```
 
@@ -73,19 +71,6 @@ The application uses `config.toml` for configuration. Key settings include:
 
 See `config.toml.example` for detailed configuration options.
 
-## RCON Setup
-
-For server control features, enable RCON in your Minecraft server:
-
-1. Edit `server.properties`:
-```properties
-enable-rcon=true
-rcon.port=25575
-rcon.password=your-secure-password
-```
-
-2. Restart your Minecraft server
-
 ## Usage
 
 Access the web interface at `http://localhost:8080` (or your configured port).
@@ -101,6 +86,8 @@ sudo systemctl stop vaulthunters_web_manager.service
 ```
 
 ### View Logs
+
+If installed via the automated installer:
 
 ```bash
 sudo journalctl -u vaulthunters_web_manager.service -f
@@ -137,3 +124,4 @@ This project is open source. See the repository for license details.
 - Check the [Issues](https://github.com/Hr46ph/vaulthunters_web_manager/issues) page for common problems
 - Review `RCON_HELP.md` for VaultHunters-specific commands
 - Examine service logs for troubleshooting: `journalctl -u vaulthunters_web_manager.service`
+
