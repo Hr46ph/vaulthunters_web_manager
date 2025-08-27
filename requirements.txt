@@ -11,3 +11,6 @@ psutil==5.9.6
 mcstatus==11.0.0
 mcrcon==0.7.0
 toml==0.10.2
+
+# Windows-specific dependencies (automatically skipped on non-Windows)
+pywin32>=306; sys_platform == "win32"
