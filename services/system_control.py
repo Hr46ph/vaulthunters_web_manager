@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from flask import current_app, has_app_context
 import logging
 from .server_properties import ServerPropertiesParser
+from .platform_abstraction import platform_abstraction
 
 # Global cache for status data
 _status_cache = {}
@@ -358,28 +359,19 @@ class SystemControlService:
             self.logger.info(f"Starting Minecraft server in {self.server_path}")
             self.logger.info(f"Command: {' '.join(cmd)}")
             
-            # Prepare log file paths
-            log_file = os.path.join(self.server_path, 'logs', 'latest.log')
-            os.makedirs(os.path.dirname(log_file), exist_ok=True)
+            # Use platform abstraction for cross-platform process detaching
+            self.logger.info(f"Starting detached server with platform abstraction")
             
-            # Build the command string for shell execution
-            cmd_str = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in ([self.java_executable] + self.forge_startup_command)])
-            
-            # Use bash to execute a completely detached process
-            detach_cmd = f'bash -c "cd \\"{self.server_path}\\" && setsid nohup {cmd_str} >>logs/latest.log 2>&1 </dev/null & disown"'
-            
-            self.logger.info(f"Starting detached server: {detach_cmd}")
-            
-            # Execute with minimal connection to parent
-            process = subprocess.Popen(
-                detach_cmd,
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                stdin=subprocess.DEVNULL,
-                start_new_session=True,
-                cwd='/'  # Change to root to avoid any path dependencies
-            )
+            try:
+                process = platform_abstraction.start_detached_process(
+                    command=cmd,
+                    cwd=self.server_path,
+                    log_file='logs/latest.log'
+                )
+                self.logger.info(f"Server process started with platform abstraction")
+            except Exception as e:
+                self.logger.error(f"Failed to start process with platform abstraction: {e}")
+                raise
             
             # Don't wait for the subprocess - it should exit immediately after forking
             
@@ -478,16 +470,11 @@ class SystemControlService:
                 self.logger.warning(f"RCON stop failed: {rcon_error}, falling back to SIGTERM")
                 minecraft_proc.terminate()
                 
-                # Wait up to 30 seconds for graceful shutdown
-                try:
-                    minecraft_proc.wait(timeout=30)
-                    self.logger.info(f"Server stopped gracefully")
-                except psutil.TimeoutExpired:
-                    # Force kill if graceful shutdown fails
-                    self.logger.warning("Graceful shutdown timed out, force killing")
-                    minecraft_proc.kill()
-                    minecraft_proc.wait(timeout=10)  # Wait for force kill
-                    self.logger.info("Server force killed")
+                # Use platform abstraction for graceful termination
+                if platform_abstraction.terminate_process_gracefully(minecraft_proc, timeout=30):
+                    self.logger.info("Server stopped gracefully via platform abstraction")
+                else:
+                    self.logger.warning("Server was force-killed via platform abstraction")
             
             # Clear cached process and PID
             global _minecraft_process, _minecraft_pid

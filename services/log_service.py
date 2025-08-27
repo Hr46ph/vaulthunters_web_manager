@@ -5,6 +5,7 @@ import glob
 import shutil
 from datetime import datetime
 from flask import current_app
+from .platform_abstraction import platform_abstraction
 
 class LogService:
     """Service for reading various log files and systemd journal"""
@@ -13,11 +14,19 @@ class LogService:
         self.logger = logging.getLogger(__name__)
     
     def get_service_journal(self, service_name, lines=100):
-        """Get systemd journal logs for a service"""
-        # Try with sudo first
+        """Get service logs using platform abstraction"""
+        # Use platform abstraction to get appropriate command
+        cmd = platform_abstraction.get_service_logs_command(service_name, lines)
+        if not cmd:
+            return {
+                'success': False,
+                'error': f'Service logs not supported on {platform_abstraction.get_platform_info()["system"]}',
+                'service': service_name
+            }
+        
         try:
             result = subprocess.run(
-                ['sudo', '/bin/journalctl', '-u', f'{service_name}.service', '-n', str(lines), '--no-pager'],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=15
@@ -118,8 +127,10 @@ class LogService:
                     'logs': ''
                 }
             
+            # Use platform abstraction for cross-platform log tailing
+            cmd = platform_abstraction.get_log_tail_command(log_file, lines, follow=False)
             result = subprocess.run(
-                ['tail', '-n', str(lines), log_file],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -281,10 +292,8 @@ class LogService:
             if not log_file or not os.path.exists(log_file):
                 return {'success': False, 'error': f'Log file not found: {log_type}'}
             
-            cmd = ['tail', '-n', str(lines)]
-            if follow:
-                cmd.append('-f')
-            cmd.append(log_file)
+            # Use platform abstraction for cross-platform log tailing
+            cmd = platform_abstraction.get_log_tail_command(log_file, lines, follow)
             
             if follow:
                 # For real-time following, we need a different approach

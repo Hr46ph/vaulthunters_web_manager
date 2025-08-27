@@ -3,6 +3,7 @@
 import os
 import toml
 from typing import Dict, Any
+from services.platform_abstraction import platform_abstraction
 
 def load_toml_config() -> Dict[str, Any]:
     """Load configuration from config.toml file"""
@@ -32,10 +33,10 @@ def create_flask_config(toml_config: Dict[str, Any]) -> Dict[str, Any]:
     metrics_config = toml_config.get('metrics', {})
     
     return {
-        # Server settings
-        'MINECRAFT_SERVER_PATH': server_config.get('minecraft_server_path', '/home/minecraft/vaulthunters'),
-        'BACKUP_PATH': server_config.get('backup_path', '/home/minecraft/backups'),
-        'JAVA_EXECUTABLE': server_config.get('java_executable', 'java'),
+        # Server settings - use platform-specific defaults
+        'MINECRAFT_SERVER_PATH': server_config.get('minecraft_server_path', platform_abstraction.get_default_minecraft_path()),
+        'BACKUP_PATH': server_config.get('backup_path', platform_abstraction.get_default_backup_path()),
+        'JAVA_EXECUTABLE': server_config.get('java_executable', platform_abstraction.find_java_executable()),
         'MINECRAFT_SERVER_HOST': server_config.get('minecraft_server_host', 'localhost'),
         'MINECRAFT_SERVER_PORT': server_config.get('minecraft_server_port', 25565),
         
