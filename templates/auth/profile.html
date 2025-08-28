@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - VaultHunters Web Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-user-circle me-2"></i>User Profile
+                </h4>
+            </div>
+            <div class="card-body">
+                {% if user %}
+                    <div class="row mb-4">
+                        <div class="col-sm-3">
+                            <strong>Username:</strong>
+                        </div>
+                        <div class="col-sm-9">
+                            <i class="fas fa-user me-2"></i>{{ user.username }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-sm-3">
+                            <strong>Role:</strong>
+                        </div>
+                        <div class="col-sm-9">
+                            <span class="badge bg-{% if user.role == 'admin' %}danger{% else %}secondary{% endif %} fs-6">
+                                <i class="fas fa-{% if user.role == 'admin' %}shield-alt{% else %}user{% endif %} me-1"></i>
+                                {{ user.role.title() }}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-sm-3">
+                            <strong>Status:</strong>
+                        </div>
+                        <div class="col-sm-9">
+                            {% if user.active %}
+                                <span class="badge bg-success fs-6">
+                                    <i class="fas fa-check-circle me-1"></i>Active
+                                </span>
+                            {% else %}
+                                <span class="badge bg-warning fs-6">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Inactive
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-sm-3">
+                            <strong>Account Created:</strong>
+                        </div>
+                        <div class="col-sm-9">
+                            <i class="fas fa-calendar me-2"></i>{{ user.created_at }}
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                        <a href="{{ url_for('main.change_password') }}" class="btn btn-primary">
+                            <i class="fas fa-key me-1"></i>Change Password
+                        </a>
+                        <a href="{{ url_for('main.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Unable to load user profile information.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if user and user.role == 'admin' %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-shield-alt me-2"></i>Administrator Access
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">As an administrator, you have access to additional features:</p>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-users text-primary me-2"></i>User Management</li>
+                    <li><i class="fas fa-cogs text-primary me-2"></i>System Configuration</li>
+                    <li><i class="fas fa-server text-primary me-2"></i>Server Control</li>
+                </ul>
+                <a href="{{ url_for('main.users') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-users me-1"></i>Manage Users
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

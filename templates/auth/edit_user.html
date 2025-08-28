@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Edit User - VaultHunters Web Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">Edit User: {{ user.username }}</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" novalidate>
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" value="{{ user.username }}" disabled>
+                        <div class="form-text">Username cannot be changed.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.role.label(class="form-label") }}
+                        {{ form.role(class="form-select" + (" is-invalid" if form.role.errors else "")) }}
+                        {% if form.role.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.role.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">
+                            <strong>Administrator:</strong> Full access to all features including user management<br>
+                            <strong>User:</strong> Standard access without user management
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.active(class="form-check-input" + (" is-invalid" if form.active.errors else "")) }}
+                            {{ form.active.label(class="form-check-label") }}
+                            {% if form.active.errors %}
+                                <div class="invalid-feedback">
+                                    {% for error in form.active.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="form-text">Inactive users cannot log in to the system.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Created</label>
+                        <input type="text" class="form-control" value="{{ user.created_at }}" disabled>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('main.users') }}" class="btn btn-secondary me-md-2">Cancel</a>
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

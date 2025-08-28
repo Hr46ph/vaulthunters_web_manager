@@ -2,7 +2,7 @@
 
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.exceptions import HTTPException
@@ -15,6 +15,9 @@ def create_app(config_name=None):
     
     app = Flask(__name__)
     app.config.from_object(config.get(config_name, config['default']))
+    
+    # Configure session settings - use default Flask sessions
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
     
     # Initialize CSRF protection based on config
     csrf = None
@@ -82,10 +85,21 @@ def create_app(config_name=None):
     @app.context_processor
     def inject_common_vars():
         from flask_wtf.csrf import generate_csrf
+        from services.auth_manager import AuthManager
+        
         context_vars = {
             'current_year': datetime.now().year,
             'app_name': 'VaultHunters Web Manager'
         }
+        
+        # Add user context
+        if AuthManager.is_authenticated():
+            user_info = AuthManager.get_user_info()
+            if user_info:
+                context_vars.update({
+                    'current_user_info': user_info,
+                    'is_admin': AuthManager.is_admin()
+                })
         
         # Add CSRF token if CSRF is enabled
         if app.config.get('CSRF_ENABLED', True):

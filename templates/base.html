@@ -12,15 +12,46 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('main.index') }}">VaultHunters Web Manager</a>
+            <a class="navbar-brand" href="{{ url_for('main.index') if session.get('logged_in') else url_for('main.login') }}">VaultHunters Web Manager</a>
             <div class="navbar-nav ms-auto">
-                <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">Dashboard</a>
-                <a class="nav-link {% if request.endpoint == 'main.logs' %}active{% endif %}" href="{{ url_for('main.logs') }}">Logs</a>
-                <a class="nav-link {% if request.endpoint == 'main.config_editor' %}active{% endif %}" href="{{ url_for('main.config_editor') }}">Config</a>
-                <a class="nav-link {% if request.endpoint == 'main.backups' %}active{% endif %}" href="{{ url_for('main.backups') }}">Backups</a>
-                <button class="btn btn-outline-light btn-sm ms-2" id="darkModeToggle" onclick="toggleDarkMode()">
-                    <i class="fas fa-moon" id="darkModeIcon"></i>
-                </button>
+                {% if session.get('logged_in') %}
+                    <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">Dashboard</a>
+                    <a class="nav-link {% if request.endpoint == 'main.logs' %}active{% endif %}" href="{{ url_for('main.logs') }}">Logs</a>
+                    <a class="nav-link {% if request.endpoint == 'main.config_editor' %}active{% endif %}" href="{{ url_for('main.config_editor') }}">Config</a>
+                    <a class="nav-link {% if request.endpoint == 'main.backups' %}active{% endif %}" href="{{ url_for('main.backups') }}">Backups</a>
+                    {% if is_admin %}
+                        <a class="nav-link {% if request.endpoint == 'main.users' %}active{% endif %}" href="{{ url_for('main.users') }}">
+                            <i class="fas fa-users me-1"></i>Users
+                        </a>
+                    {% endif %}
+                    <button class="btn btn-outline-light btn-sm ms-2" id="darkModeToggle" onclick="toggleDarkMode()">
+                        <i class="fas fa-moon" id="darkModeIcon"></i>
+                    </button>
+                    
+                    <!-- User dropdown -->
+                    <div class="dropdown ms-3">
+                        <a class="nav-link dropdown-toggle text-light" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user me-1"></i>{{ session.get('user_id', 'Unknown') }}
+                            {% if current_user_info %}
+                                <span class="badge bg-{% if current_user_info.role == 'admin' %}danger{% else %}secondary{% endif %} ms-1">
+                                    {{ current_user_info.role.title() }}
+                                </span>
+                            {% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('main.profile') }}">
+                                <i class="fas fa-user-circle me-1"></i>Profile
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.change_password') }}">
+                                <i class="fas fa-key me-1"></i>Change Password
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-warning" href="{{ url_for('main.logout') }}">
+                                <i class="fas fa-sign-out-alt me-1"></i>Logout
+                            </a></li>
+                        </ul>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </nav>

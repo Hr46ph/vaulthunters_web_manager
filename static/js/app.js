@@ -405,10 +405,12 @@ function setTheme(theme) {
     document.documentElement.setAttribute('data-bs-theme', theme);
     
     const icon = document.getElementById('darkModeIcon');
-    if (theme === 'dark') {
-        icon.className = 'fas fa-sun';
-    } else {
-        icon.className = 'fas fa-moon';
+    if (icon) {
+        if (theme === 'dark') {
+            icon.className = 'fas fa-sun';
+        } else {
+            icon.className = 'fas fa-moon';
+        }
     }
 }
 
@@ -690,14 +692,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize theme
     initTheme();
     
-    // Update server status on page load - small delay to let page render first
-    setTimeout(updateServerStatus, 100);
+    // Only initialize dashboard features if user is authenticated
+    // Check for presence of navigation elements that indicate authentication
+    const isAuthenticated = document.getElementById('darkModeToggle') !== null;
     
-    // Update system info on page load
-    setTimeout(updateSystemInfo, 200);
-    
-    // Set up periodic status updates (every 5 seconds)
-    setInterval(updateServerStatus, 5000);
+    if (isAuthenticated) {
+        // Update server status on page load - small delay to let page render first
+        setTimeout(updateServerStatus, 100);
+        
+        // Update system info on page load
+        setTimeout(updateSystemInfo, 200);
+        
+        // Set up periodic status updates (every 5 seconds)
+        setInterval(updateServerStatus, 5000);
+    }
     
     
     // Set up player list updates (every 5 seconds) if player list is present

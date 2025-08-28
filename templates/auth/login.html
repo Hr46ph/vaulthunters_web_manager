@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Login - VaultHunters Web Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+    .login-container {
+        max-width: 400px;
+        margin: 50px auto;
+    }
+    .login-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .login-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .form-floating {
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="card login-card">
+        <div class="card-body p-4">
+            <div class="login-header">
+                <h2><i class="fas fa-server text-primary me-2"></i>VaultHunters Web Manager</h2>
+                <p class="text-muted">Please sign in with your Linux account</p>
+            </div>
+
+            <form method="POST" action="{{ url_for('main.login') }}">
+                {{ form.hidden_tag() }}
+                
+                <div class="form-floating">
+                    {{ form.username(class="form-control", placeholder="Username", id="floatingUsername") }}
+                    <label for="floatingUsername">Username</label>
+                    {% if form.username.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.username.errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="form-floating">
+                    {{ form.password(class="form-control", placeholder="Password", id="floatingPassword") }}
+                    <label for="floatingPassword">Password</label>
+                    {% if form.password.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.password.errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="d-grid">
+                    {{ form.submit(class="btn btn-primary btn-lg") }}
+                </div>
+            </form>
+
+            <div class="text-center mt-4">
+                <small class="text-muted">
+                    <i class="fas fa-shield-alt me-1"></i>
+                    Secured with Linux PAM authentication
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-focus username field
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('floatingUsername').focus();
+});
+</script>
+{% endblock %}

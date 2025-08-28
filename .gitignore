@@ -72,6 +72,7 @@ data/
 # Flask stuff:
 instance/
 .webassets-cache
+sessions/
 
 # Scrapy stuff:
 .scrapy

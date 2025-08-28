@@ -1,5 +1,8 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app, session
 from flask_wtf.csrf import validate_csrf
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, SubmitField, SelectField, BooleanField
+from wtforms.validators import DataRequired, Length, EqualTo
 from werkzeug.exceptions import BadRequest
 from services.system_control import SystemControlService
 from services.log_service import LogService
@@ -9,6 +12,7 @@ from services.server_properties import ServerPropertiesParser
 from services.log_watcher import get_log_watcher
 from services.rcon_client import RconClient
 from services.system_info import SystemInfoService
+from services.auth_manager import AuthManager, login_required, admin_required
 import os
 import logging
 import subprocess
@@ -162,6 +166,37 @@ def _execute_rcon_server_control(action):
 # Create blueprint
 main_bp = Blueprint('main', __name__)
 
+# Login form class
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=1, max=50)])
+    password = PasswordField('Password', validators=[DataRequired()])
+    submit = SubmitField('Login')
+
+# Password change form
+class PasswordChangeForm(FlaskForm):
+    current_password = PasswordField('Current Password', validators=[DataRequired()])
+    new_password = PasswordField('New Password', validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField('Confirm New Password', 
+                                   validators=[DataRequired(), EqualTo('new_password')])
+    submit = SubmitField('Change Password')
+
+# Add user form (admin only)
+class AddUserForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=50)])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField('Confirm Password', 
+                                   validators=[DataRequired(), EqualTo('password')])
+    role = SelectField('Role', choices=[('user', 'User'), ('admin', 'Administrator')], 
+                      validators=[DataRequired()])
+    submit = SubmitField('Add User')
+
+# Edit user form (admin only)
+class EditUserForm(FlaskForm):
+    role = SelectField('Role', choices=[('user', 'User'), ('admin', 'Administrator')], 
+                      validators=[DataRequired()])
+    active = BooleanField('Active')
+    submit = SubmitField('Update User')
+
 
 
 def get_recent_performance_events():
@@ -246,7 +281,158 @@ def get_recent_performance_events():
             'severity': 'error'
         }]
 
+# Authentication routes
+@main_bp.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page and authentication"""
+    if AuthManager.is_authenticated():
+        return redirect(url_for('main.index'))
+    
+    form = LoginForm()
+    
+    if form.validate_on_submit():
+        username = form.username.data
+        password = form.password.data
+        
+        if AuthManager.authenticate_user(username, password):
+            AuthManager.login_user(username)
+            flash(f'Welcome, {username}!', 'success')
+            
+            # Redirect to next page or dashboard
+            next_page = request.args.get('next')
+            if next_page and next_page.startswith('/'):
+                return redirect(next_page)
+            return redirect(url_for('main.index'))
+        else:
+            flash('Invalid username or password.', 'error')
+    
+    return render_template('auth/login.html', form=form)
+
+@main_bp.route('/logout')
+def logout():
+    """Logout and redirect to login page"""
+    AuthManager.logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('main.login'))
+
+# User Management Routes
+
+@main_bp.route('/users')
+@admin_required
+def users():
+    """User management page (admin only)"""
+    try:
+        users = AuthManager.list_users()
+        current_user = AuthManager.get_current_user()
+        return render_template('auth/users.html', users=users, current_user=current_user)
+    except Exception as e:
+        current_app.logger.error(f'Users page error: {e}')
+        flash('Error loading user management page', 'error')
+        return redirect(url_for('main.index'))
+
+@main_bp.route('/users/add', methods=['GET', 'POST'])
+@admin_required
+def add_user():
+    """Add new user page (admin only)"""
+    form = AddUserForm()
+    
+    if form.validate_on_submit():
+        username = form.username.data.strip()
+        password = form.password.data
+        role = form.role.data
+        
+        if AuthManager.add_user(username, password, role):
+            flash(f'User {username} added successfully with {role} role.', 'success')
+            return redirect(url_for('main.users'))
+        else:
+            flash('Failed to add user. Username may already exist.', 'error')
+    
+    return render_template('auth/add_user.html', form=form)
+
+@main_bp.route('/users/<username>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_user(username):
+    """Edit user page (admin only)"""
+    user_info = AuthManager.get_user_info(username)
+    if not user_info:
+        flash('User not found.', 'error')
+        return redirect(url_for('main.users'))
+    
+    form = EditUserForm()
+    
+    if form.validate_on_submit():
+        role = form.role.data
+        active = form.active.data
+        
+        if AuthManager.update_user(username, role=role, active=active):
+            flash(f'User {username} updated successfully.', 'success')
+            return redirect(url_for('main.users'))
+        else:
+            flash('Failed to update user.', 'error')
+    
+    # Pre-populate form
+    form.role.data = user_info['role']
+    form.active.data = user_info['active']
+    
+    return render_template('auth/edit_user.html', form=form, user=user_info)
+
+@main_bp.route('/users/<username>/delete', methods=['POST'])
+@admin_required
+def delete_user(username):
+    """Delete user (admin only)"""
+    try:
+        validate_csrf_token()
+        
+        current_user = AuthManager.get_current_user()
+        if username == current_user:
+            flash('You cannot delete your own account.', 'error')
+            return redirect(url_for('main.users'))
+        
+        if AuthManager.delete_user(username):
+            flash(f'User {username} deleted successfully.', 'success')
+        else:
+            flash('Failed to delete user. Cannot delete the last admin user.', 'error')
+        
+        return redirect(url_for('main.users'))
+        
+    except Exception as e:
+        current_app.logger.error(f'Delete user error: {e}')
+        flash('Error deleting user.', 'error')
+        return redirect(url_for('main.users'))
+
+@main_bp.route('/profile')
+@login_required
+def profile():
+    """User profile page"""
+    try:
+        user_info = AuthManager.get_user_info()
+        return render_template('auth/profile.html', user=user_info)
+    except Exception as e:
+        current_app.logger.error(f'Profile page error: {e}')
+        flash('Error loading profile page', 'error')
+        return redirect(url_for('main.index'))
+
+@main_bp.route('/profile/password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    """Change password page"""
+    form = PasswordChangeForm()
+    
+    if form.validate_on_submit():
+        current_user = AuthManager.get_current_user()
+        current_password = form.current_password.data
+        new_password = form.new_password.data
+        
+        if AuthManager.change_password(current_user, current_password, new_password):
+            flash('Password changed successfully.', 'success')
+            return redirect(url_for('main.profile'))
+        else:
+            flash('Current password is incorrect.', 'error')
+    
+    return render_template('auth/change_password.html', form=form)
+
 @main_bp.route('/')
+@login_required
 def index():
     """Main dashboard - lightweight initial load"""
     try:
@@ -257,6 +443,7 @@ def index():
         return render_template('index.html')
 
 @main_bp.route('/server/status')
+@login_required
 def server_status():
     """API endpoint for server status"""
     try:
@@ -269,6 +456,7 @@ def server_status():
         return jsonify({'error': 'Failed to get server status'}), 500
 
 @main_bp.route('/system/info')
+@login_required
 def system_info():
     """API endpoint for system version information"""
     try:
@@ -283,6 +471,7 @@ def system_info():
 
 
 @main_bp.route('/server/control', methods=['POST'])
+@login_required
 def server_control():
     """Handle server control actions (start/stop/restart)"""
     try:
@@ -354,6 +543,7 @@ def server_control():
         return jsonify({'success': False, 'error': f'Server control failed: {str(e)}'}), 500
 
 @main_bp.route('/logs')
+@login_required
 def logs():
     """Enhanced log viewer page with 3 separate content windows"""
     try:
@@ -364,6 +554,7 @@ def logs():
         return redirect(url_for('main.index'))
 
 @main_bp.route('/logs/content/<log_type>')
+@login_required
 def log_content(log_type):
     """API endpoint for log content"""
     try:
@@ -387,6 +578,7 @@ def log_content(log_type):
         return jsonify({'error': 'Failed to read log file'}), 500
 
 @main_bp.route('/logs/crash/list')
+@login_required
 def crash_reports_list():
     """API endpoint to list available crash reports"""
     try:
@@ -403,6 +595,7 @@ def crash_reports_list():
         return jsonify({'success': False, 'error': 'Failed to get crash reports list'}), 500
 
 @main_bp.route('/logs/crash/content/<path:filename>')
+@login_required
 def crash_report_content(filename):
     """API endpoint to get specific crash report content"""
     try:
@@ -425,6 +618,7 @@ def crash_report_content(filename):
         return jsonify({'success': False, 'error': 'Failed to read crash report'}), 500
 
 @main_bp.route('/logs/stream/<log_type>')
+@login_required
 def log_stream(log_type):
     """Server-Sent Events endpoint for real-time log streaming"""
     if log_type not in ['latest', 'debug']:
@@ -668,6 +862,7 @@ def log_stream(log_type):
     return response
 
 @main_bp.route('/logs/rotate/<log_type>', methods=['POST'])
+@login_required
 def rotate_log(log_type):
     """API endpoint for rotating (clearing) log files"""
     try:
@@ -713,6 +908,7 @@ def rotate_log(log_type):
         return jsonify({'success': False, 'error': f'Failed to rotate log file: {str(e)}'}), 500
 
 @main_bp.route('/logs/journal')
+@login_required
 def journal_content():
     """API endpoint for system journal content"""
     try:
@@ -739,6 +935,7 @@ def journal_content():
         return jsonify({'error': 'Failed to read journal'}), 500
 
 @main_bp.route('/logs/journal/stream')
+@login_required
 def journal_stream():
     """Server-Sent Events endpoint for real-time journal streaming"""
     try:
@@ -808,6 +1005,7 @@ def journal_stream():
         return jsonify({'error': 'Failed to start journal stream'}), 500
 
 @main_bp.route('/config')
+@login_required
 def config_editor():
     """Configuration editor page"""
     try:
@@ -818,6 +1016,7 @@ def config_editor():
         return redirect(url_for('main.index'))
 
 @main_bp.route('/config/files/list')
+@login_required
 def config_files_list():
     """API endpoint for config files list"""
     try:
@@ -849,6 +1048,7 @@ def config_files_list():
         return jsonify({'error': 'Failed to get config files list'}), 500
 
 @main_bp.route('/config/content/<path:config_file>')
+@login_required
 def config_content(config_file):
     """API endpoint for config file content"""
     try:
@@ -882,6 +1082,7 @@ def config_content(config_file):
         return jsonify({'error': 'Failed to read config file'}), 500
 
 @main_bp.route('/config/save', methods=['POST'])
+@login_required
 def save_config():
     """Save configuration file"""
     try:
@@ -925,6 +1126,7 @@ def save_config():
         return jsonify({'error': 'Failed to save configuration'}), 500
 
 @main_bp.route('/config/jvm/<file_type>')
+@login_required
 def get_jvm_config(file_type):
     """Get JVM configuration file content"""
     try:
@@ -944,6 +1146,7 @@ def get_jvm_config(file_type):
         return jsonify({'error': 'Failed to read JVM configuration'}), 500
 
 @main_bp.route('/config/jvm/save', methods=['POST'])
+@login_required
 def save_jvm_config():
     """Save JVM configuration file"""
     try:
@@ -978,6 +1181,7 @@ def save_jvm_config():
         return jsonify({'error': 'Failed to save JVM configuration'}), 500
 
 @main_bp.route('/config/jvm/apply_aikars_flags', methods=['POST'])
+@login_required
 def apply_aikars_flags():
     """Generate Aikar's flags content (without saving)"""
     try:
@@ -1003,6 +1207,7 @@ def apply_aikars_flags():
         return jsonify({'error': 'Failed to generate Aikar\'s flags'}), 500
 
 @main_bp.route('/backups')
+@login_required
 def backups():
     """Backup manager page"""
     try:
@@ -1025,6 +1230,7 @@ def backups():
         return redirect(url_for('main.index'))
 
 @main_bp.route('/backups/download/<filename>')
+@login_required
 def download_backup(filename):
     """Download backup file"""
     try:
@@ -1036,6 +1242,7 @@ def download_backup(filename):
         return redirect(url_for('main.backups'))
 
 @main_bp.route('/server/journal')
+@login_required
 def server_journal():
     """Get systemd journal logs for the VaultHunters service"""
     try:
@@ -1056,6 +1263,7 @@ def server_journal():
         }), 500
 
 @main_bp.route('/webmanager/journal')
+@login_required
 def webmanager_journal():
     """Get systemd journal logs for the web manager service"""
     try:
@@ -1074,6 +1282,7 @@ def webmanager_journal():
         }), 500
 
 @main_bp.route('/console')
+@login_required
 def console():
     """Console page with RCON interface"""
     try:
@@ -1084,6 +1293,7 @@ def console():
         return redirect(url_for('main.index'))
 
 @main_bp.route('/console/status')
+@login_required
 def console_status():
     """Check RCON connection status"""
     from services.rcon_status import RconStatusService
@@ -1093,6 +1303,7 @@ def console_status():
     return jsonify(status)
 
 @main_bp.route('/console/execute', methods=['POST'])
+@login_required
 def console_execute():
     """Execute RCON command"""
     try:
@@ -1120,6 +1331,7 @@ def console_execute():
         }), 500
 
 @main_bp.route('/console/connect', methods=['POST'])
+@login_required
 def console_connect():
     """Force RCON reconnection"""
     try:
@@ -1144,6 +1356,7 @@ def console_connect():
         }), 500
 
 @main_bp.route('/console/disconnect', methods=['POST'])
+@login_required
 def console_disconnect():
     """Disconnect RCON connection"""
     try:
@@ -1168,6 +1381,7 @@ def console_disconnect():
         }), 500
 
 @main_bp.route('/api/players/online')
+@login_required
 def get_online_players():
     """API endpoint to get current online players (simplified)"""
     try:
@@ -1193,6 +1407,7 @@ def get_online_players():
         }), 500
 
 @main_bp.route('/api/server-properties/validate')
+@login_required
 def validate_server_properties():
     """API endpoint to validate server.properties configuration"""
     try:
@@ -1213,6 +1428,7 @@ def validate_server_properties():
         }), 500
 
 @main_bp.route('/api/server-properties/apply', methods=['POST'])
+@login_required
 def apply_server_properties():
     """API endpoint to auto-configure server.properties"""
     try:
@@ -1258,6 +1474,11 @@ def apply_server_properties():
             'success': False,
             'error': str(e)
         }), 500
+
+@main_bp.route('/favicon.ico')
+def favicon():
+    """Favicon endpoint"""
+    return '', 204
 
 @main_bp.route('/health')
 def health_check():
