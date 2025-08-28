@@ -195,17 +195,13 @@ account) plus 2FA, and administrators use familiar adduser/usermod commands for 
 5. ~~Implement password change integration with Linux accounts~~ ✅ **Web-based password change functionality** (completed in Phase 2)
 6. Add security headers and CSRF protection enhancement
 7. Create comprehensive testing suite
-8. **New**: Implement account lockout after failed attempts
 9. ~~**New**: Add password strength requirements~~ ✅ **Basic password strength requirements** (8+ chars, completed in Phase 2)
-10. **New**: User activity logging
 
 **Deliverables**:
 - Session security improvements
 - Brute force protection
 - Audit trail
 - Production-ready security features
-- **Enhanced**: Web-based user account management
-- **Enhanced**: Comprehensive authentication logging
 
 ### Phase 5: TLS/HTTPS Implementation
 **Goal**: Add transport layer security with self-signed certificates
@@ -226,16 +222,6 @@ account) plus 2FA, and administrators use familiar adduser/usermod commands for 
 - HTTP to HTTPS redirect functionality
 - Certificate management interface
 - SSL configuration documentation
-
-### Phase 6: Advanced Features (Optional)
-**Goal**: Enterprise features for enhanced security
-
-**Tasks**:
-1. WebAuthn/FIDO2 hardware key support
-2. LDAP/Active Directory integration option
-3. OAuth2/OIDC provider support
-4. Multi-session management
-5. Advanced audit reporting
 
 **Dependencies**:
 - Phase 1 must complete before Phase 2
