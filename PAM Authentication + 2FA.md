@@ -192,11 +192,11 @@ account) plus 2FA, and administrators use familiar adduser/usermod commands for 
 2. Add rate limiting for login attempts
 3. Create audit logging for authentication events
 4. Add "Remember Me" functionality with secure tokens
-5. ~~Implement password change integration with Linux accounts~~ **Web-based password change functionality**
+5. ~~Implement password change integration with Linux accounts~~ ✅ **Web-based password change functionality** (completed in Phase 2)
 6. Add security headers and CSRF protection enhancement
 7. Create comprehensive testing suite
 8. **New**: Implement account lockout after failed attempts
-9. **New**: Add password strength requirements
+9. ~~**New**: Add password strength requirements~~ ✅ **Basic password strength requirements** (8+ chars, completed in Phase 2)
 10. **New**: User activity logging
 
 **Deliverables**:
@@ -207,7 +207,27 @@ account) plus 2FA, and administrators use familiar adduser/usermod commands for 
 - **Enhanced**: Web-based user account management
 - **Enhanced**: Comprehensive authentication logging
 
-### Phase 5: Advanced Features (Optional)
+### Phase 5: TLS/HTTPS Implementation
+**Goal**: Add transport layer security with self-signed certificates
+
+**Tasks**:
+1. Generate self-signed SSL certificates for development/testing
+2. Configure Flask app to support HTTPS with SSL context
+3. Add certificate management utilities (generation, renewal)
+4. Implement HTTP to HTTPS redirect middleware
+5. Update configuration options for SSL certificate paths
+6. Add SSL certificate validation and error handling
+7. Create documentation for certificate setup and management
+8. Test HTTPS functionality with various browsers
+
+**Deliverables**:
+- Self-signed certificate generation script
+- HTTPS-enabled Flask configuration
+- HTTP to HTTPS redirect functionality
+- Certificate management interface
+- SSL configuration documentation
+
+### Phase 6: Advanced Features (Optional)
 **Goal**: Enterprise features for enhanced security
 
 **Tasks**:
@@ -220,4 +240,6 @@ account) plus 2FA, and administrators use familiar adduser/usermod commands for 
 **Dependencies**:
 - Phase 1 must complete before Phase 2
 - Phase 2 must complete before Phase 3
-- Phases 3-5 can be implemented independently after Phase 2
+- Phases 3-4 can be implemented independently after Phase 2
+- Phase 5 (TLS) can be implemented independently after Phase 1
+- Phase 6 can be implemented independently after Phase 2
