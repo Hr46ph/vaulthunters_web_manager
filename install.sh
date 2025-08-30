@@ -9,8 +9,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Project repository URL
+# Project repository URL and branch configuration
 REPO_URL="https://github.com/Hr46ph/vaulthunters_web_manager.git"
+# Set to "main" for production, or specify feature branch for testing
+DEFAULT_BRANCH="main"
+# Override branch with: INSTALL_BRANCH=feature/authentication ./install.sh
+INSTALL_BRANCH="${INSTALL_BRANCH:-$DEFAULT_BRANCH}"
 DEFAULT_PORT=8889
 
 # Function to print colored output
@@ -33,7 +37,7 @@ print_error() {
 # Function to test sudo permissions
 test_sudo_permissions() {
     print_info "Testing sudo permissions..."
-    
+
     if ! sudo -n true 2>/dev/null; then
         if ! sudo -v; then
             print_error "This script requires sudo permissions to create systemd services and sudoers files."
@@ -41,23 +45,23 @@ test_sudo_permissions() {
             exit 1
         fi
     fi
-    
+
     print_success "Sudo permissions verified"
 }
 
 # Function to test required commands
 test_required_commands() {
     print_info "Checking required commands..."
-    
+
     local required_commands=("git" "python3" "systemctl" "useradd" "usermod" "visudo" "caddy" "openssl")
     local missing_commands=()
-    
+
     for cmd in "${required_commands[@]}"; do
         if ! command -v "$cmd" &> /dev/null; then
             missing_commands+=("$cmd")
         fi
     done
-    
+
     if [ ${#missing_commands[@]} -ne 0 ]; then
         print_error "Missing required commands: ${missing_commands[*]}"
         print_error "Please install the following packages:"
@@ -69,13 +73,13 @@ test_required_commands() {
         print_error "- openssl (for SSL certificate generation)"
         exit 1
     fi
-    
+
     # Check if python3-venv is available
     if ! python3 -m venv --help &> /dev/null; then
         print_error "python3-venv is not available. Please install python3-venv package."
         exit 1
     fi
-    
+
     print_success "All required commands are available"
 }
 
@@ -84,14 +88,14 @@ ask_for_minecraft_user() {
     print_info "Please specify the user that will run the Minecraft server:"
     read -p "Enter username (default: minecraft): " MINECRAFT_USER
     MINECRAFT_USER=${MINECRAFT_USER:-minecraft}
-    
+
     print_info "Using username: $MINECRAFT_USER"
 }
 
 # Function to detect user type and handle user creation
 detect_and_handle_user() {
     local current_user=$(whoami)
-    
+
     if [ "$MINECRAFT_USER" = "$current_user" ]; then
         print_info "Using current user ($current_user) for Minecraft server"
         USER_TYPE="current"
@@ -111,9 +115,9 @@ detect_and_handle_user() {
 # Function to create new minecraft user
 create_minecraft_user() {
     print_info "Creating user $MINECRAFT_USER..."
-    
+
     sudo useradd -m -s /bin/bash "$MINECRAFT_USER"
-    
+
     if [ $? -eq 0 ]; then
         print_success "User $MINECRAFT_USER created successfully"
         print_info "User home directory: $MINECRAFT_HOME"
@@ -127,9 +131,9 @@ create_minecraft_user() {
 check_vaulthunters_server() {
     if [ "$USER_TYPE" = "current" ] || [ "$USER_TYPE" = "existing" ]; then
         print_info "Checking for existing VaultHunters server..."
-        
+
         read -p "Do you have an existing VaultHunters server? (y/N): " has_server
-        
+
         if [[ $has_server =~ ^[Yy]$ ]]; then
             # Check default location first
             if [ -d "$MINECRAFT_HOME/vaulthunters" ] || [ -d "$MINECRAFT_HOME/VaultHunters" ]; then
@@ -142,7 +146,7 @@ check_vaulthunters_server() {
             else
                 print_warning "VaultHunters server not found in default location ($MINECRAFT_HOME/vaulthunters)"
                 read -p "Enter the full path to your VaultHunters server directory: " SERVER_PATH
-                
+
                 if [ ! -d "$SERVER_PATH" ]; then
                     print_error "Directory $SERVER_PATH does not exist"
                     exit 1
@@ -156,7 +160,7 @@ check_vaulthunters_server() {
         SERVER_PATH="$MINECRAFT_HOME/vaulthunters"
         print_info "Will use default server path for new user: $SERVER_PATH"
     fi
-    
+
     # Set backup path
     BACKUP_PATH="$MINECRAFT_HOME/backups"
 }
@@ -164,13 +168,13 @@ check_vaulthunters_server() {
 # Function to clone the project
 clone_project() {
     local project_dir="$MINECRAFT_HOME/vaulthunters_web_manager"
-    
+
     print_info "Cloning VaultHunters Web Manager..."
-    
+
     if [ -d "$project_dir" ]; then
         print_warning "Directory $project_dir already exists"
         read -p "Do you want to remove it and clone fresh? (y/N): " remove_existing
-        
+
         if [[ $remove_existing =~ ^[Yy]$ ]]; then
             sudo rm -rf "$project_dir"
         else
@@ -178,10 +182,11 @@ clone_project() {
             exit 1
         fi
     fi
-    
-    # Clone as the minecraft user
-    sudo -u "$MINECRAFT_USER" git clone "$REPO_URL" "$project_dir"
-    
+
+    # Clone as the minecraft user, using specified branch
+    print_info "Cloning branch: $INSTALL_BRANCH"
+    sudo -u "$MINECRAFT_USER" git clone -b "$INSTALL_BRANCH" "$REPO_URL" "$project_dir"
+
     if [ $? -eq 0 ]; then
         print_success "Project cloned successfully to $project_dir"
         PROJECT_DIR="$project_dir"
@@ -194,23 +199,23 @@ clone_project() {
 # Function to create virtual environment
 create_virtual_environment() {
     print_info "Creating Python virtual environment..."
-    
+
     local venv_dir="$PROJECT_DIR/venv"
-    
+
     # Create venv as minecraft user
     sudo -u "$MINECRAFT_USER" python3 -m venv "$venv_dir"
-    
+
     if [ $? -eq 0 ]; then
         print_success "Virtual environment created at $venv_dir"
     else
         print_error "Failed to create virtual environment"
         exit 1
     fi
-    
+
     # Install requirements as minecraft user
     print_info "Installing Python dependencies..."
     sudo -u "$MINECRAFT_USER" bash -c "cd '$PROJECT_DIR' && source venv/bin/activate && pip install -r requirements.txt"
-    
+
     if [ $? -eq 0 ]; then
         print_success "Python dependencies installed successfully"
     else
@@ -222,7 +227,7 @@ create_virtual_environment() {
 # Function to test port availability
 test_port_availability() {
     local port=$1
-    
+
     if command -v ss &> /dev/null; then
         ss -tuln | grep -q ":$port "
     elif command -v netstat &> /dev/null; then
@@ -240,26 +245,26 @@ except:
     exit(1)
 "
     fi
-    
+
     return $?
 }
 
 # Function to get available port
 get_available_port() {
     local port=$DEFAULT_PORT
-    
+
     print_info "Testing port availability..."
-    
+
     if test_port_availability $port; then
         print_error "Port $port is already in use"
         while true; do
             read -p "Enter an alternative port number: " port
-            
+
             if [[ ! $port =~ ^[0-9]+$ ]] || [ $port -lt 1024 ] || [ $port -gt 65535 ]; then
                 print_error "Please enter a valid port number (1024-65535)"
                 continue
             fi
-            
+
             if test_port_availability $port; then
                 print_error "Port $port is already in use"
                 continue
@@ -268,7 +273,7 @@ get_available_port() {
             fi
         done
     fi
-    
+
     WEB_PORT=$port
     print_success "Using port $WEB_PORT for web interface"
 }
@@ -281,7 +286,7 @@ get_ssl_certificate_config() {
     print_warning "If you access via domain name, the certificate must include that domain."
     print_warning "Accessing with mismatched IP/domain will result in connection errors."
     echo
-    
+
     # Detect current IP address
     local detected_ip
     detected_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7}' | head -1)
@@ -291,12 +296,12 @@ get_ssl_certificate_config() {
     if [ -z "$detected_ip" ]; then
         detected_ip="127.0.0.1"
     fi
-    
+
     # Get IP address
     print_info "Current detected IP address: $detected_ip"
     read -p "Enter IP address for certificate (press Enter for $detected_ip): " user_ip
     CERT_IP=${user_ip:-$detected_ip}
-    
+
     # Detect hostname/FQDN
     local detected_hostname
     detected_hostname=$(hostname -f 2>/dev/null)
@@ -306,12 +311,12 @@ get_ssl_certificate_config() {
     if [ -z "$detected_hostname" ]; then
         detected_hostname="localhost"
     fi
-    
+
     # Get domain name
     print_info "Current detected hostname/FQDN: $detected_hostname"
     read -p "Enter domain name for certificate (press Enter for $detected_hostname): " user_domain
     CERT_DOMAIN=${user_domain:-$detected_hostname}
-    
+
     print_success "SSL Certificate will be generated for:"
     print_success "  IP Address: $CERT_IP"
     print_success "  Domain Name: $CERT_DOMAIN"
@@ -320,7 +325,7 @@ get_ssl_certificate_config() {
 # Function to create systemd service file
 create_systemd_service() {
     print_info "Creating systemd service file..."
-    
+
     local service_content="[Unit]
 Description=VaultHunters Web Manager
 After=network.target
@@ -343,7 +348,7 @@ StandardError=journal
 WantedBy=multi-user.target"
 
     echo "$service_content" | sudo tee /etc/systemd/system/vaulthunters_web_manager.service > /dev/null
-    
+
     if [ $? -eq 0 ]; then
         print_success "Systemd service file created"
         sudo systemctl daemon-reload
@@ -356,7 +361,7 @@ WantedBy=multi-user.target"
 # Function to create sudoers file
 create_sudoers_file() {
     print_info "Creating sudoers file for $MINECRAFT_USER..."
-    
+
     local sudoers_content="$MINECRAFT_USER ALL=NOPASSWD: /bin/systemctl start vaulthunters_web_manager.service, \\
                         /bin/systemctl stop vaulthunters_web_manager.service, \\
                         /bin/systemctl restart vaulthunters_web_manager.service, \\
@@ -364,7 +369,7 @@ create_sudoers_file() {
 $MINECRAFT_USER ALL=NOPASSWD: /bin/journalctl -u vaulthunters_web_manager.service -n * --no-pager"
 
     echo "$sudoers_content" | sudo EDITOR='tee' visudo -f "/etc/sudoers.d/$MINECRAFT_USER"
-    
+
     if [ $? -eq 0 ]; then
         print_success "Sudoers file created for $MINECRAFT_USER"
     else
@@ -376,18 +381,18 @@ $MINECRAFT_USER ALL=NOPASSWD: /bin/journalctl -u vaulthunters_web_manager.servic
 # Function to setup SSL certificates and Caddy
 setup_ssl_certificates() {
     print_info "Setting up SSL certificates and Caddy configuration..."
-    
+
     # Create Caddy data directory
     local caddy_dir="$MINECRAFT_HOME/.local/share/caddy"
     sudo -u "$MINECRAFT_USER" mkdir -p "$caddy_dir"
-    
+
     if [ $? -ne 0 ]; then
         print_error "Failed to create Caddy directory: $caddy_dir"
         exit 1
     fi
-    
+
     print_success "Created Caddy directory: $caddy_dir"
-    
+
     # Create certificate configuration file
     local cert_config="$PROJECT_DIR/ip_cert.cnf"
     local cert_config_content="[req]
@@ -409,32 +414,32 @@ DNS.1 = $CERT_DOMAIN
 DNS.2 = localhost"
 
     sudo -u "$MINECRAFT_USER" bash -c "echo '$cert_config_content' > '$cert_config'"
-    
+
     if [ $? -ne 0 ]; then
         print_error "Failed to create certificate configuration"
         exit 1
     fi
-    
+
     print_success "Created certificate configuration: $cert_config"
-    
+
     # Generate SSL certificate
     print_info "Generating SSL certificate..."
     local cert_path="$caddy_dir/ip_cert.pem"
     local key_path="$caddy_dir/ip_key.pem"
-    
+
     sudo -u "$MINECRAFT_USER" openssl req -new -x509 -days 365 -nodes \
         -out "$cert_path" \
         -keyout "$key_path" \
         -config "$cert_config"
-    
+
     if [ $? -ne 0 ]; then
         print_error "Failed to generate SSL certificate"
         exit 1
     fi
-    
+
     print_success "Generated SSL certificate: $cert_path"
     print_success "Generated SSL private key: $key_path"
-    
+
     # Create Caddyfile
     local caddyfile_path="$caddy_dir/Caddyfile"
     local caddyfile_content="{
@@ -482,27 +487,27 @@ $CERT_IP:$WEB_PORT {
 }"
 
     sudo -u "$MINECRAFT_USER" bash -c "echo '$caddyfile_content' > '$caddyfile_path'"
-    
+
     if [ $? -ne 0 ]; then
         print_error "Failed to create Caddyfile"
         exit 1
     fi
-    
+
     print_success "Created Caddyfile: $caddyfile_path"
-    
+
     # Create logs directory
     sudo -u "$MINECRAFT_USER" mkdir -p "$PROJECT_DIR/logs"
-    
+
     print_success "SSL certificates and Caddy configuration completed"
 }
 
 # Function to create default config.toml
 create_default_config() {
     print_info "Creating default config.toml..."
-    
+
     # Generate a random secret key
     local secret_key=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-    
+
     local config_content="[server]
 minecraft_server_path = \"$SERVER_PATH\"
 backup_path = \"$BACKUP_PATH\"
@@ -524,7 +529,7 @@ secret_key = \"$secret_key\"
 debug = false"
 
     sudo -u "$MINECRAFT_USER" bash -c "echo '$config_content' > '$PROJECT_DIR/config.toml'"
-    
+
     if [ $? -eq 0 ]; then
         print_success "Default config.toml created with generated secret key"
     else
@@ -536,13 +541,13 @@ debug = false"
 # Function to enable and start service
 enable_and_start_service() {
     print_info "Enabling and starting VaultHunters Web Manager service..."
-    
+
     sudo systemctl enable vaulthunters_web_manager.service
     sudo systemctl start vaulthunters_web_manager.service
-    
+
     if [ $? -eq 0 ]; then
         print_success "Service enabled and started"
-        
+
         # Wait a moment and check status
         sleep 2
         if sudo systemctl is-active --quiet vaulthunters_web_manager.service; then
@@ -559,7 +564,7 @@ enable_and_start_service() {
 # Function to create Caddy systemd service
 create_caddy_systemd_service() {
     print_info "Creating Caddy systemd service..."
-    
+
     local caddy_service_content="[Unit]
 Description=Caddy HTTP/2 web server for VaultHunters Web Manager
 After=network.target network-online.target
@@ -584,7 +589,7 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 WantedBy=multi-user.target"
 
     echo "$caddy_service_content" | sudo tee /etc/systemd/system/caddy-vaulthunters.service > /dev/null
-    
+
     if [ $? -eq 0 ]; then
         print_success "Caddy systemd service file created"
         sudo systemctl daemon-reload
@@ -648,52 +653,52 @@ main() {
     echo "VaultHunters Web Manager Installer"
     echo "=========================================="
     echo
-    
+
     # Step 1: Test sudo permissions
     test_sudo_permissions
-    
+
     # Step 2: Test required commands
     test_required_commands
-    
+
     # Step 3: Ask for minecraft user
     ask_for_minecraft_user
-    
+
     # Step 4: Detect and handle user
     detect_and_handle_user
-    
+
     # Step 5: Check for VaultHunters server
     check_vaulthunters_server
-    
+
     # Step 6: Get available port
     get_available_port
-    
+
     # Step 7: Get SSL certificate configuration
     get_ssl_certificate_config
-    
+
     # Step 8: Clone project
     clone_project
-    
+
     # Step 9: Create virtual environment
     create_virtual_environment
-    
+
     # Step 10: Setup SSL certificates and Caddy
     setup_ssl_certificates
-    
+
     # Step 11: Create systemd service
     create_systemd_service
-    
+
     # Step 12: Create Caddy systemd service
     create_caddy_systemd_service
-    
+
     # Step 13: Create sudoers file
     create_sudoers_file
-    
+
     # Step 14: Create default config
     create_default_config
-    
+
     # Step 15: Enable and start service
     enable_and_start_service
-    
+
     # Step 16: Display final information
     display_final_info
 }
