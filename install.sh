@@ -12,10 +12,12 @@ NC='\033[0m' # No Color
 # Project repository URL and branch configuration
 REPO_URL="https://github.com/Hr46ph/vaulthunters_web_manager.git"
 # Set to "main" for production, or specify feature branch for testing
-DEFAULT_BRANCH="main"
+DEFAULT_BRANCH="feature/authentication"
 # Override branch with: INSTALL_BRANCH=feature/authentication ./install.sh
 INSTALL_BRANCH="${INSTALL_BRANCH:-$DEFAULT_BRANCH}"
-DEFAULT_PORT=8889
+DEFAULT_CADDY_PORT=443
+ALTERNATIVE_CADDY_PORT=8443
+DEFAULT_FLASK_PORT=8080
 
 # Function to print colored output
 print_info() {
@@ -249,16 +251,16 @@ except:
     return $?
 }
 
-# Function to get available port
-get_available_port() {
-    local port=$DEFAULT_PORT
+# Function to get available Flask port
+get_available_flask_port() {
+    local port=$DEFAULT_FLASK_PORT
 
-    print_info "Testing port availability..."
+    print_info "Testing Flask port availability ($port)..."
 
     if test_port_availability $port; then
-        print_error "Port $port is already in use"
+        print_warning "Flask port $port is already in use"
         while true; do
-            read -p "Enter an alternative port number: " port
+            read -p "Enter an alternative Flask port number (1024-65535): " port
 
             if [[ ! $port =~ ^[0-9]+$ ]] || [ $port -lt 1024 ] || [ $port -gt 65535 ]; then
                 print_error "Please enter a valid port number (1024-65535)"
@@ -274,8 +276,43 @@ get_available_port() {
         done
     fi
 
-    WEB_PORT=$port
-    print_success "Using port $WEB_PORT for web interface"
+    FLASK_PORT=$port
+    print_success "Using Flask port $FLASK_PORT (backend)"
+}
+
+# Function to get available Caddy port
+get_available_caddy_port() {
+    local port=$DEFAULT_CADDY_PORT
+
+    print_info "Testing Caddy port availability ($port)..."
+
+    if test_port_availability $port; then
+        print_warning "Caddy port $port is already in use"
+        print_info "Trying alternative port $ALTERNATIVE_CADDY_PORT..."
+        port=$ALTERNATIVE_CADDY_PORT
+        
+        if test_port_availability $port; then
+            print_warning "Alternative port $port is also in use"
+            while true; do
+                read -p "Enter an alternative Caddy port number (1024-65535): " port
+
+                if [[ ! $port =~ ^[0-9]+$ ]] || [ $port -lt 1024 ] || [ $port -gt 65535 ]; then
+                    print_error "Please enter a valid port number (1024-65535)"
+                    continue
+                fi
+
+                if test_port_availability $port; then
+                    print_error "Port $port is already in use"
+                    continue
+                else
+                    break
+                fi
+            done
+        fi
+    fi
+
+    CADDY_PORT=$port
+    print_success "Using Caddy port $CADDY_PORT (HTTPS frontend)"
 }
 
 # Function to get SSL certificate configuration
@@ -452,12 +489,12 @@ DNS.2 = localhost"
     admin localhost:2019
 }
 
-$CERT_IP:$WEB_PORT {
+$CERT_IP:$CADDY_PORT {
     # Use the certificate files we generated
     tls $cert_path $key_path
 
     # Reverse proxy to your Flask application
-    reverse_proxy 127.0.0.1:8081 {
+    reverse_proxy 127.0.0.1:$FLASK_PORT {
         header_up Host {host}
         header_up X-Forwarded-Proto {scheme}
         header_up X-Forwarded-Host {host}
@@ -522,8 +559,8 @@ memory_min = \"4G\"
 memory_max = \"8G\"
 
 [web]
-host = \"0.0.0.0\"
-port = 8081
+host = \"127.0.0.1\"
+port = $FLASK_PORT
 # Random secret key generated during installation
 secret_key = \"$secret_key\"
 debug = false"
@@ -573,7 +610,8 @@ display_final_info() {
     echo "  - Project Directory: $PROJECT_DIR"
     echo "  - Server Path: $SERVER_PATH"
     echo "  - Backup Path: $BACKUP_PATH"
-    echo "  - Web Interface Port: $WEB_PORT (via Caddy HTTPS proxy)"
+    echo "  - Flask Backend Port: $FLASK_PORT (localhost only)"
+    echo "  - Caddy HTTPS Port: $CADDY_PORT (external access)"
     echo "  - Certificate IP: $CERT_IP"
     echo "  - Certificate Domain: $CERT_DOMAIN"
     echo
@@ -587,8 +625,8 @@ display_final_info() {
     echo "  2. Ensure your VaultHunters server is set up with RCON enabled"
     echo "  3. Start the service:"
     echo "     sudo systemctl start vaulthunters_web_manager.service"
-    echo "  4. Access the web interface at: https://$CERT_IP:$WEB_PORT"
-    echo "     (You can also use https://$CERT_DOMAIN:$WEB_PORT if DNS is configured)"
+    echo "  4. Access the web interface at: https://$CERT_IP:$CADDY_PORT"
+    echo "     (You can also use https://$CERT_DOMAIN:$CADDY_PORT if DNS is configured)"
     echo
     print_warning "Important: You must access the application using the exact IP or domain"
     print_warning "configured in the certificate. Other IPs/domains will result in SSL errors."
@@ -627,36 +665,39 @@ main() {
     # Step 5: Check for VaultHunters server
     check_vaulthunters_server
 
-    # Step 6: Get available port
-    get_available_port
+    # Step 6: Get available Flask port
+    get_available_flask_port
 
-    # Step 7: Get SSL certificate configuration
+    # Step 7: Get available Caddy port
+    get_available_caddy_port
+
+    # Step 8: Get SSL certificate configuration
     get_ssl_certificate_config
 
-    # Step 8: Clone project
+    # Step 9: Clone project
     clone_project
 
-    # Step 9: Create virtual environment
+    # Step 10: Create virtual environment
     create_virtual_environment
 
-    # Step 10: Setup SSL certificates and Caddy
+    # Step 11: Setup SSL certificates and Caddy
     setup_ssl_certificates
 
-    # Step 11: Create systemd service
+    # Step 12: Create systemd service
     create_systemd_service
 
-    # Step 12: Caddy configuration complete (managed by Flask app)
+    # Step 13: Caddy configuration complete (managed by Flask app)
 
-    # Step 13: Create sudoers file
+    # Step 14: Create sudoers file
     create_sudoers_file
 
-    # Step 14: Create default config
+    # Step 15: Create default config
     create_default_config
 
-    # Step 15: Enable and start service
+    # Step 16: Enable and start service
     enable_and_start_service
 
-    # Step 16: Display final information
+    # Step 17: Display final information
     display_final_info
 }
 

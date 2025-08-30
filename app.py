@@ -270,7 +270,7 @@ def main():
     app = create_app(config_name)
     
     host = app.config.get('HOST', '127.0.0.1')
-    port = app.config.get('PORT', 8081)
+    port = app.config.get('PORT', 8080)
     debug = app.config.get('DEBUG', False)
     
     # Start Caddy reverse proxy first

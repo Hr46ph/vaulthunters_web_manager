@@ -40,7 +40,7 @@ large_heap_threshold = 12
 # Web interface binding (Flask backend for Caddy reverse proxy)
 # Use 127.0.0.1 for security when using Caddy reverse proxy
 host = "127.0.0.1"
-port = 8081
+port = 8080
 
 # SSL/TLS configuration (handled by Caddy reverse proxy)
 # Set ssl_enabled=false when using Caddy for TLS termination
