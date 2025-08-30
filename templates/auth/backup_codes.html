@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Backup Codes - VaultHunters Web Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+    .backup-container {
+        max-width: 500px;
+        margin: 30px auto;
+    }
+    .backup-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .backup-codes {
+        border-radius: 8px;
+        padding: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 1.1em;
+        margin: 20px 0;
+        border: 1px solid var(--bs-border-color);
+        background-color: var(--bs-secondary-bg);
+    }
+    .backup-code-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px 20px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .backup-code {
+        color: var(--bs-body-color);
+        font-weight: bold;
+        padding: 8px 0;
+        letter-spacing: 1px;
+        user-select: text;
+    }
+    @media (min-width: 768px) {
+        .backup-code-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="backup-container">
+    <div class="card backup-card">
+        <div class="card-body p-4">
+            <div class="text-center mb-4">
+                <h2><i class="fas fa-key text-warning me-2"></i>New Backup Codes</h2>
+                <p class="text-muted">Your new backup codes have been generated</p>
+            </div>
+
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Important:</strong> Save these backup codes in a safe place. Each code can only be used once.
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Your Backup Codes:</h6>
+                <button id="copyAllBtn" class="btn btn-outline-primary btn-sm" title="Copy all codes to clipboard">
+                    <i class="fas fa-copy me-1"></i>Copy All
+                </button>
+            </div>
+
+            <div class="backup-codes">
+                <ul class="backup-code-grid">
+                    {% for code in backup_codes %}
+                        <li class="backup-code" data-code="{{ code }}">{{ code }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Tips:</strong>
+                <ul class="mb-0 mt-2">
+                    <li>Print this page or save the codes in a password manager</li>
+                    <li>These codes replace your previous backup codes</li>
+                </ul>
+            </div>
+
+            <div class="text-center">
+                <a href="{{ url_for('main.profile') }}" class="btn btn-primary">
+                    <i class="fas fa-user me-2"></i>Back to Profile
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+    } else {
+        // Fallback for older browsers or non-HTTPS environments
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '-9999px';
+        textArea.style.left = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            return successful ? Promise.resolve() : Promise.reject();
+        } catch (err) {
+            document.body.removeChild(textArea);
+            return Promise.reject(err);
+        }
+    }
+}
+
+function copyAllCodes() {
+    const backupCodes = document.querySelectorAll('.backup-code');
+    const codes = Array.from(backupCodes).map(el => el.dataset.code);
+    const allCodes = codes.join('\n');
+    
+    copyToClipboard(allCodes).then(() => {
+        const copyAllBtn = document.getElementById('copyAllBtn');
+        const originalText = copyAllBtn.innerHTML;
+        
+        copyAllBtn.innerHTML = '<i class="fas fa-check me-1"></i>Copied!';
+        copyAllBtn.classList.remove('btn-outline-primary');
+        copyAllBtn.classList.add('btn-success');
+        
+        setTimeout(() => {
+            copyAllBtn.innerHTML = originalText;
+            copyAllBtn.classList.remove('btn-success');
+            copyAllBtn.classList.add('btn-outline-primary');
+        }, 2000);
+    }).catch(() => {
+        const copyAllBtn = document.getElementById('copyAllBtn');
+        const originalText = copyAllBtn.innerHTML;
+        
+        copyAllBtn.innerHTML = '<i class="fas fa-times me-1"></i>Copy failed';
+        copyAllBtn.classList.remove('btn-outline-primary');
+        copyAllBtn.classList.add('btn-danger');
+        
+        setTimeout(() => {
+            copyAllBtn.innerHTML = originalText;
+            copyAllBtn.classList.remove('btn-danger');
+            copyAllBtn.classList.add('btn-outline-primary');
+        }, 2000);
+    });
+}
+
+// Print functionality and event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Add copy all button functionality
+    const copyAllBtn = document.getElementById('copyAllBtn');
+    if (copyAllBtn) {
+        copyAllBtn.addEventListener('click', copyAllCodes);
+    }
+    
+    // Add print button
+    const printBtn = document.createElement('button');
+    printBtn.className = 'btn btn-outline-secondary btn-sm me-2';
+    printBtn.innerHTML = '<i class="fas fa-print me-1"></i>Print Codes';
+    printBtn.onclick = () => window.print();
+    
+    const backBtn = document.querySelector('.btn-primary');
+    backBtn.parentNode.insertBefore(printBtn, backBtn);
+});
+</script>
+{% endblock %}

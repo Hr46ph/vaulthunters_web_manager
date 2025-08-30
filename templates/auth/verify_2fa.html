@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Two-Factor Authentication - VaultHunters Web Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+    .login-container {
+        max-width: 400px;
+        margin: 50px auto;
+    }
+    .login-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .login-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .form-floating {
+        margin-bottom: 20px;
+    }
+    .code-input {
+        font-family: 'Courier New', monospace;
+        text-align: center;
+        font-size: 1.2em;
+        letter-spacing: 0.2em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="card login-card">
+        <div class="card-body p-4">
+            <div class="login-header">
+                <h2><i class="fas fa-shield-alt text-warning me-2"></i>Two-Factor Authentication</h2>
+                <p class="text-muted">Enter the authentication code for <strong>{{ username }}</strong></p>
+            </div>
+
+            <form method="POST" action="{{ url_for('main.verify_2fa') }}">
+                {{ form.hidden_tag() }}
+                
+                <div class="form-floating">
+                    {{ form.totp_token(class="form-control code-input", placeholder="000000", id="floatingToken", autocomplete="off", maxlength="8") }}
+                    <label for="floatingToken">Authentication Code</label>
+                    {% if form.totp_token.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.totp_token.errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="d-grid">
+                    {{ form.submit(class="btn btn-warning btn-lg") }}
+                </div>
+            </form>
+
+            <div class="text-center mt-4">
+                <small class="text-muted">
+                    <i class="fas fa-mobile-alt me-1"></i>
+                    Enter the 6-digit code from your authenticator app<br>
+                    or use one of your backup codes
+                </small>
+            </div>
+
+            <div class="text-center mt-3">
+                <a href="{{ url_for('main.login') }}" class="btn btn-link btn-sm">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Login
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-focus token field
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('floatingToken').focus();
+    
+    // Auto-format token input
+    const tokenInput = document.getElementById('floatingToken');
+    tokenInput.addEventListener('input', function(e) {
+        // Remove any non-alphanumeric characters and convert to uppercase
+        this.value = this.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    });
+});
+</script>
+{% endblock %}

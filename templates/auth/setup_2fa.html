@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Setup Two-Factor Authentication - VaultHunters Web Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+    .setup-container {
+        max-width: 600px;
+        margin: 30px auto;
+    }
+    .setup-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .setup-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .qr-code-container {
+        text-align: center;
+        margin: 30px 0;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 10px;
+    }
+    .backup-codes {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+        margin: 20px 0;
+    }
+    .backup-code {
+        display: inline-block;
+        margin: 5px 10px;
+        padding: 5px 10px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+    }
+    .form-floating {
+        margin-bottom: 20px;
+    }
+    .code-input {
+        font-family: 'Courier New', monospace;
+        text-align: center;
+        font-size: 1.2em;
+        letter-spacing: 0.2em;
+    }
+    .step-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        background-color: #007bff;
+        color: white;
+        border-radius: 50%;
+        font-weight: bold;
+        margin-right: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="setup-container">
+    <div class="card setup-card">
+        <div class="card-body p-4">
+            <div class="setup-header">
+                <h2><i class="fas fa-shield-alt text-primary me-2"></i>Setup Two-Factor Authentication</h2>
+                <p class="text-muted">Secure your account with time-based one-time passwords (TOTP)</p>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="mb-4">
+                        <h5><span class="step-number">1</span>Install an authenticator app</h5>
+                        <p class="ms-5">Download and install an authenticator app such as:</p>
+                        <ul class="ms-5">
+                            <li><strong>Google Authenticator</strong> (iOS/Android)</li>
+                            <li><strong>Authy</strong> (iOS/Android/Desktop)</li>
+                            <li><strong>Microsoft Authenticator</strong> (iOS/Android)</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-4">
+                        <h5><span class="step-number">2</span>Scan the QR code</h5>
+                        <div class="qr-code-container">
+                            <img src="data:image/png;base64,{{ qr_code }}" alt="2FA QR Code" class="img-fluid" style="max-width: 200px;">
+                            <p class="mt-3 text-muted small">Scan this QR code with your authenticator app</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h5><span class="step-number">3</span>Save your backup codes</h5>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Important:</strong> Save these backup codes in a safe place. You can use them to access your account if you lose your phone.
+                        </div>
+                        <div class="backup-codes">
+                            {% for code in backup_codes %}
+                                <span class="backup-code">{{ code }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h5><span class="step-number">4</span>Verify setup</h5>
+                        <p class="ms-5">Enter the 6-digit code from your authenticator app to complete setup:</p>
+                        
+                        <form method="POST" action="{{ url_for('main.setup_2fa') }}" class="ms-5">
+                            {{ form.hidden_tag() }}
+                            
+                            <div class="form-floating">
+                                {{ form.totp_token(class="form-control code-input", placeholder="000000", id="floatingToken", autocomplete="off", maxlength="6") }}
+                                <label for="floatingToken">Authentication Code</label>
+                                {% if form.totp_token.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.totp_token.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <a href="{{ url_for('main.profile') }}" class="btn btn-secondary">Cancel</a>
+                                {{ form.submit(class="btn btn-primary") }}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-focus token field
+    document.getElementById('floatingToken').focus();
+    
+    // Auto-format token input
+    const tokenInput = document.getElementById('floatingToken');
+    tokenInput.addEventListener('input', function(e) {
+        // Remove any non-numeric characters
+        this.value = this.value.replace(/[^0-9]/g, '');
+    });
+    
+    // Add copy functionality for backup codes
+    const backupCodes = document.querySelectorAll('.backup-code');
+    backupCodes.forEach(code => {
+        code.addEventListener('click', function() {
+            navigator.clipboard.writeText(this.textContent).then(() => {
+                const originalBg = this.style.backgroundColor;
+                this.style.backgroundColor = '#d4edda';
+                setTimeout(() => {
+                    this.style.backgroundColor = originalBg;
+                }, 500);
+            });
+        });
+        code.style.cursor = 'pointer';
+        code.title = 'Click to copy';
+    });
+});
+</script>
+{% endblock %}

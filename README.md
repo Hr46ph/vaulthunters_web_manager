@@ -17,6 +17,7 @@ A Flask-based web application for managing VaultHunters Minecraft servers. Provi
 
 - Python 3.10 minimum, 3.12+ recommended
 - Java 17 only! (requirement for Vaulthunters modpack)
+- **Caddy web server** for TLS termination and reverse proxy
 - Recent Linux kernel 6.x with systemd (required for systemd service, can run manually without, or init script if you make them)
 
 ## Screenshots
@@ -85,7 +86,7 @@ See `config.toml.example` for detailed configuration options.
 
 ## Usage
 
-Access the web interface at `http://localhost:8080` (or your configured port).
+Access the web interface at `https://localhost:8889` (HTTPS via Caddy reverse proxy).
 
 ### Service Management
 
@@ -107,6 +108,8 @@ sudo journalctl -u vaulthunters_web_manager.service -f
 
 ## Architecture
 
+- **Caddy Reverse Proxy**: TLS termination and HTTPS handling with automatic certificate management
+- **Flask Backend**: HTTP application server running on localhost for security
 - **Direct Process Management**: Controls Minecraft server processes without requiring systemd
 - **Real-time Updates**: Server-Sent Events for live log streaming and status updates
 - **Security**: Flask-WTF CSRF protection and input validation

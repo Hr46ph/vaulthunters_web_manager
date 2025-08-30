@@ -37,9 +37,18 @@ large_heap_threshold = 12
 # heap_32gb_plus_system = 24 # For 32GB+ RAM systems
 
 [web]
-# Web interface binding
-host = "0.0.0.0"
-port = 8080
+# Web interface binding (Flask backend for Caddy reverse proxy)
+# Use 127.0.0.1 for security when using Caddy reverse proxy
+host = "127.0.0.1"
+port = 8081
+
+# SSL/TLS configuration (handled by Caddy reverse proxy)
+# Set ssl_enabled=false when using Caddy for TLS termination
+ssl_enabled = false
+ssl_cert_path = "certs/server.crt"
+ssl_key_path = "certs/server.key"
+# Redirect HTTP to HTTPS when SSL is enabled (Caddy handles this)
+ssl_redirect = false
 
 # Security settings
 # IMPORTANT: Change this to a random secret key in production!
@@ -75,6 +84,3 @@ editable_configs = [
 
 # Allowed backup file extensions for download
 allowed_backup_extensions = [".zip", ".tar.gz", ".tar", ".7z"]
-
-# Monitoring settings are hardcoded in the application
-# See CLAUDE.md for monitoring implementation details

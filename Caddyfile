@@ -1,0 +1,66 @@
+# VaultHunters Web Manager - Caddy Reverse Proxy Configuration
+# 
+# This configuration provides TLS termination for the Flask application
+# running on localhost:8081. For production deployment, replace 
+# localhost:8889 with your actual domain name.
+
+# Global options - user-space certificate management
+{
+	# Disable automatic HTTPS redirects (requires root for port 80)
+	auto_https off
+	# Keep admin API on non-privileged port
+	admin localhost:2019
+	# Disable automatic certificate installation (no sudo required)
+	skip_install_trust
+	# Use user-space certificate storage
+	storage file_system {
+		root {$HOME}/.local/share/caddy
+	}
+}
+
+:8889 {
+	# Bind to all interfaces
+	bind 0.0.0.0
+	
+	# Reverse proxy to Flask application
+	reverse_proxy 127.0.0.1:8081
+
+	# User-space self-signed certificate (no system installation)
+	# Browsers will show certificate warning (expected for local development)
+	tls internal {
+		# Generate certificates in user space only
+		on_demand
+	}
+
+	# Optional: Add security headers
+	header {
+		# Enable HSTS
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Prevent MIME type sniffing
+		X-Content-Type-Options "nosniff"
+		# Enable XSS protection
+		X-XSS-Protection "1; mode=block"
+		# Prevent clickjacking
+		X-Frame-Options "DENY"
+		# Remove server header
+		-Server
+	}
+
+	# Optional: Enable compression
+	encode gzip
+
+	# Log access to application logs directory
+	log {
+		output file logs/caddy_access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format console
+	}
+}
+
+# Optional: Redirect HTTP to HTTPS
+# Uncomment if you want to ensure all traffic uses HTTPS
+# :8888 {
+#     redir https://{host}:8889{uri}
+# }

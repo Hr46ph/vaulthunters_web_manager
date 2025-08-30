@@ -289,6 +289,8 @@
                 followCheckbox.disabled = true;
                 followCheckbox.checked = false;
                 autoScrollEnabled = false; // Disable auto-scroll for non-followable logs
+                // Also stop any active following when switching to non-followable log
+                stopFollow();
             }
         }
         
@@ -354,6 +356,8 @@
                     // Start following if enabled and supported
                     const followCheckbox = document.getElementById('follow-unified');
                     if (followCheckbox && followCheckbox.checked && config.canFollow) {
+                        // Ensure auto-scroll is enabled when starting to follow
+                        autoScrollEnabled = true;
                         startFollow();
                     }
                 }
@@ -550,6 +554,11 @@
             followCheckbox.addEventListener('change', function() {
                 if (this.checked) {
                     autoScrollEnabled = true;
+                    // Force scroll to bottom when enabling follow
+                    const logElement = document.getElementById('unified-log');
+                    if (logElement) {
+                        logElement.scrollTop = logElement.scrollHeight;
+                    }
                     startFollow();
                 } else {
                     stopFollow();
@@ -561,12 +570,20 @@
         const logElement = document.getElementById('unified-log');
         if (logElement) {
             logElement.addEventListener('scroll', function() {
-                // If user scrolls away from bottom, disable auto-scroll
-                if (!isAtBottom(logElement)) {
-                    autoScrollEnabled = false;
+                const followCheckbox = document.getElementById('follow-unified');
+                
+                // Only adjust auto-scroll behavior if follow is enabled
+                if (followCheckbox && followCheckbox.checked) {
+                    if (!isAtBottom(logElement)) {
+                        // User scrolled away from bottom while following - disable auto-scroll but keep following
+                        autoScrollEnabled = false;
+                    } else {
+                        // User scrolled back to bottom - re-enable auto-scroll
+                        autoScrollEnabled = true;
+                    }
                 } else {
-                    // If user scrolls back to bottom, re-enable auto-scroll
-                    autoScrollEnabled = true;
+                    // If follow is not checked, don't change auto-scroll state
+                    autoScrollEnabled = false;
                 }
             });
         }

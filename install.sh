@@ -11,7 +11,7 @@ NC='\033[0m' # No Color
 
 # Project repository URL
 REPO_URL="https://github.com/Hr46ph/vaulthunters_web_manager.git"
-DEFAULT_PORT=8080
+DEFAULT_PORT=8889
 
 # Function to print colored output
 print_info() {
@@ -49,7 +49,7 @@ test_sudo_permissions() {
 test_required_commands() {
     print_info "Checking required commands..."
     
-    local required_commands=("git" "python3" "systemctl" "useradd" "usermod" "visudo")
+    local required_commands=("git" "python3" "systemctl" "useradd" "usermod" "visudo" "caddy")
     local missing_commands=()
     
     for cmd in "${required_commands[@]}"; do
@@ -65,6 +65,7 @@ test_required_commands() {
         print_error "- python3 and python3-venv"
         print_error "- systemd"
         print_error "- sudo"
+        print_error "- caddy (web server for TLS termination)"
         exit 1
     fi
     
@@ -401,7 +402,7 @@ display_final_info() {
     print_info "Next Steps:"
     echo "  1. Edit $PROJECT_DIR/config.toml if needed"
     echo "  2. Ensure your VaultHunters server is set up with RCON enabled"
-    echo "  3. Access the web interface at: http://$(ip route get 1 2>/dev/null | awk '{print $7}' | head -1 || echo 'localhost'):$WEB_PORT"
+    echo "  3. Access the web interface at: https://$(ip route get 1 2>/dev/null | awk '{print $7}' | head -1 || echo 'localhost'):$WEB_PORT"
     echo
     print_info "Service Management Commands (run as $MINECRAFT_USER):"
     echo "  - sudo systemctl status vaulthunters_web_manager.service"

@@ -43,10 +43,16 @@ def create_flask_config(toml_config: Dict[str, Any]) -> Dict[str, Any]:
         'MEMORY_LARGE_HEAP_THRESHOLD': memory_config.get('large_heap_threshold', 12),
         
         # Web interface
-        'HOST': web_config.get('host', '0.0.0.0'),
+        'HOST': web_config.get('host', '127.0.0.1'),
         'PORT': web_config.get('port', 8080),
         'SECRET_KEY': web_config.get('secret_key', 'change-this-to-a-random-secret-key'),
         'DEBUG': web_config.get('debug', False),
+        
+        # SSL/TLS configuration
+        'SSL_ENABLED': web_config.get('ssl_enabled', False),
+        'SSL_CERT_PATH': web_config.get('ssl_cert_path', 'certs/server.crt'),
+        'SSL_KEY_PATH': web_config.get('ssl_key_path', 'certs/server.key'),
+        'SSL_REDIRECT': web_config.get('ssl_redirect', True),
         
         # Security
         'CSRF_ENABLED': security_config.get('csrf_enabled', True),
