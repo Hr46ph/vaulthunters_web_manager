@@ -654,6 +654,17 @@ display_final_info() {
     print_info "View service logs:"
     echo "  - sudo journalctl -u vaulthunters_web_manager.service -f"
     echo "  - Application logs: $PROJECT_DIR/logs/caddy_access.log"
+    echo
+    print_warning "🔑 IMPORTANT - FIRST LOGIN CREDENTIALS:"
+    echo "  The application automatically creates an admin user with a random password."
+    echo "  To find your admin login credentials, check the service logs:"
+    echo
+    echo "    sudo journalctl -u vaulthunters_web_manager.service | grep 'ADMIN CREDENTIALS'"
+    echo
+    echo "  Look for a message like:"
+    echo "    🔑 DEFAULT ADMIN CREDENTIALS CREATED - Username: admin, Password: [random password]"
+    echo
+    print_warning "⚠️  Please change the admin password immediately after first login!"
 }
 
 # Main installation function

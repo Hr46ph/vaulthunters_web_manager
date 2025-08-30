@@ -90,6 +90,21 @@ See `config.toml.example` for detailed configuration options.
 
 Access the web interface at `https://localhost:8889` (HTTPS via Caddy reverse proxy).
 
+### First Login
+
+The application automatically creates an admin user with a randomly generated secure password on first startup. To find your login credentials:
+
+```bash
+sudo journalctl -u vaulthunters_web_manager.service | grep 'ADMIN CREDENTIALS'
+```
+
+Look for a log message like:
+```
+🔑 DEFAULT ADMIN CREDENTIALS CREATED - Username: admin, Password: [random password]
+```
+
+**⚠️ Important**: Change the admin password immediately after first login for security!
+
 ### Service Management
 
 If installed via the automated installer:
