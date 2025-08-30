@@ -227,11 +227,17 @@ class SystemControlService:
                 
                 try:
                     from mcstatus import JavaServer
+                    import concurrent.futures
+                    
                     server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
                     server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
                     
                     server = JavaServer(server_host, server_port)
-                    query_status = server.status()
+                    
+                    # Use ThreadPoolExecutor with timeout to prevent hanging
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(server.status)
+                        query_status = future.result(timeout=3)  # 3 second timeout
                     
                     if query_status:
                         server_ready = True
@@ -250,7 +256,7 @@ class SystemControlService:
                         player_list_str = ", ".join(player_names) if player_names else "none"
                         self.logger.info(f"mcstatus connected successfully - {query_status.players.online}/{status_info['max_players']} players ({player_list_str})")
                         
-                except Exception as e:
+                except (Exception, concurrent.futures.TimeoutError) as e:
                     self.logger.warning(f"mcstatus connection to {server_host}:{server_port} failed: {type(e).__name__}: {e}")
                 
                 if not server_ready and status_info['running']:
@@ -605,12 +611,17 @@ class SystemControlService:
         
         try:
             from mcstatus import JavaServer
+            import concurrent.futures
             
             server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
             server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
             
             server = JavaServer(server_host, server_port)
-            status_result = server.status()
+            
+            # Use ThreadPoolExecutor with timeout to prevent hanging
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(server.status)
+                status_result = future.result(timeout=3)  # 3 second timeout
             
             # Get current online players from status (sample)
             current_players = []
@@ -626,7 +637,7 @@ class SystemControlService:
                 'players': normalized_players
             }
             
-        except Exception as e:
+        except (Exception, concurrent.futures.TimeoutError) as e:
             self.logger.warning(f'Failed to collect player status via mcstatus: {e}')
             return {
                 'success': False,

@@ -20,6 +20,12 @@ import json
 import time
 from datetime import datetime
 
+def get_base_url():
+    """Generate proper absolute URL for redirects behind reverse proxy"""
+    scheme = request.environ.get('REAL_SCHEME', request.environ.get('wsgi.url_scheme', 'http'))
+    host = request.environ.get('REAL_HOST', request.host)
+    return f"{scheme}://{host}"
+
 def validate_csrf_token():
     """Validate CSRF token for the current request if CSRF is enabled"""
     if not current_app.config.get('CSRF_ENABLED', True):
@@ -299,7 +305,7 @@ def get_recent_performance_events():
 def login():
     """Login page and authentication"""
     if AuthManager.is_authenticated():
-        return redirect(url_for('main.index'))
+        return redirect(get_base_url() + url_for('main.index'))
     
     form = LoginForm()
     
@@ -313,7 +319,7 @@ def login():
                 # Store username in session temporarily for 2FA verification
                 session['2fa_username'] = username
                 session['2fa_next'] = request.args.get('next')
-                return redirect(url_for('main.verify_2fa'))
+                return redirect(get_base_url() + url_for('main.verify_2fa'))
             else:
                 # No 2FA, log in directly
                 AuthManager.login_user(username)
@@ -334,7 +340,7 @@ def logout():
     """Logout and redirect to login page"""
     AuthManager.logout_user()
     flash('You have been logged out.', 'info')
-    return redirect(url_for('main.login'))
+    return redirect(get_base_url() + url_for('main.login'))
 
 # 2FA Routes
 
@@ -345,7 +351,7 @@ def verify_2fa():
     username = session.get('2fa_username')
     if not username:
         flash('Invalid access. Please log in again.', 'error')
-        return redirect(url_for('main.login'))
+        return redirect(get_base_url() + url_for('main.login'))
     
     form = TwoFactorLoginForm()
     
@@ -364,8 +370,8 @@ def verify_2fa():
             
             # Redirect to next page or dashboard
             if next_page and next_page.startswith('/'):
-                return redirect(next_page)
-            return redirect(url_for('main.index'))
+                return redirect(get_base_url() + next_page)
+            return redirect(get_base_url() + url_for('main.index'))
         else:
             flash('Invalid authentication code. Please try again.', 'error')
     
@@ -413,7 +419,7 @@ def setup_2fa():
             AuthManager.logout_user()
             
             flash('2FA has been successfully enabled! Please log in again with your new 2FA setup.', 'success')
-            return redirect(url_for('main.login'))
+            return redirect(get_base_url() + url_for('main.login'))
         else:
             flash('Invalid authentication code. Please scan the QR code again and try again.', 'error')
     
@@ -1074,7 +1080,7 @@ def journal_content():
     """API endpoint for system journal content"""
     try:
         result = subprocess.run(
-            ['sudo', '/bin/journalctl', '-xeu', 'vaulthunters-web.service', '--no-pager'],
+            ['sudo', '/bin/journalctl', '-xeu', 'vaulthunters_web_manager.service', '--no-pager'],
             capture_output=True,
             text=True,
             timeout=15
@@ -1109,7 +1115,7 @@ def journal_stream():
             try:
                 # Start with recent journal entries
                 initial_result = subprocess.run(
-                    ['sudo', '/bin/journalctl', '-xeu', 'vaulthunters-web.service', '--no-pager'],
+                    ['sudo', '/bin/journalctl', '-xeu', 'vaulthunters_web_manager.service', '--no-pager'],
                     capture_output=True,
                     text=True,
                     timeout=10
@@ -1124,7 +1130,7 @@ def journal_stream():
                 
                 # Start following the journal (use -u without -xe for cleaner follow output)
                 process = subprocess.Popen(
-                    ['sudo', '/bin/journalctl', '-u', 'vaulthunters-web.service', '--follow'],
+                    ['sudo', '/bin/journalctl', '-u', 'vaulthunters_web_manager.service', '--follow'],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,

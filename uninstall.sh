@@ -54,10 +54,10 @@ test_sudo_permissions() {
 detect_installation() {
     print_info "Detecting existing VaultHunters Web Manager installation..."
     
-    # Check for systemd service
+    # Check for system-wide systemd service (legacy)
     if systemctl list-unit-files | grep -q "vaulthunters_web_manager.service"; then
-        print_success "Found systemd service: vaulthunters_web_manager.service"
-        SERVICE_EXISTS=true
+        print_success "Found legacy system-wide service: vaulthunters_web_manager.service"
+        LEGACY_SERVICE_EXISTS=true
         
         # Get user from service file
         if [ -f "/etc/systemd/system/vaulthunters_web_manager.service" ]; then
@@ -75,9 +75,13 @@ detect_installation() {
             fi
         fi
     else
-        SERVICE_EXISTS=false
-        print_warning "No systemd service found"
+        LEGACY_SERVICE_EXISTS=false
+        print_info "No legacy system-wide service found"
     fi
+    
+    # Check for user services (current method)
+    # We'll check this after we know the user
+    USER_SERVICES_EXIST=false
     
     # Ask for user if not detected
     if [ -z "$MINECRAFT_USER" ]; then
@@ -96,6 +100,21 @@ detect_installation() {
     if id "$MINECRAFT_USER" &>/dev/null; then
         USER_EXISTS=true
         print_info "User $MINECRAFT_USER exists"
+        
+        # Check for user services
+        local user_service_dir="/home/$MINECRAFT_USER/.config/systemd/user"
+        if [ -f "$user_service_dir/vaulthunters_web_manager.service" ] || [ -f "$user_service_dir/caddy.service" ]; then
+            USER_SERVICES_EXIST=true
+            print_success "Found user services in $user_service_dir"
+            if [ -f "$user_service_dir/vaulthunters_web_manager.service" ]; then
+                print_info "  - vaulthunters_web_manager.service"
+            fi
+            if [ -f "$user_service_dir/caddy.service" ]; then
+                print_info "  - caddy.service"
+            fi
+        else
+            print_info "No user services found"
+        fi
     else
         USER_EXISTS=false
         print_warning "User $MINECRAFT_USER does not exist"
@@ -127,8 +146,8 @@ ask_removal_options() {
     echo
     
     # Ask about service removal
-    if [ "$SERVICE_EXISTS" = true ]; then
-        read -p "Remove systemd service? (Y/n): " remove_service
+    if [ "$LEGACY_SERVICE_EXISTS" = true ] || [ "$USER_SERVICES_EXIST" = true ]; then
+        read -p "Remove systemd services? (Y/n): " remove_service
         if [[ ! $remove_service =~ ^[Nn]$ ]]; then
             REMOVE_SERVICE=true
         fi
@@ -215,28 +234,72 @@ display_removal_summary() {
     fi
 }
 
-# Function to stop and remove systemd service
-remove_systemd_service() {
+# Function to stop and remove systemd services
+remove_systemd_services() {
     if [ "$REMOVE_SERVICE" = true ]; then
-        print_info "Stopping and removing systemd service..."
+        print_info "Stopping and removing systemd services..."
         
-        # Stop the service if running
-        if systemctl is-active --quiet vaulthunters_web_manager.service; then
-            sudo systemctl stop vaulthunters_web_manager.service
-            print_success "Service stopped"
+        # Remove legacy system-wide service
+        if [ "$LEGACY_SERVICE_EXISTS" = true ]; then
+            print_info "Removing legacy system-wide service..."
+            
+            # Stop the service if running
+            if systemctl is-active --quiet vaulthunters_web_manager.service; then
+                sudo systemctl stop vaulthunters_web_manager.service
+                print_success "Legacy service stopped"
+            fi
+            
+            # Disable the service
+            if systemctl is-enabled --quiet vaulthunters_web_manager.service; then
+                sudo systemctl disable vaulthunters_web_manager.service
+                print_success "Legacy service disabled"
+            fi
+            
+            # Remove service file
+            if [ -f "/etc/systemd/system/vaulthunters_web_manager.service" ]; then
+                sudo rm -f /etc/systemd/system/vaulthunters_web_manager.service
+                sudo systemctl daemon-reload
+                print_success "Legacy service file removed"
+            fi
         fi
         
-        # Disable the service
-        if systemctl is-enabled --quiet vaulthunters_web_manager.service; then
-            sudo systemctl disable vaulthunters_web_manager.service
-            print_success "Service disabled"
-        fi
-        
-        # Remove service file
-        if [ -f "/etc/systemd/system/vaulthunters_web_manager.service" ]; then
-            sudo rm -f /etc/systemd/system/vaulthunters_web_manager.service
-            sudo systemctl daemon-reload
-            print_success "Service file removed"
+        # Remove user services
+        if [ "$USER_SERVICES_EXIST" = true ] && [ "$USER_EXISTS" = true ]; then
+            print_info "Removing user services..."
+            
+            # Stop and disable user services as the minecraft user
+            sudo -u "$MINECRAFT_USER" bash -c "
+                export XDG_RUNTIME_DIR=\"/run/user/\$(id -u)\"
+                export DBUS_SESSION_BUS_ADDRESS=\"unix:path=\${XDG_RUNTIME_DIR}/bus\"
+                
+                # Stop services
+                systemctl --user stop caddy.service 2>/dev/null || true
+                systemctl --user stop vaulthunters_web_manager.service 2>/dev/null || true
+                echo 'User services stopped'
+                
+                # Disable services
+                systemctl --user disable caddy.service 2>/dev/null || true
+                systemctl --user disable vaulthunters_web_manager.service 2>/dev/null || true
+                echo 'User services disabled'
+            "
+            
+            # Remove service files
+            local user_service_dir="/home/$MINECRAFT_USER/.config/systemd/user"
+            if [ -f "$user_service_dir/vaulthunters_web_manager.service" ]; then
+                sudo rm -f "$user_service_dir/vaulthunters_web_manager.service"
+                print_success "vaulthunters_web_manager user service file removed"
+            fi
+            if [ -f "$user_service_dir/caddy.service" ]; then
+                sudo rm -f "$user_service_dir/caddy.service"
+                print_success "caddy user service file removed"
+            fi
+            
+            # Reload user daemon
+            sudo -u "$MINECRAFT_USER" bash -c "
+                export XDG_RUNTIME_DIR=\"/run/user/\$(id -u)\"
+                export DBUS_SESSION_BUS_ADDRESS=\"unix:path=\${XDG_RUNTIME_DIR}/bus\"
+                systemctl --user daemon-reload 2>/dev/null || true
+            "
         fi
     fi
 }
@@ -358,8 +421,8 @@ main() {
     # Step 5: Perform removal
     print_info "Starting uninstallation process..."
     
-    # Stop and remove service first
-    remove_systemd_service
+    # Stop and remove services first
+    remove_systemd_services
     
     # Create backup if requested
     create_project_backup

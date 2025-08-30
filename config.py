@@ -105,6 +105,9 @@ class DevelopmentConfig:
 class ProductionConfig:
     """Production configuration"""
     DEBUG = False
+    # Production Flask server settings for better connection handling
+    THREADED = True
+    PROCESSES = 1
 
 class TestingConfig:
     """Testing configuration"""

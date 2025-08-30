@@ -371,58 +371,74 @@ get_ssl_certificate_config() {
     print_success "  Domain Name: $CERT_DOMAIN"
 }
 
-# Function to create systemd service file
-create_systemd_service() {
-    print_info "Creating systemd service file..."
+# Function to create systemd user services
+create_systemd_services() {
+    print_info "Creating systemd user services..."
 
-    local service_content="[Unit]
-Description=VaultHunters Web Manager
+    # Create systemd user directory
+    local systemd_user_dir="$MINECRAFT_HOME/.config/systemd/user"
+    sudo -u "$MINECRAFT_USER" mkdir -p "$systemd_user_dir"
+
+    # Create VaultHunters Web Manager user service
+    local web_service_content="[Unit]
+Description=VaultHunters Web Manager Flask Application
 After=network.target
-Wants=network.target
 
 [Service]
 Type=simple
-User=$MINECRAFT_USER
-Group=$MINECRAFT_USER
 WorkingDirectory=$PROJECT_DIR
-Environment=PATH=$PROJECT_DIR/venv/bin:/usr/bin:/usr/local/bin
-ExecStart=$PROJECT_DIR/venv/bin/python $PROJECT_DIR/app.py
-KillMode=process
+Environment=PATH=$PROJECT_DIR/venv/bin
+Environment=FLASK_ENV=production
+Environment=PYTHONPATH=$PROJECT_DIR
+ExecStart=$PROJECT_DIR/venv/bin/python app.py
 Restart=always
 RestartSec=5
-StandardOutput=journal
-StandardError=journal
 
 [Install]
-WantedBy=multi-user.target"
+WantedBy=default.target"
 
-    echo "$service_content" | sudo tee /etc/systemd/system/vaulthunters_web_manager.service > /dev/null
+    sudo -u "$MINECRAFT_USER" bash -c "echo '$web_service_content' > '$systemd_user_dir/vaulthunters_web_manager.service'"
+
+    # Create Caddy user service
+    local caddy_service_content="[Unit]
+Description=Caddy HTTP/2 web server
+Documentation=https://caddyserver.com/docs/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/caddy run --config $MINECRAFT_HOME/.local/share/caddy/Caddyfile
+ExecReload=/usr/bin/caddy reload --config $MINECRAFT_HOME/.local/share/caddy/Caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+LimitNPROC=1048576
+WorkingDirectory=$MINECRAFT_HOME/.local/share/caddy
+Environment=HOME=$MINECRAFT_HOME
+
+[Install]
+WantedBy=default.target"
+
+    sudo -u "$MINECRAFT_USER" bash -c "echo '$caddy_service_content' > '$systemd_user_dir/caddy.service'"
 
     if [ $? -eq 0 ]; then
-        print_success "Systemd service file created"
-        sudo systemctl daemon-reload
+        print_success "Systemd user services created"
     else
-        print_error "Failed to create systemd service file"
+        print_error "Failed to create systemd user services"
         exit 1
     fi
 }
 
-# Function to create sudoers file
-create_sudoers_file() {
-    print_info "Creating sudoers file for $MINECRAFT_USER..."
+# Function to enable user lingering for systemd user services
+enable_user_lingering() {
+    print_info "Enabling user lingering for $MINECRAFT_USER (allows services to run without login)..."
 
-    local sudoers_content="$MINECRAFT_USER ALL=NOPASSWD: /bin/systemctl start vaulthunters_web_manager.service, \\
-                        /bin/systemctl stop vaulthunters_web_manager.service, \\
-                        /bin/systemctl restart vaulthunters_web_manager.service, \\
-                        /bin/systemctl status vaulthunters_web_manager.service
-$MINECRAFT_USER ALL=NOPASSWD: /bin/journalctl -u vaulthunters_web_manager.service -n * --no-pager"
-
-    echo "$sudoers_content" | sudo EDITOR='tee' visudo -f "/etc/sudoers.d/$MINECRAFT_USER"
+    sudo loginctl enable-linger "$MINECRAFT_USER"
 
     if [ $? -eq 0 ]; then
-        print_success "Sudoers file created for $MINECRAFT_USER"
+        print_success "User lingering enabled for $MINECRAFT_USER"
     else
-        print_error "Failed to create sudoers file"
+        print_error "Failed to enable user lingering"
         exit 1
     fi
 }
@@ -588,31 +604,43 @@ debug = false"
     fi
 }
 
-# Function to enable and start service
-enable_and_start_service() {
-    print_info "Enabling and starting VaultHunters Web Manager service..."
+# Function to enable and start user services
+enable_and_start_services() {
+    print_info "Enabling and starting user services for $MINECRAFT_USER..."
 
-    sudo systemctl enable vaulthunters_web_manager.service
-    sudo systemctl start vaulthunters_web_manager.service
+    # Enable user services as the minecraft user
+    sudo -u "$MINECRAFT_USER" bash -c "
+        export XDG_RUNTIME_DIR=\"/run/user/\$(id -u)\"
+        export DBUS_SESSION_BUS_ADDRESS=\"unix:path=\${XDG_RUNTIME_DIR}/bus\"
+        systemctl --user daemon-reload
+        systemctl --user enable caddy.service
+        systemctl --user enable vaulthunters_web_manager.service
+        systemctl --user start caddy.service
+        systemctl --user start vaulthunters_web_manager.service
+    "
 
     if [ $? -eq 0 ]; then
-        print_success "Service enabled and started"
+        print_success "User services enabled and started"
 
         # Wait a moment and check status
-        sleep 2
-        if sudo systemctl is-active --quiet vaulthunters_web_manager.service; then
-            print_success "Service is running successfully"
-        else
-            print_warning "Service may not be running properly. Check with: sudo systemctl status vaulthunters_web_manager.service"
-        fi
+        sleep 3
+        sudo -u "$MINECRAFT_USER" bash -c "
+            export XDG_RUNTIME_DIR=\"/run/user/\$(id -u)\"
+            export DBUS_SESSION_BUS_ADDRESS=\"unix:path=\${XDG_RUNTIME_DIR}/bus\"
+            if systemctl --user is-active --quiet caddy.service && systemctl --user is-active --quiet vaulthunters_web_manager.service; then
+                echo 'Both services are running successfully'
+            else
+                echo 'One or more services may not be running properly'
+                echo 'Check with: systemctl --user status caddy vaulthunters_web_manager'
+            fi
+        "
     else
-        print_error "Failed to enable/start service"
+        print_error "Failed to enable/start user services"
         exit 1
     fi
 }
 
-# Note: Caddy is managed directly by the Flask application (app.py)
-# No separate Caddy systemd service is needed
+# Note: Both Caddy and Flask now run as separate user services
 
 # Function to display final information
 display_final_info() {
@@ -645,21 +673,30 @@ display_final_info() {
     print_warning "configured in the certificate. Other IPs/domains will result in SSL errors."
     echo
     print_info "Service Management Commands (run as $MINECRAFT_USER):"
-    echo "  Web Application (includes integrated Caddy):"
-    echo "    - sudo systemctl status vaulthunters_web_manager.service"
-    echo "    - sudo systemctl restart vaulthunters_web_manager.service"
-    echo "    - sudo systemctl stop vaulthunters_web_manager.service"
-    echo "    - sudo systemctl start vaulthunters_web_manager.service"
+    echo "  Both services (Caddy and Flask):"
+    echo "    - systemctl --user status caddy vaulthunters_web_manager"
+    echo "    - systemctl --user restart caddy vaulthunters_web_manager"
+    echo "    - systemctl --user stop caddy vaulthunters_web_manager"
+    echo "    - systemctl --user start caddy vaulthunters_web_manager"
+    echo
+    print_info "Individual service commands:"
+    echo "  Caddy (reverse proxy):"
+    echo "    - systemctl --user status caddy"
+    echo "    - systemctl --user restart caddy"
+    echo "  Flask application:"
+    echo "    - systemctl --user status vaulthunters_web_manager"
+    echo "    - systemctl --user restart vaulthunters_web_manager"
     echo
     print_info "View service logs:"
-    echo "  - sudo journalctl -u vaulthunters_web_manager.service -f"
+    echo "  - journalctl --user -u caddy -f"
+    echo "  - journalctl --user -u vaulthunters_web_manager -f"
     echo "  - Application logs: $PROJECT_DIR/logs/caddy_access.log"
     echo
     print_warning "🔑 IMPORTANT - FIRST LOGIN CREDENTIALS:"
     echo "  The application automatically creates an admin user with a random password."
     echo "  To find your admin login credentials, check the service logs:"
     echo
-    echo "    sudo journalctl -u vaulthunters_web_manager.service | grep 'ADMIN CREDENTIALS'"
+    echo "    journalctl --user -u vaulthunters_web_manager | grep 'ADMIN CREDENTIALS'"
     echo
     echo "  Look for a message like:"
     echo "    🔑 DEFAULT ADMIN CREDENTIALS CREATED - Username: admin, Password: [random password]"
@@ -707,19 +744,17 @@ main() {
     # Step 11: Setup SSL certificates and Caddy
     setup_ssl_certificates
 
-    # Step 12: Create systemd service
-    create_systemd_service
+    # Step 12: Create systemd user services
+    create_systemd_services
 
-    # Step 13: Caddy configuration complete (managed by Flask app)
+    # Step 13: Enable user lingering
+    enable_user_lingering
 
-    # Step 14: Create sudoers file
-    create_sudoers_file
-
-    # Step 15: Create default config
+    # Step 14: Create default config
     create_default_config
 
-    # Step 16: Enable and start service
-    enable_and_start_service
+    # Step 15: Enable and start user services
+    enable_and_start_services
 
     # Step 17: Display final information
     display_final_info
