@@ -7,6 +7,10 @@ import secrets
 import logging
 from functools import wraps
 from flask import session, request, redirect, url_for, flash, current_app
+import pyotp
+import qrcode
+import io
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +179,8 @@ class AuthManager:
                 "username": username,
                 "role": user_data.get("role", "user"),
                 "active": user_data.get("active", True),
-                "created_at": user_data.get("created_at", "unknown")
+                "created_at": user_data.get("created_at", "unknown"),
+                "2fa_enabled": user_data.get("2fa_enabled", False)
             }
             
         except Exception as e:
@@ -418,6 +423,278 @@ class AuthManager:
         except Exception as e:
             logger.error(f"Error deleting user {username}: {e}")
             return False
+    
+    @staticmethod
+    def setup_2fa(username):
+        """
+        Set up TOTP 2FA for a user
+        
+        Args:
+            username (str): Username to set up 2FA for
+            
+        Returns:
+            dict: Dictionary with secret, qr_code (base64), and backup_codes, or None if failed
+        """
+        try:
+            AuthManager._ensure_users_file()
+            
+            # Load users database
+            with open(AuthManager.USERS_FILE, 'r') as f:
+                users = json.load(f)
+            
+            # Check if user exists
+            if username not in users:
+                logger.warning(f"User {username} not found for 2FA setup")
+                return None
+            
+            # Generate TOTP secret
+            secret = pyotp.random_base32()
+            
+            # Generate backup codes
+            backup_codes = [secrets.token_hex(4).upper() for _ in range(10)]
+            backup_codes_hashed = [AuthManager._hash_password(code) for code in backup_codes]
+            
+            # Create TOTP provisioning URI
+            totp = pyotp.TOTP(secret)
+            provisioning_uri = totp.provisioning_uri(
+                name=username,
+                issuer_name="VaultHunters Manager"
+            )
+            
+            # Generate QR code
+            qr = qrcode.QRCode(version=1, box_size=10, border=5)
+            qr.add_data(provisioning_uri)
+            qr.make(fit=True)
+            
+            # Convert QR code to base64 image
+            img = qr.make_image(fill_color="black", back_color="white")
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            qr_code_base64 = base64.b64encode(buf.getvalue()).decode()
+            
+            # Store 2FA data (but don't enable yet)
+            users[username]['totp_secret'] = secret
+            users[username]['backup_codes'] = backup_codes_hashed
+            users[username]['2fa_enabled'] = False
+            
+            # Save users file
+            with open(AuthManager.USERS_FILE, 'w') as f:
+                json.dump(users, f, indent=2)
+            
+            logger.info(f"2FA setup initiated for user {username}")
+            
+            return {
+                'secret': secret,
+                'qr_code': qr_code_base64,
+                'backup_codes': backup_codes  # Return plain text codes for user to save
+            }
+            
+        except Exception as e:
+            logger.error(f"Error setting up 2FA for {username}: {e}")
+            return None
+    
+    @staticmethod
+    def enable_2fa(username, totp_token):
+        """
+        Enable 2FA for a user after verifying TOTP token
+        
+        Args:
+            username (str): Username to enable 2FA for
+            totp_token (str): TOTP token to verify
+            
+        Returns:
+            bool: True if 2FA enabled successfully, False otherwise
+        """
+        try:
+            AuthManager._ensure_users_file()
+            
+            # Load users database
+            with open(AuthManager.USERS_FILE, 'r') as f:
+                users = json.load(f)
+            
+            # Check if user exists and has TOTP secret
+            if username not in users or 'totp_secret' not in users[username]:
+                logger.warning(f"User {username} not found or no TOTP secret for 2FA enable")
+                return False
+            
+            # Verify TOTP token
+            totp = pyotp.TOTP(users[username]['totp_secret'])
+            if not totp.verify(totp_token):
+                logger.warning(f"Invalid TOTP token for 2FA enable for user {username}")
+                return False
+            
+            # Enable 2FA
+            users[username]['2fa_enabled'] = True
+            
+            # Save users file
+            with open(AuthManager.USERS_FILE, 'w') as f:
+                json.dump(users, f, indent=2)
+            
+            logger.info(f"2FA enabled successfully for user {username}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error enabling 2FA for {username}: {e}")
+            return False
+    
+    @staticmethod
+    def disable_2fa(username):
+        """
+        Disable 2FA for a user
+        
+        Args:
+            username (str): Username to disable 2FA for
+            
+        Returns:
+            bool: True if 2FA disabled successfully, False otherwise
+        """
+        try:
+            AuthManager._ensure_users_file()
+            
+            # Load users database
+            with open(AuthManager.USERS_FILE, 'r') as f:
+                users = json.load(f)
+            
+            # Check if user exists
+            if username not in users:
+                logger.warning(f"User {username} not found for 2FA disable")
+                return False
+            
+            # Remove 2FA data
+            users[username].pop('totp_secret', None)
+            users[username].pop('backup_codes', None)
+            users[username]['2fa_enabled'] = False
+            
+            # Save users file
+            with open(AuthManager.USERS_FILE, 'w') as f:
+                json.dump(users, f, indent=2)
+            
+            logger.info(f"2FA disabled for user {username}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error disabling 2FA for {username}: {e}")
+            return False
+    
+    @staticmethod
+    def verify_2fa(username, token):
+        """
+        Verify TOTP token or backup code for 2FA
+        
+        Args:
+            username (str): Username to verify 2FA for
+            token (str): TOTP token or backup code
+            
+        Returns:
+            bool: True if token is valid, False otherwise
+        """
+        try:
+            AuthManager._ensure_users_file()
+            
+            # Load users database
+            with open(AuthManager.USERS_FILE, 'r') as f:
+                users = json.load(f)
+            
+            # Check if user exists and has 2FA enabled
+            if username not in users or not users[username].get('2fa_enabled', False):
+                return False
+            
+            user_data = users[username]
+            
+            # First try TOTP verification
+            if 'totp_secret' in user_data:
+                totp = pyotp.TOTP(user_data['totp_secret'])
+                if totp.verify(token):
+                    return True
+            
+            # Then try backup codes
+            if 'backup_codes' in user_data:
+                for i, backup_code_hash in enumerate(user_data['backup_codes']):
+                    if AuthManager._verify_password(token.upper(), backup_code_hash):
+                        # Remove used backup code
+                        user_data['backup_codes'].pop(i)
+                        
+                        # Save updated users file
+                        with open(AuthManager.USERS_FILE, 'w') as f:
+                            json.dump(users, f, indent=2)
+                        
+                        logger.info(f"Backup code used for 2FA verification for user {username}")
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error verifying 2FA for {username}: {e}")
+            return False
+    
+    @staticmethod
+    def has_2fa_enabled(username):
+        """
+        Check if user has 2FA enabled
+        
+        Args:
+            username (str): Username to check
+            
+        Returns:
+            bool: True if 2FA is enabled, False otherwise
+        """
+        try:
+            AuthManager._ensure_users_file()
+            
+            # Load users database
+            with open(AuthManager.USERS_FILE, 'r') as f:
+                users = json.load(f)
+            
+            # Check if user exists and has 2FA enabled
+            if username not in users:
+                return False
+            
+            return users[username].get('2fa_enabled', False)
+            
+        except Exception as e:
+            logger.error(f"Error checking 2FA status for {username}: {e}")
+            return False
+    
+    @staticmethod
+    def regenerate_backup_codes(username):
+        """
+        Regenerate backup codes for a user
+        
+        Args:
+            username (str): Username to regenerate backup codes for
+            
+        Returns:
+            list: New backup codes or None if failed
+        """
+        try:
+            AuthManager._ensure_users_file()
+            
+            # Load users database
+            with open(AuthManager.USERS_FILE, 'r') as f:
+                users = json.load(f)
+            
+            # Check if user exists and has 2FA enabled
+            if username not in users or not users[username].get('2fa_enabled', False):
+                logger.warning(f"User {username} not found or 2FA not enabled for backup code regeneration")
+                return None
+            
+            # Generate new backup codes
+            backup_codes = [secrets.token_hex(4).upper() for _ in range(10)]
+            backup_codes_hashed = [AuthManager._hash_password(code) for code in backup_codes]
+            
+            # Update user data
+            users[username]['backup_codes'] = backup_codes_hashed
+            
+            # Save users file
+            with open(AuthManager.USERS_FILE, 'w') as f:
+                json.dump(users, f, indent=2)
+            
+            logger.info(f"Backup codes regenerated for user {username}")
+            return backup_codes
+            
+        except Exception as e:
+            logger.error(f"Error regenerating backup codes for {username}: {e}")
+            return None
 
 
 def login_required(f):

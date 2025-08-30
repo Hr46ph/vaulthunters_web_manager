@@ -197,6 +197,19 @@ class EditUserForm(FlaskForm):
     active = BooleanField('Active')
     submit = SubmitField('Update User')
 
+# 2FA Forms
+class TwoFactorLoginForm(FlaskForm):
+    totp_token = StringField('Authentication Code', 
+                           validators=[DataRequired(), Length(min=6, max=8)],
+                           render_kw={'placeholder': '6-digit code or backup code'})
+    submit = SubmitField('Verify')
+
+class Setup2FAForm(FlaskForm):
+    totp_token = StringField('Authentication Code', 
+                           validators=[DataRequired(), Length(min=6, max=6)],
+                           render_kw={'placeholder': '6-digit code from authenticator app'})
+    submit = SubmitField('Enable 2FA')
+
 
 
 def get_recent_performance_events():
@@ -295,14 +308,22 @@ def login():
         password = form.password.data
         
         if AuthManager.authenticate_user(username, password):
-            AuthManager.login_user(username)
-            flash(f'Welcome, {username}!', 'success')
-            
-            # Redirect to next page or dashboard
-            next_page = request.args.get('next')
-            if next_page and next_page.startswith('/'):
-                return redirect(next_page)
-            return redirect(url_for('main.index'))
+            # Check if user has 2FA enabled
+            if AuthManager.has_2fa_enabled(username):
+                # Store username in session temporarily for 2FA verification
+                session['2fa_username'] = username
+                session['2fa_next'] = request.args.get('next')
+                return redirect(url_for('main.verify_2fa'))
+            else:
+                # No 2FA, log in directly
+                AuthManager.login_user(username)
+                flash(f'Welcome, {username}!', 'success')
+                
+                # Redirect to next page or dashboard
+                next_page = request.args.get('next')
+                if next_page and next_page.startswith('/'):
+                    return redirect(next_page)
+                return redirect(url_for('main.index'))
         else:
             flash('Invalid username or password.', 'error')
     
@@ -314,6 +335,143 @@ def logout():
     AuthManager.logout_user()
     flash('You have been logged out.', 'info')
     return redirect(url_for('main.login'))
+
+# 2FA Routes
+
+@main_bp.route('/verify-2fa', methods=['GET', 'POST'])
+def verify_2fa():
+    """2FA verification page"""
+    # Check if we have a pending 2FA login
+    username = session.get('2fa_username')
+    if not username:
+        flash('Invalid access. Please log in again.', 'error')
+        return redirect(url_for('main.login'))
+    
+    form = TwoFactorLoginForm()
+    
+    if form.validate_on_submit():
+        totp_token = form.totp_token.data.strip()
+        
+        if AuthManager.verify_2fa(username, totp_token):
+            # 2FA verified, complete login
+            AuthManager.login_user(username)
+            
+            # Clear 2FA session data
+            next_page = session.pop('2fa_next', None)
+            session.pop('2fa_username', None)
+            
+            flash(f'Welcome, {username}!', 'success')
+            
+            # Redirect to next page or dashboard
+            if next_page and next_page.startswith('/'):
+                return redirect(next_page)
+            return redirect(url_for('main.index'))
+        else:
+            flash('Invalid authentication code. Please try again.', 'error')
+    
+    return render_template('auth/verify_2fa.html', form=form, username=username)
+
+@main_bp.route('/setup-2fa', methods=['GET', 'POST'])
+@login_required
+def setup_2fa():
+    """2FA setup page"""
+    username = AuthManager.get_current_user()
+    
+    # Check if 2FA is already enabled
+    if AuthManager.has_2fa_enabled(username):
+        flash('2FA is already enabled for your account.', 'info')
+        return redirect(url_for('main.profile'))
+    
+    # Check if we're in setup process (have setup data in session)
+    setup_data = session.get('2fa_setup_data')
+    
+    if request.method == 'GET':
+        # Start 2FA setup process
+        setup_result = AuthManager.setup_2fa(username)
+        if not setup_result:
+            flash('Failed to set up 2FA. Please try again.', 'error')
+            return redirect(url_for('main.profile'))
+        
+        # Store setup data in session temporarily
+        session['2fa_setup_data'] = {
+            'secret': setup_result['secret'],
+            'qr_code': setup_result['qr_code'],
+            'backup_codes': setup_result['backup_codes']
+        }
+        setup_data = session['2fa_setup_data']
+    
+    form = Setup2FAForm()
+    
+    if form.validate_on_submit():
+        totp_token = form.totp_token.data.strip()
+        
+        if AuthManager.enable_2fa(username, totp_token):
+            # Clear setup data from session
+            session.pop('2fa_setup_data', None)
+            
+            # Log out user for security - they need to log in again with 2FA
+            AuthManager.logout_user()
+            
+            flash('2FA has been successfully enabled! Please log in again with your new 2FA setup.', 'success')
+            return redirect(url_for('main.login'))
+        else:
+            flash('Invalid authentication code. Please scan the QR code again and try again.', 'error')
+    
+    if not setup_data:
+        flash('2FA setup session expired. Please try again.', 'error')
+        return redirect(url_for('main.profile'))
+    
+    return render_template('auth/setup_2fa.html', 
+                         form=form, 
+                         qr_code=setup_data['qr_code'],
+                         backup_codes=setup_data['backup_codes'])
+
+@main_bp.route('/disable-2fa', methods=['POST'])
+@login_required
+def disable_2fa():
+    """Disable 2FA for current user"""
+    username = AuthManager.get_current_user()
+    
+    if not AuthManager.has_2fa_enabled(username):
+        flash('2FA is not enabled for your account.', 'info')
+        return redirect(url_for('main.profile'))
+    
+    if AuthManager.disable_2fa(username):
+        flash('2FA has been disabled for your account.', 'warning')
+    else:
+        flash('Failed to disable 2FA. Please try again.', 'error')
+    
+    return redirect(url_for('main.profile'))
+
+@main_bp.route('/regenerate-backup-codes', methods=['POST'])
+@login_required
+def regenerate_backup_codes():
+    """Regenerate backup codes for current user"""
+    username = AuthManager.get_current_user()
+    
+    if not AuthManager.has_2fa_enabled(username):
+        flash('2FA is not enabled for your account.', 'error')
+        return redirect(url_for('main.profile'))
+    
+    backup_codes = AuthManager.regenerate_backup_codes(username)
+    if backup_codes:
+        session['new_backup_codes'] = backup_codes
+        flash('New backup codes generated. Please save them in a safe place.', 'success')
+        return redirect(url_for('main.show_backup_codes'))
+    else:
+        flash('Failed to regenerate backup codes. Please try again.', 'error')
+        return redirect(url_for('main.profile'))
+
+@main_bp.route('/backup-codes')
+@login_required
+def show_backup_codes():
+    """Show newly generated backup codes"""
+    backup_codes = session.pop('new_backup_codes', None)
+    if not backup_codes:
+        flash('No backup codes to display.', 'error')
+        return redirect(url_for('main.profile'))
+    
+    return render_template('auth/backup_codes.html', backup_codes=backup_codes)
 
 # User Management Routes
 
@@ -406,9 +564,12 @@ def profile():
     """User profile page"""
     try:
         user_info = AuthManager.get_user_info()
+        if not user_info:
+            flash('Error loading user information.', 'error')
+            return redirect(url_for('main.index'))
         return render_template('auth/profile.html', user=user_info)
     except Exception as e:
-        current_app.logger.error(f'Profile page error: {e}')
+        current_app.logger.error(f'Profile page error: {e}', exc_info=True)
         flash('Error loading profile page', 'error')
         return redirect(url_for('main.index'))
 

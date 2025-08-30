@@ -11,3 +11,6 @@ psutil==5.9.6
 mcstatus==11.0.0
 mcrcon==0.7.0
 toml==0.10.2
+pyotp==2.9.0
+qrcode==7.4.2
+Pillow>=10.2.0
