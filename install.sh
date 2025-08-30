@@ -561,44 +561,8 @@ enable_and_start_service() {
     fi
 }
 
-# Function to create Caddy systemd service
-create_caddy_systemd_service() {
-    print_info "Creating Caddy systemd service..."
-
-    local caddy_service_content="[Unit]
-Description=Caddy HTTP/2 web server for VaultHunters Web Manager
-After=network.target network-online.target
-Requires=network.target
-
-[Service]
-Type=notify
-User=$MINECRAFT_USER
-Group=$MINECRAFT_USER
-ExecStart=/usr/bin/caddy run --environ --config $MINECRAFT_HOME/.local/share/caddy/Caddyfile
-ExecReload=/bin/kill -USR1 \$MAINPID
-KillMode=mixed
-KillSignal=SIGQUIT
-TimeoutStopSec=5s
-LimitNOFILE=1048576
-LimitNPROC=1048576
-PrivateTmp=true
-ProtectSystem=full
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-
-[Install]
-WantedBy=multi-user.target"
-
-    echo "$caddy_service_content" | sudo tee /etc/systemd/system/caddy-vaulthunters.service > /dev/null
-
-    if [ $? -eq 0 ]; then
-        print_success "Caddy systemd service file created"
-        sudo systemctl daemon-reload
-        sudo systemctl enable caddy-vaulthunters.service
-    else
-        print_error "Failed to create Caddy systemd service file"
-        exit 1
-    fi
-}
+# Note: Caddy is managed directly by the Flask application (app.py)
+# No separate Caddy systemd service is needed
 
 # Function to display final information
 display_final_info() {
@@ -621,9 +585,8 @@ display_final_info() {
     print_info "Next Steps:"
     echo "  1. Edit $PROJECT_DIR/config.toml if needed"
     echo "  2. Ensure your VaultHunters server is set up with RCON enabled"
-    echo "  3. Start services:"
+    echo "  3. Start the service:"
     echo "     sudo systemctl start vaulthunters_web_manager.service"
-    echo "     sudo systemctl start caddy-vaulthunters.service"
     echo "  4. Access the web interface at: https://$CERT_IP:$WEB_PORT"
     echo "     (You can also use https://$CERT_DOMAIN:$WEB_PORT if DNS is configured)"
     echo
@@ -631,20 +594,15 @@ display_final_info() {
     print_warning "configured in the certificate. Other IPs/domains will result in SSL errors."
     echo
     print_info "Service Management Commands (run as $MINECRAFT_USER):"
-    echo "  Web Application:"
+    echo "  Web Application (includes integrated Caddy):"
     echo "    - sudo systemctl status vaulthunters_web_manager.service"
     echo "    - sudo systemctl restart vaulthunters_web_manager.service"
     echo "    - sudo systemctl stop vaulthunters_web_manager.service"
     echo "    - sudo systemctl start vaulthunters_web_manager.service"
-    echo "  Caddy Proxy:"
-    echo "    - sudo systemctl status caddy-vaulthunters.service"
-    echo "    - sudo systemctl restart caddy-vaulthunters.service"
-    echo "    - sudo systemctl stop caddy-vaulthunters.service"
-    echo "    - sudo systemctl start caddy-vaulthunters.service"
     echo
     print_info "View service logs:"
     echo "  - sudo journalctl -u vaulthunters_web_manager.service -f"
-    echo "  - sudo journalctl -u caddy-vaulthunters.service -f"
+    echo "  - Application logs: $PROJECT_DIR/logs/caddy_access.log"
 }
 
 # Main installation function
@@ -687,8 +645,7 @@ main() {
     # Step 11: Create systemd service
     create_systemd_service
 
-    # Step 12: Create Caddy systemd service
-    create_caddy_systemd_service
+    # Step 12: Caddy configuration complete (managed by Flask app)
 
     # Step 13: Create sudoers file
     create_sudoers_file
