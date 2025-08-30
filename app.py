@@ -173,24 +173,28 @@ def start_caddy():
         # Start Caddy with better error handling
         print("🚀 Starting Caddy reverse proxy...")
         caddy_process = subprocess.Popen(
-            ['caddy', 'start', '--config', 'Caddyfile'],
+            ['caddy', 'run', '--config', 'Caddyfile'],
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Combine stderr into stdout
+            stderr=subprocess.PIPE,
             text=True,
             cwd=os.getcwd()  # Ensure proper working directory
         )
         
-        # Wait a moment and check if it started successfully
+        # Wait a moment for Caddy to start
         import time
-        time.sleep(2)
+        time.sleep(3)
         
-        # Check if process is still running
+        # Check if process is still running (should be for 'caddy run')
         if caddy_process.poll() is not None:
-            # Process already terminated - get output
-            stdout, _ = caddy_process.communicate()
+            # Process terminated - get output to see what went wrong
+            stdout, stderr = caddy_process.communicate()
             print(f"❌ Caddy failed to start. Output:")
-            for line in stdout.splitlines():
-                print(f"   {line}")
+            if stdout:
+                for line in stdout.splitlines():
+                    print(f"   {line}")
+            if stderr:
+                for line in stderr.splitlines():
+                    print(f"   {line}")
             caddy_process = None
             return False
         
@@ -201,8 +205,8 @@ def start_caddy():
                 s.settimeout(5)  # 5 second timeout
                 result = s.connect_ex(('127.0.0.1', 8889))
                 if result == 0:
-                    print("✅ Caddy reverse proxy started successfully")
-                    print("🌐 HTTPS available at https://0.0.0.0:8889")
+                    print(f"✅ Caddy reverse proxy started successfully (pid={caddy_process.pid})")
+                    print("🌐 HTTPS available at https://0.0.0.0:8889") 
                     print("📝 Caddy logs: logs/caddy_access.log")
                     return True
                 else:
@@ -222,19 +226,24 @@ def stop_caddy():
     global caddy_process
     
     try:
-        # Stop Caddy using the stop command
-        subprocess.run(['caddy', 'stop'], capture_output=True, check=True)
-        print("✅ Caddy reverse proxy stopped")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
-    
-    # Also terminate the process if we have a reference
-    if caddy_process and caddy_process.poll() is None:
-        caddy_process.terminate()
-        try:
+        if caddy_process and caddy_process.poll() is None:
+            # Process is still running, terminate it
+            caddy_process.terminate()
             caddy_process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            caddy_process.kill()
+            print("✅ Caddy reverse proxy stopped")
+        else:
+            # Try the stop command as fallback
+            subprocess.run(['caddy', 'stop'], capture_output=True, check=False)
+            print("✅ Caddy reverse proxy stopped")
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+        # Force kill if terminate doesn't work
+        if caddy_process:
+            try:
+                caddy_process.kill()
+                caddy_process.wait(timeout=2)
+            except:
+                pass
+        print("✅ Caddy reverse proxy stopped (forced)")
     
     caddy_process = None
 

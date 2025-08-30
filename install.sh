@@ -49,7 +49,7 @@ test_sudo_permissions() {
 test_required_commands() {
     print_info "Checking required commands..."
     
-    local required_commands=("git" "python3" "systemctl" "useradd" "usermod" "visudo" "caddy")
+    local required_commands=("git" "python3" "systemctl" "useradd" "usermod" "visudo" "caddy" "openssl")
     local missing_commands=()
     
     for cmd in "${required_commands[@]}"; do
@@ -66,6 +66,7 @@ test_required_commands() {
         print_error "- systemd"
         print_error "- sudo"
         print_error "- caddy (web server for TLS termination)"
+        print_error "- openssl (for SSL certificate generation)"
         exit 1
     fi
     
@@ -272,6 +273,50 @@ get_available_port() {
     print_success "Using port $WEB_PORT for web interface"
 }
 
+# Function to get SSL certificate configuration
+get_ssl_certificate_config() {
+    print_info "SSL Certificate Configuration"
+    print_warning "The SSL certificate must match how you access the application."
+    print_warning "If you access via IP address, the certificate must include that IP."
+    print_warning "If you access via domain name, the certificate must include that domain."
+    print_warning "Accessing with mismatched IP/domain will result in connection errors."
+    echo
+    
+    # Detect current IP address
+    local detected_ip
+    detected_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7}' | head -1)
+    if [ -z "$detected_ip" ]; then
+        detected_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    fi
+    if [ -z "$detected_ip" ]; then
+        detected_ip="127.0.0.1"
+    fi
+    
+    # Get IP address
+    print_info "Current detected IP address: $detected_ip"
+    read -p "Enter IP address for certificate (press Enter for $detected_ip): " user_ip
+    CERT_IP=${user_ip:-$detected_ip}
+    
+    # Detect hostname/FQDN
+    local detected_hostname
+    detected_hostname=$(hostname -f 2>/dev/null)
+    if [ -z "$detected_hostname" ]; then
+        detected_hostname=$(hostname 2>/dev/null)
+    fi
+    if [ -z "$detected_hostname" ]; then
+        detected_hostname="localhost"
+    fi
+    
+    # Get domain name
+    print_info "Current detected hostname/FQDN: $detected_hostname"
+    read -p "Enter domain name for certificate (press Enter for $detected_hostname): " user_domain
+    CERT_DOMAIN=${user_domain:-$detected_hostname}
+    
+    print_success "SSL Certificate will be generated for:"
+    print_success "  IP Address: $CERT_IP"
+    print_success "  Domain Name: $CERT_DOMAIN"
+}
+
 # Function to create systemd service file
 create_systemd_service() {
     print_info "Creating systemd service file..."
@@ -328,6 +373,129 @@ $MINECRAFT_USER ALL=NOPASSWD: /bin/journalctl -u vaulthunters_web_manager.servic
     fi
 }
 
+# Function to setup SSL certificates and Caddy
+setup_ssl_certificates() {
+    print_info "Setting up SSL certificates and Caddy configuration..."
+    
+    # Create Caddy data directory
+    local caddy_dir="$MINECRAFT_HOME/.local/share/caddy"
+    sudo -u "$MINECRAFT_USER" mkdir -p "$caddy_dir"
+    
+    if [ $? -ne 0 ]; then
+        print_error "Failed to create Caddy directory: $caddy_dir"
+        exit 1
+    fi
+    
+    print_success "Created Caddy directory: $caddy_dir"
+    
+    # Create certificate configuration file
+    local cert_config="$PROJECT_DIR/ip_cert.cnf"
+    local cert_config_content="[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = $CERT_IP
+
+[v3_req]
+keyUsage = keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = $CERT_IP
+DNS.1 = $CERT_DOMAIN
+DNS.2 = localhost"
+
+    sudo -u "$MINECRAFT_USER" bash -c "echo '$cert_config_content' > '$cert_config'"
+    
+    if [ $? -ne 0 ]; then
+        print_error "Failed to create certificate configuration"
+        exit 1
+    fi
+    
+    print_success "Created certificate configuration: $cert_config"
+    
+    # Generate SSL certificate
+    print_info "Generating SSL certificate..."
+    local cert_path="$caddy_dir/ip_cert.pem"
+    local key_path="$caddy_dir/ip_key.pem"
+    
+    sudo -u "$MINECRAFT_USER" openssl req -new -x509 -days 365 -nodes \
+        -out "$cert_path" \
+        -keyout "$key_path" \
+        -config "$cert_config"
+    
+    if [ $? -ne 0 ]; then
+        print_error "Failed to generate SSL certificate"
+        exit 1
+    fi
+    
+    print_success "Generated SSL certificate: $cert_path"
+    print_success "Generated SSL private key: $key_path"
+    
+    # Create Caddyfile
+    local caddyfile_path="$caddy_dir/Caddyfile"
+    local caddyfile_content="{
+    auto_https off
+    skip_install_trust
+    storage file_system {
+        root $caddy_dir
+    }
+    debug
+    admin localhost:2019
+}
+
+$CERT_IP:$WEB_PORT {
+    # Use the certificate files we generated
+    tls $cert_path $key_path
+
+    # Reverse proxy to your Flask application
+    reverse_proxy 127.0.0.1:8081 {
+        header_up Host {host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port {port}
+    }
+
+    # Optional: Add security headers
+    header {
+        Strict-Transport-Security \"max-age=31536000; includeSubDomains\"
+        X-Content-Type-Options \"nosniff\"
+        X-XSS-Protection \"1; mode=block\"
+        X-Frame-Options \"DENY\"
+        -Server
+    }
+
+    # Optional: Enable compression
+    encode gzip
+
+    # Log access to application logs directory
+    log {
+        output file $PROJECT_DIR/logs/caddy_access.log {
+            roll_size 10MiB
+            roll_keep 5
+        }
+        format console
+    }
+}"
+
+    sudo -u "$MINECRAFT_USER" bash -c "echo '$caddyfile_content' > '$caddyfile_path'"
+    
+    if [ $? -ne 0 ]; then
+        print_error "Failed to create Caddyfile"
+        exit 1
+    fi
+    
+    print_success "Created Caddyfile: $caddyfile_path"
+    
+    # Create logs directory
+    sudo -u "$MINECRAFT_USER" mkdir -p "$PROJECT_DIR/logs"
+    
+    print_success "SSL certificates and Caddy configuration completed"
+}
+
 # Function to create default config.toml
 create_default_config() {
     print_info "Creating default config.toml..."
@@ -350,7 +518,7 @@ memory_max = \"8G\"
 
 [web]
 host = \"0.0.0.0\"
-port = $WEB_PORT
+port = 8081
 # Random secret key generated during installation
 secret_key = \"$secret_key\"
 debug = false"
@@ -388,6 +556,45 @@ enable_and_start_service() {
     fi
 }
 
+# Function to create Caddy systemd service
+create_caddy_systemd_service() {
+    print_info "Creating Caddy systemd service..."
+    
+    local caddy_service_content="[Unit]
+Description=Caddy HTTP/2 web server for VaultHunters Web Manager
+After=network.target network-online.target
+Requires=network.target
+
+[Service]
+Type=notify
+User=$MINECRAFT_USER
+Group=$MINECRAFT_USER
+ExecStart=/usr/bin/caddy run --environ --config $MINECRAFT_HOME/.local/share/caddy/Caddyfile
+ExecReload=/bin/kill -USR1 \$MAINPID
+KillMode=mixed
+KillSignal=SIGQUIT
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+LimitNPROC=1048576
+PrivateTmp=true
+ProtectSystem=full
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target"
+
+    echo "$caddy_service_content" | sudo tee /etc/systemd/system/caddy-vaulthunters.service > /dev/null
+    
+    if [ $? -eq 0 ]; then
+        print_success "Caddy systemd service file created"
+        sudo systemctl daemon-reload
+        sudo systemctl enable caddy-vaulthunters.service
+    else
+        print_error "Failed to create Caddy systemd service file"
+        exit 1
+    fi
+}
+
 # Function to display final information
 display_final_info() {
     print_success "Installation completed successfully!"
@@ -397,21 +604,42 @@ display_final_info() {
     echo "  - Project Directory: $PROJECT_DIR"
     echo "  - Server Path: $SERVER_PATH"
     echo "  - Backup Path: $BACKUP_PATH"
-    echo "  - Web Interface Port: $WEB_PORT"
+    echo "  - Web Interface Port: $WEB_PORT (via Caddy HTTPS proxy)"
+    echo "  - Certificate IP: $CERT_IP"
+    echo "  - Certificate Domain: $CERT_DOMAIN"
+    echo
+    print_info "SSL Certificate Information:"
+    echo "  - Certificate: $MINECRAFT_HOME/.local/share/caddy/ip_cert.pem"
+    echo "  - Private Key: $MINECRAFT_HOME/.local/share/caddy/ip_key.pem"
+    echo "  - Caddyfile: $MINECRAFT_HOME/.local/share/caddy/Caddyfile"
     echo
     print_info "Next Steps:"
     echo "  1. Edit $PROJECT_DIR/config.toml if needed"
     echo "  2. Ensure your VaultHunters server is set up with RCON enabled"
-    echo "  3. Access the web interface at: https://$(ip route get 1 2>/dev/null | awk '{print $7}' | head -1 || echo 'localhost'):$WEB_PORT"
+    echo "  3. Start services:"
+    echo "     sudo systemctl start vaulthunters_web_manager.service"
+    echo "     sudo systemctl start caddy-vaulthunters.service"
+    echo "  4. Access the web interface at: https://$CERT_IP:$WEB_PORT"
+    echo "     (You can also use https://$CERT_DOMAIN:$WEB_PORT if DNS is configured)"
+    echo
+    print_warning "Important: You must access the application using the exact IP or domain"
+    print_warning "configured in the certificate. Other IPs/domains will result in SSL errors."
     echo
     print_info "Service Management Commands (run as $MINECRAFT_USER):"
-    echo "  - sudo systemctl status vaulthunters_web_manager.service"
-    echo "  - sudo systemctl restart vaulthunters_web_manager.service"
-    echo "  - sudo systemctl stop vaulthunters_web_manager.service"
-    echo "  - sudo systemctl start vaulthunters_web_manager.service"
+    echo "  Web Application:"
+    echo "    - sudo systemctl status vaulthunters_web_manager.service"
+    echo "    - sudo systemctl restart vaulthunters_web_manager.service"
+    echo "    - sudo systemctl stop vaulthunters_web_manager.service"
+    echo "    - sudo systemctl start vaulthunters_web_manager.service"
+    echo "  Caddy Proxy:"
+    echo "    - sudo systemctl status caddy-vaulthunters.service"
+    echo "    - sudo systemctl restart caddy-vaulthunters.service"
+    echo "    - sudo systemctl stop caddy-vaulthunters.service"
+    echo "    - sudo systemctl start caddy-vaulthunters.service"
     echo
     print_info "View service logs:"
     echo "  - sudo journalctl -u vaulthunters_web_manager.service -f"
+    echo "  - sudo journalctl -u caddy-vaulthunters.service -f"
 }
 
 # Main installation function
@@ -439,25 +667,34 @@ main() {
     # Step 6: Get available port
     get_available_port
     
-    # Step 7: Clone project
+    # Step 7: Get SSL certificate configuration
+    get_ssl_certificate_config
+    
+    # Step 8: Clone project
     clone_project
     
-    # Step 8: Create virtual environment
+    # Step 9: Create virtual environment
     create_virtual_environment
     
-    # Step 9: Create systemd service
+    # Step 10: Setup SSL certificates and Caddy
+    setup_ssl_certificates
+    
+    # Step 11: Create systemd service
     create_systemd_service
     
-    # Step 10: Create sudoers file
+    # Step 12: Create Caddy systemd service
+    create_caddy_systemd_service
+    
+    # Step 13: Create sudoers file
     create_sudoers_file
     
-    # Step 11: Create default config
+    # Step 14: Create default config
     create_default_config
     
-    # Step 12: Enable and start service
+    # Step 15: Enable and start service
     enable_and_start_service
     
-    # Step 13: Display final information
+    # Step 16: Display final information
     display_final_info
 }
 
