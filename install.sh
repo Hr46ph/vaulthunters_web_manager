@@ -349,10 +349,22 @@ get_ssl_certificate_config() {
         detected_hostname="localhost"
     fi
 
-    # Get domain name
+    # Get domain name with validation
     print_info "Current detected hostname/FQDN: $detected_hostname"
-    read -p "Enter domain name for certificate (press Enter for $detected_hostname): " user_domain
-    CERT_DOMAIN=${user_domain:-$detected_hostname}
+    
+    while true; do
+        read -p "Enter domain name for certificate (press Enter for $detected_hostname): " user_domain
+        CERT_DOMAIN=${user_domain:-$detected_hostname}
+        
+        # Validate domain format
+        if [[ "$CERT_DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$ ]]; then
+            break
+        else
+            print_error "Invalid domain format: $CERT_DOMAIN"
+            print_info "Domain must contain only letters, numbers, dots, and hyphens"
+            print_info "Examples: example.com, myserver.local, host"
+        fi
+    done
 
     print_success "SSL Certificate will be generated for:"
     print_success "  IP Address: $CERT_IP"
@@ -489,7 +501,8 @@ DNS.2 = localhost"
     admin localhost:2019
 }
 
-$CERT_IP:$CADDY_PORT {
+# Support both IP address and domain access
+$CERT_IP:$CADDY_PORT, $CERT_DOMAIN:$CADDY_PORT {
     # Use the certificate files we generated
     tls $cert_path $key_path
 

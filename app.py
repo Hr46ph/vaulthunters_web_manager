@@ -157,9 +157,10 @@ def start_caddy():
         print("⚠️  Caddy not found - running Flask directly without HTTPS")
         return False
     
-    # Check if Caddyfile exists
-    if not os.path.exists('Caddyfile'):
-        print("⚠️  Caddyfile not found - running Flask directly without HTTPS")
+    # Check if Caddyfile exists in the user's caddy directory
+    caddyfile_path = os.path.expanduser('~/.local/share/caddy/Caddyfile')
+    if not os.path.exists(caddyfile_path):
+        print(f"⚠️  Caddyfile not found at {caddyfile_path} - running Flask directly without HTTPS")
         return False
     
     # Stop any existing Caddy instance first
@@ -173,7 +174,7 @@ def start_caddy():
         # Start Caddy with better error handling
         print("🚀 Starting Caddy reverse proxy...")
         caddy_process = subprocess.Popen(
-            ['caddy', 'run', '--config', 'Caddyfile'],
+            ['caddy', 'run', '--config', caddyfile_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

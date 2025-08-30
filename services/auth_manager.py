@@ -5,6 +5,7 @@ import json
 import hashlib
 import secrets
 import logging
+from datetime import datetime
 from functools import wraps
 from flask import session, request, redirect, url_for, flash, current_app
 import pyotp
@@ -24,24 +25,25 @@ class AuthManager:
         """Ensure users file and directory exist"""
         os.makedirs(os.path.dirname(AuthManager.USERS_FILE), exist_ok=True)
         if not os.path.exists(AuthManager.USERS_FILE):
-            # Create default admin users as mentioned in documentation
+            # Create default admin user with random password
+            import string
+            admin_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
+            
             default_users = {
                 "admin": {
-                    "password_hash": AuthManager._hash_password("admin123"),
-                    "created_at": "2025-08-28",
-                    "role": "admin",
-                    "active": True
-                },
-                "ingemar": {
-                    "password_hash": AuthManager._hash_password("minecraft123"),
-                    "created_at": "2025-08-28",
+                    "password_hash": AuthManager._hash_password(admin_password),
+                    "created_at": datetime.now().strftime("%Y-%m-%d"),
                     "role": "admin",
                     "active": True
                 }
             }
             with open(AuthManager.USERS_FILE, 'w') as f:
                 json.dump(default_users, f, indent=2)
-            logger.info(f"Created default users file with admin users (admin:admin123, ingemar:minecraft123)")
+            
+            # Log to both application log and journal (systemd will capture this)
+            logger.warning(f"🔑 DEFAULT ADMIN CREDENTIALS CREATED - Username: admin, Password: {admin_password}")
+            print(f"🔑 DEFAULT ADMIN CREDENTIALS CREATED - Username: admin, Password: {admin_password}")
+            logger.warning("⚠️  Please change the admin password immediately after first login!")
     
     @staticmethod
     def _hash_password(password):
