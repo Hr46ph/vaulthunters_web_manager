@@ -698,6 +698,70 @@ class AuthManager:
             logger.error(f"Error regenerating backup codes for {username}: {e}")
             return None
 
+    @staticmethod
+    def is_emergency_reset_available():
+        """
+        Check if emergency admin password reset is available.
+        Only available when there's exactly one user (the default admin).
+        
+        Returns:
+            bool: True if emergency reset is available
+        """
+        try:
+            AuthManager._ensure_users_file()
+            
+            with open(AuthManager.USERS_FILE, 'r') as f:
+                users = json.load(f)
+            
+            # Only available when there's exactly one user and it's 'admin'
+            return len(users) == 1 and 'admin' in users
+            
+        except Exception as e:
+            logger.error(f"Error checking emergency reset availability: {e}")
+            return False
+
+    @staticmethod
+    def emergency_reset_admin_password():
+        """
+        Emergency reset of admin password. Only works when there's exactly one user.
+        Generates new random password and logs it.
+        
+        Returns:
+            bool: True if reset was successful
+        """
+        try:
+            if not AuthManager.is_emergency_reset_available():
+                logger.warning("Emergency reset attempted but not available - multiple users exist")
+                return False
+            
+            # Generate new random password
+            import string
+            new_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
+            
+            # Load users
+            with open(AuthManager.USERS_FILE, 'r') as f:
+                users = json.load(f)
+            
+            # Update admin password
+            users['admin']['password_hash'] = AuthManager._hash_password(new_password)
+            users['admin']['password_changed_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Save updated users
+            with open(AuthManager.USERS_FILE, 'w') as f:
+                json.dump(users, f, indent=2)
+            
+            # Log the new credentials (both to app log and stdout for systemd journal)
+            logger.warning(f"🚨 EMERGENCY ADMIN PASSWORD RESET - Username: admin, New Password: {new_password}")
+            print(f"🚨 EMERGENCY ADMIN PASSWORD RESET - Username: admin, New Password: {new_password}")
+            logger.warning("⚠️  Please log in and change this password immediately!")
+            print("⚠️  Please log in and change this password immediately!")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error during emergency password reset: {e}")
+            return False
+
 
 def login_required(f):
     """

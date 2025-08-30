@@ -4,21 +4,110 @@
 
 {% block extra_css %}
 <style>
+    /* Force dark theme for login page */
+    html, body {
+        background-color: #212529 !important;
+        color: #fff !important;
+    }
+    
     .login-container {
         max-width: 400px;
         margin: 50px auto;
     }
+    
     .login-card {
-        border: none;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        background-color: #343a40 !important;
+        border: 1px solid #495057;
+        border-radius: 15px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
     }
+    
     .login-header {
         text-align: center;
         margin-bottom: 30px;
     }
+    
+    .login-header h2 {
+        color: #fff;
+        font-weight: 600;
+    }
+    
+    .login-header p {
+        color: #adb5bd !important;
+    }
+    
     .form-floating {
         margin-bottom: 20px;
+    }
+    
+    .form-floating .form-control {
+        background-color: #495057 !important;
+        border: 1px solid #6c757d;
+        color: #fff !important;
+    }
+    
+    .form-floating .form-control:focus {
+        background-color: #495057 !important;
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        color: #fff !important;
+    }
+    
+    .form-floating label {
+        color: #adb5bd !important;
+    }
+    
+    .btn-primary {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        font-weight: 500;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
+    }
+    
+    .alert-warning {
+        background-color: #664d03 !important;
+        border-color: #997404 !important;
+        color: #ffecb3 !important;
+    }
+    
+    .btn-warning {
+        background-color: #ffc107;
+        border-color: #ffc107;
+        color: #000;
+        font-weight: 500;
+    }
+    
+    .btn-warning:hover {
+        background-color: #ffcd39;
+        border-color: #ffc720;
+        color: #000;
+    }
+    
+    .text-muted {
+        color: #6c757d !important;
+    }
+    
+    .bg-dark code {
+        background-color: #1a1d20 !important;
+        color: #f8f9fa !important;
+        font-family: 'Courier New', monospace;
+    }
+    
+    .modal-content {
+        background-color: #343a40 !important;
+        border: 1px solid #495057;
+    }
+    
+    .modal-header {
+        border-bottom: 1px solid #495057;
+    }
+    
+    .modal-footer {
+        border-top: 1px solid #495057;
     }
 </style>
 {% endblock %}
@@ -64,6 +153,20 @@
                 </div>
             </form>
 
+            <!-- Emergency Reset Button (only shown when available) -->
+            {% if show_emergency_reset %}
+            <div class="text-center mt-3 mb-3">
+                <div class="alert alert-warning alert-sm py-2">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    <small>Lost admin password?</small>
+                </div>
+                <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#emergencyResetModal">
+                    <i class="fas fa-key me-1"></i>
+                    Emergency Reset Admin Password
+                </button>
+            </div>
+            {% endif %}
+
             <div class="text-center mt-4">
                 <small class="text-muted">
                     <i class="fas fa-shield-alt me-1"></i>
@@ -73,6 +176,43 @@
         </div>
     </div>
 </div>
+
+<!-- Emergency Reset Modal -->
+{% if show_emergency_reset %}
+<div class="modal fade" id="emergencyResetModal" tabindex="-1" aria-labelledby="emergencyResetModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="emergencyResetModalLabel">
+                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                    Emergency Admin Password Reset
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <strong>Warning:</strong> This will generate a new random password for the admin account.
+                </div>
+                <p>To see the new password after reset, run this command on the host where the application is running, as the user which has the application installed:</p>
+                <div class="bg-dark text-light p-3 rounded mb-3">
+                    <code>journalctl --user -u vaulthunters_web_manager --follow</code>
+                </div>
+                <p class="text-muted small">The new password will appear in the logs with the tag "EMERGENCY ADMIN PASSWORD RESET".</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('main.emergency_reset_admin') }}" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-key me-1"></i>
+                        Reset Password
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

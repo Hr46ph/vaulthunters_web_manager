@@ -443,6 +443,34 @@ enable_user_lingering() {
     fi
 }
 
+# Function to setup user environment for systemctl --user
+setup_user_environment() {
+    print_info "Setting up user environment for systemctl --user commands..."
+
+    # Add environment variables to user's .bashrc
+    local bashrc_content="
+# VaultHunters Web Manager - systemctl --user environment
+export XDG_RUNTIME_DIR=\"/run/user/\$(id -u)\"
+export DBUS_SESSION_BUS_ADDRESS=\"unix:path=\${XDG_RUNTIME_DIR}/bus\"
+"
+
+    # Check if already exists in .bashrc
+    if sudo -u "$MINECRAFT_USER" grep -q "VaultHunters Web Manager - systemctl" "$MINECRAFT_HOME/.bashrc" 2>/dev/null; then
+        print_info "Environment variables already present in .bashrc"
+    else
+        sudo -u "$MINECRAFT_USER" bash -c "echo '$bashrc_content' >> '$MINECRAFT_HOME/.bashrc'"
+        print_success "Added systemctl --user environment to .bashrc"
+    fi
+
+    # Also add to .profile for non-bash shells
+    if sudo -u "$MINECRAFT_USER" grep -q "VaultHunters Web Manager - systemctl" "$MINECRAFT_HOME/.profile" 2>/dev/null; then
+        print_info "Environment variables already present in .profile"
+    else
+        sudo -u "$MINECRAFT_USER" bash -c "echo '$bashrc_content' >> '$MINECRAFT_HOME/.profile'"
+        print_success "Added systemctl --user environment to .profile"
+    fi
+}
+
 # Function to setup SSL certificates and Caddy
 setup_ssl_certificates() {
     print_info "Setting up SSL certificates and Caddy configuration..."
@@ -664,8 +692,8 @@ display_final_info() {
     print_info "Next Steps:"
     echo "  1. Edit $PROJECT_DIR/config.toml if needed"
     echo "  2. Ensure your VaultHunters server is set up with RCON enabled"
-    echo "  3. Start the service:"
-    echo "     sudo systemctl start vaulthunters_web_manager.service"
+    echo "  3. Start the service (if not already running):"
+    echo "     systemctl --user start vaulthunters_web_manager"
     echo "  4. Access the web interface at: https://$CERT_IP:$CADDY_PORT"
     echo "     (You can also use https://$CERT_DOMAIN:$CADDY_PORT if DNS is configured)"
     echo
@@ -673,6 +701,10 @@ display_final_info() {
     print_warning "configured in the certificate. Other IPs/domains will result in SSL errors."
     echo
     print_info "Service Management Commands (run as $MINECRAFT_USER):"
+    echo "  The environment for systemctl --user has been configured automatically."
+    echo "  If you still get DBUS errors, restart your shell or run:"
+    echo "    source ~/.bashrc"
+    echo
     echo "  Both services (Caddy and Flask):"
     echo "    - systemctl --user status caddy vaulthunters_web_manager"
     echo "    - systemctl --user restart caddy vaulthunters_web_manager"
@@ -694,12 +726,13 @@ display_final_info() {
     echo
     print_warning "🔑 IMPORTANT - FIRST LOGIN CREDENTIALS:"
     echo "  The application automatically creates an admin user with a random password."
-    echo "  To find your admin login credentials, check the service logs:"
+    echo "  If you missed the password output during installation:"
     echo
-    echo "    journalctl --user -u vaulthunters_web_manager | grep 'ADMIN CREDENTIALS'"
+    echo "  1. Visit the login page: https://$CERT_IP:$CADDY_PORT"
+    echo "  2. Click 'Emergency Reset Admin Password' (only visible for single-user setups)"
+    echo "  3. Check logs for new password: journalctl --user -u vaulthunters_web_manager | grep 'EMERGENCY'"
     echo
-    echo "  Look for a message like:"
-    echo "    🔑 DEFAULT ADMIN CREDENTIALS CREATED - Username: admin, Password: [random password]"
+    echo "  Note: Emergency reset is automatically disabled once additional users are created."
     echo
     print_warning "⚠️  Please change the admin password immediately after first login!"
 }
@@ -750,10 +783,13 @@ main() {
     # Step 13: Enable user lingering
     enable_user_lingering
 
-    # Step 14: Create default config
+    # Step 14: Setup user environment for systemctl --user
+    setup_user_environment
+
+    # Step 15: Create default config
     create_default_config
 
-    # Step 15: Enable and start user services
+    # Step 16: Enable and start user services
     enable_and_start_services
 
     # Step 17: Display final information

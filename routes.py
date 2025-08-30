@@ -333,13 +333,39 @@ def login():
         else:
             flash('Invalid username or password.', 'error')
     
-    return render_template('auth/login.html', form=form)
+    return render_template('auth/login.html', 
+                         form=form, 
+                         show_emergency_reset=AuthManager.is_emergency_reset_available())
 
 @main_bp.route('/logout')
 def logout():
     """Logout and redirect to login page"""
     AuthManager.logout_user()
     flash('You have been logged out.', 'info')
+    return redirect(get_base_url() + url_for('main.login'))
+
+@main_bp.route('/emergency-reset-admin', methods=['POST'])
+def emergency_reset_admin():
+    """Emergency admin password reset - only available when there's only one user"""
+    try:
+        # Validate CSRF token
+        validate_csrf_token()
+        
+        # Check if emergency reset is available
+        if not AuthManager.is_emergency_reset_available():
+            flash('Emergency reset is not available. This feature is only available when there is exactly one user (admin).', 'error')
+            return redirect(get_base_url() + url_for('main.login'))
+        
+        # Perform the reset
+        if AuthManager.emergency_reset_admin_password():
+            flash('Emergency password reset successful! Check the service logs for the new password: journalctl --user -u vaulthunters_web_manager | grep "EMERGENCY ADMIN PASSWORD RESET"', 'success')
+        else:
+            flash('Emergency password reset failed. Please check the application logs.', 'error')
+    
+    except Exception as e:
+        current_app.logger.error(f"Error during emergency reset: {e}")
+        flash('An error occurred during password reset.', 'error')
+    
     return redirect(get_base_url() + url_for('main.login'))
 
 # 2FA Routes
