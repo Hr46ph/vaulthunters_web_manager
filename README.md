@@ -15,10 +15,12 @@ A Flask-based web application for managing VaultHunters Minecraft servers. Provi
 
 ## Requirements
 
-- Python 3.10 minimum, 3.12+ recommended
-- Java 17 only! (requirement for Vaulthunters modpack)
-- **Caddy web server** for TLS termination and reverse proxy
-- Recent Linux kernel 6.x with systemd (required for systemd service, can run manually without, or init script if you make them)
+- **Python 3.10** minimum, 3.12+ recommended
+- **Java 17** only! (requirement for Vaulthunters modpack)
+- **Caddy** web server for TLS termination and reverse proxy
+- Recent Linux kernel 6.x with systemd (required for systemd service, can run manually without, or init script if you make them yourself)
+
+**Note**: Caddy should simply be installed, not enabled or running! The application starts a caddy user session as an integral part of the application.
 
 ## Screenshots
 
