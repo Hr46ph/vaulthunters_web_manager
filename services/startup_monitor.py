@@ -9,13 +9,15 @@ from .system_control import SystemControlService
 class StartupMonitor:
     """Monitors Minecraft server startup progress and readiness"""
     
-    def __init__(self):
+    def __init__(self, server_host='localhost', server_port=25565):
         self.logger = logging.getLogger(__name__)
         self._startup_state = 'stopped'  # stopped, starting, running, ready
         self._startup_start_time = None
         self._startup_callbacks = []
         self._monitor_thread = None
         self._stop_monitoring = False
+        self.server_host = server_host
+        self.server_port = server_port
     
     def get_startup_state(self):
         """Get current startup state"""
@@ -100,9 +102,9 @@ class StartupMonitor:
             connection_start_time = time.time()
             server_ready = False
             
-            # Get server connection details
-            server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
-            server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
+            # Use configured server connection details
+            server_host = self.server_host
+            server_port = self.server_port
             
             while not self._stop_monitoring and time.time() - connection_start_time < 300:  # 5 minute timeout
                 try:

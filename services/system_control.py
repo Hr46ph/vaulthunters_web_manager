@@ -92,7 +92,14 @@ def stop_cpu_monitoring():
 
 def _find_minecraft_pid_lightweight():
     """Lightweight PID search - returns PID only"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
+        logger.debug("Starting process search for Minecraft server")
+        java_procs_found = 0
+        minecraft_candidates = []
+        
         # Use pids() for faster iteration than process_iter()
         for pid in psutil.pids():
             try:
@@ -103,21 +110,33 @@ def _find_minecraft_pid_lightweight():
                 if not cmdline:
                     continue
                 
+                # Count all java processes for debugging
+                if name == 'java':
+                    java_procs_found += 1
+                    logger.debug(f"Found Java process PID {pid}: {' '.join(cmdline[:3])}...")
+                
                 # Look for Java process with Forge arguments
                 if (any('java' in arg.lower() for arg in cmdline) and
                     (any('user_jvm_args.txt' in arg for arg in cmdline) or
                      any('unix_args.txt' in arg for arg in cmdline) or
                      any('forge' in arg.lower() for arg in cmdline))):
                     
+                    minecraft_candidates.append(pid)
+                    logger.debug(f"Minecraft candidate found: PID {pid}, name={name}")
+                    
                     # Prioritize actual java processes
                     if name == 'java':
+                        logger.info(f"Found Minecraft server: PID {pid}")
                         return pid
                         
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         
+        logger.warning(f"Process search complete: {java_procs_found} Java processes found, {len(minecraft_candidates)} candidates, no match")
         return None
-    except Exception:
+        
+    except Exception as e:
+        logger.error(f"Exception in process search: {e}")
         return None
 
 class SystemControlService:
@@ -342,7 +361,11 @@ class SystemControlService:
             # Start the startup monitor
             try:
                 from .startup_monitor import get_startup_monitor
+                server_host = current_app.config.get('MINECRAFT_SERVER_HOST', 'localhost')
+                server_port = current_app.config.get('MINECRAFT_SERVER_PORT', 25565)
                 startup_monitor = get_startup_monitor()
+                startup_monitor.server_host = server_host
+                startup_monitor.server_port = server_port
                 startup_monitor.start_monitoring()
                 self.logger.info("Started startup monitoring")
             except Exception as e:

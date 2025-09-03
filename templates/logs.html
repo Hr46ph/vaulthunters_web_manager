@@ -99,6 +99,12 @@
                                 <label class="btn btn-outline-primary btn-sm" for="log-type-journal">System Journal</label>
                             </div>
                             
+                            <!-- Journal Service Selector (shown only when journal is selected) -->
+                            <select class="form-select form-select-sm me-2" id="journal-service-selector" style="width: 180px; display: none;">
+                                <option value="vaulthunters_web_manager">Web Manager</option>
+                                <option value="caddy">Caddy Proxy</option>
+                            </select>
+                            
                             <div class="input-group input-group-sm me-2" style="width: 200px;">
                                 <input type="text" class="form-control" id="search-unified" placeholder="Search logs...">
                                 <button class="btn btn-outline-secondary" type="button" onclick="clearSearch('unified')">
@@ -135,6 +141,7 @@
     // Global variables for unified log system
     let sseConnection = null;
     let currentLogType = 'latest';
+    let currentJournalService = 'vaulthunters_web_manager';
     let autoScrollEnabled = true;
     let originalLogContent = '';
     
@@ -272,25 +279,41 @@
         // Update current log type
         currentLogType = newLogType;
         
-        // Update title
-        const titleElement = document.getElementById('log-title');
-        if (titleElement) {
-            titleElement.textContent = logTypeConfig[newLogType].title;
+        // Show/hide journal service selector
+        const journalSelector = document.getElementById('journal-service-selector');
+        if (journalSelector) {
+            if (newLogType === 'journal') {
+                journalSelector.style.display = 'block';
+                // Update title to include service name
+                const serviceName = journalSelector.value;
+                const serviceDisplayName = journalSelector.options[journalSelector.selectedIndex].text;
+                document.getElementById('log-title').textContent = `${logTypeConfig[newLogType].title} - ${serviceDisplayName}`;
+            } else {
+                journalSelector.style.display = 'none';
+                // Update title normally
+                const titleElement = document.getElementById('log-title');
+                if (titleElement) {
+                    titleElement.textContent = logTypeConfig[newLogType].title;
+                }
+            }
         }
         
         // Update follow checkbox state based on log type capability
         const followCheckbox = document.getElementById('follow-unified');
         if (followCheckbox) {
+            console.log('Updating follow checkbox for log type:', newLogType, 'canFollow:', logTypeConfig[newLogType].canFollow); // Debug log
             if (logTypeConfig[newLogType].canFollow) {
                 followCheckbox.disabled = false;
                 followCheckbox.checked = true;
                 autoScrollEnabled = true; // Ensure auto-scroll is enabled for followable logs
+                console.log('Follow enabled for log type:', newLogType); // Debug log
             } else {
                 followCheckbox.disabled = true;
                 followCheckbox.checked = false;
                 autoScrollEnabled = false; // Disable auto-scroll for non-followable logs
                 // Also stop any active following when switching to non-followable log
                 stopFollow();
+                console.log('Follow disabled for log type:', newLogType); // Debug log
             }
         }
         
@@ -317,6 +340,11 @@
             .then(data => {
                 if (data.success) {
                     updateLogContent(data.content);
+                    // For crash logs, always scroll to the bottom regardless of autoScrollEnabled
+                    const logElement = document.getElementById('unified-log');
+                    if (logElement) {
+                        logElement.scrollTop = logElement.scrollHeight;
+                    }
                 } else {
                     updateLogContent(`Error loading crash report: ${data.error}`);
                 }
@@ -344,7 +372,15 @@
         
         logElement.textContent = `Loading ${config.title.toLowerCase()}...`;
         
-        fetch(config.endpoint)
+        // Build endpoint with service parameter for journal logs
+        let endpoint = config.endpoint;
+        if (currentLogType === 'journal') {
+            const journalSelector = document.getElementById('journal-service-selector');
+            const serviceName = journalSelector ? journalSelector.value : 'vaulthunters_web_manager';
+            endpoint += `?service=${serviceName}`;
+        }
+        
+        fetch(endpoint)
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
@@ -371,15 +407,19 @@
     
     // Start following current log using SSE
     function startFollow() {
+        console.log('startFollow called for log type:', currentLogType); // Debug log
         const followCheckbox = document.getElementById('follow-unified');
         if (!followCheckbox || !followCheckbox.checked) {
+            console.log('Follow checkbox not checked or not found'); // Debug log
             return;
         }
         
         const config = logTypeConfig[currentLogType];
         if (!config || !config.canFollow || !config.streamEndpoint) {
+            console.log('Config not found or cannot follow:', config); // Debug log
             return;
         }
+        console.log('Starting SSE connection for:', currentLogType); // Debug log
         
         // Stop existing connection if any
         stopFollow();
@@ -395,8 +435,16 @@
             }
         }, 30000); // 30 second watchdog
         
+        // Build stream endpoint with service parameter for journal logs
+        let streamEndpoint = config.streamEndpoint;
+        if (currentLogType === 'journal') {
+            const journalSelector = document.getElementById('journal-service-selector');
+            const serviceName = journalSelector ? journalSelector.value : 'vaulthunters_web_manager';
+            streamEndpoint += `?service=${serviceName}`;
+        }
+        
         // Create SSE connection
-        const eventSource = new EventSource(config.streamEndpoint);
+        const eventSource = new EventSource(streamEndpoint);
         sseConnection = eventSource;
         
         const logElement = document.getElementById('unified-log');
@@ -552,7 +600,9 @@
         const followCheckbox = document.getElementById('follow-unified');
         if (followCheckbox) {
             followCheckbox.addEventListener('change', function() {
+                console.log('Follow checkbox changed:', this.checked); // Debug log
                 if (this.checked) {
+                    console.log('Enabling follow mode'); // Debug log
                     autoScrollEnabled = true;
                     // Force scroll to bottom when enabling follow
                     const logElement = document.getElementById('unified-log');
@@ -561,7 +611,9 @@
                     }
                     startFollow();
                 } else {
+                    console.log('Disabling follow mode'); // Debug log
                     stopFollow();
+                    autoScrollEnabled = false; // Explicitly disable auto-scroll when not following
                 }
             });
         }
@@ -577,9 +629,11 @@
                     if (!isAtBottom(logElement)) {
                         // User scrolled away from bottom while following - disable auto-scroll but keep following
                         autoScrollEnabled = false;
+                        console.log('User scrolled away from bottom, disabling auto-scroll but keeping follow'); // Debug log
                     } else {
                         // User scrolled back to bottom - re-enable auto-scroll
                         autoScrollEnabled = true;
+                        console.log('User scrolled back to bottom, re-enabling auto-scroll'); // Debug log
                     }
                 } else {
                     // If follow is not checked, don't change auto-scroll state
@@ -607,6 +661,22 @@
         if (filterCheckbox) {
             filterCheckbox.addEventListener('change', function() {
                 searchLogs();
+            });
+        }
+        
+        // Set up journal service selector
+        const journalSelector = document.getElementById('journal-service-selector');
+        if (journalSelector) {
+            journalSelector.addEventListener('change', function() {
+                if (currentLogType === 'journal') {
+                    // Update title to include new service name
+                    const serviceDisplayName = this.options[this.selectedIndex].text;
+                    document.getElementById('log-title').textContent = `${logTypeConfig.journal.title} - ${serviceDisplayName}`;
+                    
+                    // Stop current streaming and refresh with new service
+                    stopFollow();
+                    refreshCurrentLog();
+                }
             });
         }
         

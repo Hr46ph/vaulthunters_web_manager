@@ -1105,8 +1105,19 @@ def rotate_log(log_type):
 def journal_content():
     """API endpoint for system journal content"""
     try:
+        # Get service name from query parameter, default to web manager
+        service_name = request.args.get('service', 'vaulthunters_web_manager')
+        
+        # Validate service name for security
+        allowed_services = ['vaulthunters_web_manager', 'caddy']
+        if service_name not in allowed_services:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid service name. Allowed: {", ".join(allowed_services)}'
+            }), 400
+        
         result = subprocess.run(
-            ['sudo', '/bin/journalctl', '-xeu', 'vaulthunters_web_manager.service', '--no-pager'],
+            ['/bin/journalctl', '--user', '-xeu', f'{service_name}.service', '--no-pager'],
             capture_output=True,
             text=True,
             timeout=15
@@ -1115,12 +1126,14 @@ def journal_content():
         if result.returncode == 0:
             return jsonify({
                 'success': True,
-                'content': result.stdout
+                'content': result.stdout,
+                'service': service_name
             })
         else:
             return jsonify({
                 'success': False,
-                'error': f'Journal command failed: {result.stderr}'
+                'error': f'Journal command failed: {result.stderr}',
+                'service': service_name
             }), 500
             
     except Exception as e:
@@ -1132,6 +1145,17 @@ def journal_content():
 def journal_stream():
     """Server-Sent Events endpoint for real-time journal streaming"""
     try:
+        # Get service name from query parameter, default to web manager
+        service_name = request.args.get('service', 'vaulthunters_web_manager')
+        
+        # Validate service name for security
+        allowed_services = ['vaulthunters_web_manager', 'caddy']
+        if service_name not in allowed_services:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid service name. Allowed: {", ".join(allowed_services)}'
+            }), 400
+        
         from flask import Response
         import subprocess
         import threading
@@ -1141,7 +1165,7 @@ def journal_stream():
             try:
                 # Start with recent journal entries
                 initial_result = subprocess.run(
-                    ['sudo', '/bin/journalctl', '-xeu', 'vaulthunters_web_manager.service', '--no-pager'],
+                    ['/bin/journalctl', '--user', '-xeu', f'{service_name}.service', '--no-pager'],
                     capture_output=True,
                     text=True,
                     timeout=10
@@ -1156,7 +1180,7 @@ def journal_stream():
                 
                 # Start following the journal (use -u without -xe for cleaner follow output)
                 process = subprocess.Popen(
-                    ['sudo', '/bin/journalctl', '-u', 'vaulthunters_web_manager.service', '--follow'],
+                    ['/bin/journalctl', '--user', '-u', f'{service_name}.service', '--follow'],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
