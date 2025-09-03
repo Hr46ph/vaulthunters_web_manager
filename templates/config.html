@@ -534,10 +534,9 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content
                 },
-                body: JSON.stringify({
-                    csrf_token: document.querySelector('meta[name=csrf-token]').content
-                })
+                body: JSON.stringify({})
             })
             .then(response => {
                 console.log('Response received:', response.status);
