@@ -394,12 +394,12 @@ class SystemControlService:
             # Build the command string for shell execution
             cmd_str = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in ([self.java_executable] + self.forge_startup_command)])
             
-            # Use bash to execute a completely detached process
-            detach_cmd = f'bash -c "cd \\"{self.server_path}\\" && setsid nohup {cmd_str} >>logs/latest.log 2>&1 </dev/null & disown"'
+            # Use systemd-run for proper process isolation from web manager service
+            detach_cmd = f'systemd-run --user --scope --slice=minecraft.slice --property=KillMode=none -- bash -c "cd \\"{self.server_path}\\" && {cmd_str} >>logs/latest.log 2>&1"'
             
-            self.logger.info(f"Starting detached server: {detach_cmd}")
+            self.logger.info(f"Starting detached server with systemd-run: {detach_cmd}")
             
-            # Execute with minimal connection to parent
+            # Execute with complete isolation from web manager service
             process = subprocess.Popen(
                 detach_cmd,
                 shell=True,

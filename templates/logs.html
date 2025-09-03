@@ -95,15 +95,12 @@
                                 <input type="radio" class="btn-check" name="log-type" id="log-type-crash" autocomplete="off">
                                 <label class="btn btn-outline-primary btn-sm" for="log-type-crash">Latest Crash</label>
                                 
-                                <input type="radio" class="btn-check" name="log-type" id="log-type-journal" autocomplete="off">
-                                <label class="btn btn-outline-primary btn-sm" for="log-type-journal">System Journal</label>
+                                <input type="radio" class="btn-check" name="log-type" id="log-type-web-manager" autocomplete="off">
+                                <label class="btn btn-outline-primary btn-sm" for="log-type-web-manager">Web Manager</label>
+                                
+                                <input type="radio" class="btn-check" name="log-type" id="log-type-caddy" autocomplete="off">
+                                <label class="btn btn-outline-primary btn-sm" for="log-type-caddy">Caddy Proxy</label>
                             </div>
-                            
-                            <!-- Journal Service Selector (shown only when journal is selected) -->
-                            <select class="form-select form-select-sm me-2" id="journal-service-selector" style="width: 180px; display: none;">
-                                <option value="vaulthunters_web_manager">Web Manager</option>
-                                <option value="caddy">Caddy Proxy</option>
-                            </select>
                             
                             <div class="input-group input-group-sm me-2" style="width: 200px;">
                                 <input type="text" class="form-control" id="search-unified" placeholder="Search logs...">
@@ -150,7 +147,8 @@
         latest: { title: 'Latest Server Log', canFollow: true, endpoint: '/logs/content/latest', streamEndpoint: '/logs/stream/latest' },
         debug: { title: 'Debug Server Log', canFollow: true, endpoint: '/logs/content/debug', streamEndpoint: '/logs/stream/debug' },
         crash: { title: 'Latest Crash Report', canFollow: false, endpoint: '/logs/crash/list', streamEndpoint: null },
-        journal: { title: 'System Journal', canFollow: true, endpoint: '/logs/journal', streamEndpoint: '/logs/journal/stream' }
+        'web-manager': { title: 'Web Manager Journal', canFollow: true, endpoint: '/logs/journal', streamEndpoint: '/logs/journal/stream', service: 'vaulthunters_web_manager' },
+        'caddy': { title: 'Caddy Proxy Journal', canFollow: true, endpoint: '/logs/journal', streamEndpoint: '/logs/journal/stream', service: 'caddy' }
     };
     
     // Helper function to check if user is at bottom of log window
@@ -279,23 +277,10 @@
         // Update current log type
         currentLogType = newLogType;
         
-        // Show/hide journal service selector
-        const journalSelector = document.getElementById('journal-service-selector');
-        if (journalSelector) {
-            if (newLogType === 'journal') {
-                journalSelector.style.display = 'block';
-                // Update title to include service name
-                const serviceName = journalSelector.value;
-                const serviceDisplayName = journalSelector.options[journalSelector.selectedIndex].text;
-                document.getElementById('log-title').textContent = `${logTypeConfig[newLogType].title} - ${serviceDisplayName}`;
-            } else {
-                journalSelector.style.display = 'none';
-                // Update title normally
-                const titleElement = document.getElementById('log-title');
-                if (titleElement) {
-                    titleElement.textContent = logTypeConfig[newLogType].title;
-                }
-            }
+        // Update title
+        const titleElement = document.getElementById('log-title');
+        if (titleElement) {
+            titleElement.textContent = logTypeConfig[newLogType].title;
         }
         
         // Update follow checkbox state based on log type capability
@@ -374,10 +359,8 @@
         
         // Build endpoint with service parameter for journal logs
         let endpoint = config.endpoint;
-        if (currentLogType === 'journal') {
-            const journalSelector = document.getElementById('journal-service-selector');
-            const serviceName = journalSelector ? journalSelector.value : 'vaulthunters_web_manager';
-            endpoint += `?service=${serviceName}`;
+        if (config.service) {
+            endpoint += `?service=${config.service}`;
         }
         
         fetch(endpoint)
@@ -437,10 +420,8 @@
         
         // Build stream endpoint with service parameter for journal logs
         let streamEndpoint = config.streamEndpoint;
-        if (currentLogType === 'journal') {
-            const journalSelector = document.getElementById('journal-service-selector');
-            const serviceName = journalSelector ? journalSelector.value : 'vaulthunters_web_manager';
-            streamEndpoint += `?service=${serviceName}`;
+        if (config.service) {
+            streamEndpoint += `?service=${config.service}`;
         }
         
         // Create SSE connection
@@ -664,21 +645,6 @@
             });
         }
         
-        // Set up journal service selector
-        const journalSelector = document.getElementById('journal-service-selector');
-        if (journalSelector) {
-            journalSelector.addEventListener('change', function() {
-                if (currentLogType === 'journal') {
-                    // Update title to include new service name
-                    const serviceDisplayName = this.options[this.selectedIndex].text;
-                    document.getElementById('log-title').textContent = `${logTypeConfig.journal.title} - ${serviceDisplayName}`;
-                    
-                    // Stop current streaming and refresh with new service
-                    stopFollow();
-                    refreshCurrentLog();
-                }
-            });
-        }
         
         // Initial load
         setTimeout(() => {

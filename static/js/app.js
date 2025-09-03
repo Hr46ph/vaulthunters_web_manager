@@ -841,48 +841,49 @@ function loadServerPropertiesModal() {
 
 function populatePropertiesIssues(issues) {
     const issuesContainer = document.getElementById('propertiesIssuesList');
+    const overviewSummary = document.getElementById('propertiesOverviewSummary');
     if (!issuesContainer) return;
     
+    // Populate overview summary
+    if (overviewSummary) {
+        const criticalCount = issues.filter(issue => issue.severity === 'critical').length;
+        const warningCount = issues.filter(issue => issue.severity === 'warning').length;
+        
+        let summaryText = `${issues.length} setting${issues.length > 1 ? 's' : ''} need${issues.length === 1 ? 's' : ''} attention`;
+        if (criticalCount > 0) {
+            summaryText += ` (${criticalCount} critical)`;
+        }
+        overviewSummary.textContent = summaryText;
+    }
+    
+    // Populate issues list with clean layout
     let html = '';
     
     issues.forEach((issue, index) => {
-        const severityBadge = issue.severity === 'critical' ? 
-            '<span class="badge bg-danger">Critical</span>' : 
-            '<span class="badge bg-warning">Warning</span>';
+        const severityIcon = issue.severity === 'critical' ? 
+            '<i class="fas fa-exclamation-circle text-danger"></i>' : 
+            '<i class="fas fa-exclamation-triangle text-warning"></i>';
         
         html += `
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">
-                        <i class="fas fa-cog"></i> ${issue.name}
-                        ${severityBadge}
-                    </h6>
+            <div class="mb-4 ${index < issues.length - 1 ? 'pb-3 border-bottom' : ''}">
+                <div class="d-flex align-items-center mb-2">
+                    ${severityIcon}
+                    <strong class="ms-2">${issue.name}</strong>
                 </div>
-                <div class="card-body">
-                    <p class="mb-2">${issue.description}</p>
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <strong>Current Value:</strong>
-                            <code class="text-danger">${issue.current_value}</code>
-                        </div>
-                        <div class="col-md-6">
-                            <strong>Required Value:</strong>
-                            <code class="text-success">${issue.required_value}</code>
-                        </div>
+                <p class="mb-2 text-muted">${issue.description}</p>
+                <div class="row mb-2">
+                    <div class="col-md-6">
+                        <small class="text-muted">Current:</small>
+                        <code class="d-block text-danger">${issue.current_value}</code>
                     </div>
-                    
-                    <div class="alert alert-sm alert-info mb-2">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>Why this is needed:</strong> ${issue.technical_details}
+                    <div class="col-md-6">
+                        <small class="text-muted">Required:</small>
+                        <code class="d-block text-success">${issue.required_value}</code>
                     </div>
-                    
-                    ${issue.security_note ? `
-                        <div class="alert alert-sm alert-warning mb-0">
-                            <i class="fas fa-shield-alt"></i>
-                            <strong>Security Note:</strong> ${issue.security_note}
-                        </div>
-                    ` : ''}
+                </div>
+                <div class="small text-muted">
+                    <i class="fas fa-info-circle"></i> ${issue.technical_details}
+                    ${issue.security_note ? `<br><i class="fas fa-shield-alt text-danger"></i> <span class="text-danger">${issue.security_note}</span>` : ''}
                 </div>
             </div>
         `;
@@ -892,38 +893,35 @@ function populatePropertiesIssues(issues) {
 }
 
 function configurePasswordOptions(validation) {
-    const keepPasswordOption = document.getElementById('keepPasswordOption');
+    const rconPasswordSection = document.getElementById('rconPasswordSection');
     const generatePasswordOption = document.getElementById('generatePassword');
     const customPasswordOption = document.getElementById('customPassword');
-    const keepPasswordRadio = document.getElementById('keepPassword');
     
-    // Check if there's an RCON password issue and if password already exists
-    const hasRconPasswordIssue = validation.issues && validation.issues.some(issue => issue.setting === 'rcon.password');
+    // Check if there's an RCON password issue (missing password or RCON disabled)
+    const hasRconPasswordIssue = validation.issues && validation.issues.some(issue => 
+        issue.setting === 'rcon.password' || issue.setting === 'enable-rcon'
+    );
     const hasExistingPassword = validation.has_rcon_password;
+    const rconEnabled = validation.rcon_enabled !== false; // Default to true if not specified
     
-    if (hasRconPasswordIssue && hasExistingPassword) {
-        // Password exists but there's still an issue - show keep password option
-        // This shouldn't normally happen with our fixed logic, but just in case
-        keepPasswordOption.style.display = 'block';
-        keepPasswordRadio.checked = true;
-        generatePasswordOption.checked = false;
-    } else if (hasRconPasswordIssue && !hasExistingPassword) {
-        // No password exists - hide keep password option, default to generate
-        keepPasswordOption.style.display = 'none';
-        generatePasswordOption.checked = true;
-    } else if (hasExistingPassword) {
-        // Password exists and no issue - show keep password option as default
-        keepPasswordOption.style.display = 'block';
-        keepPasswordRadio.checked = true;
-        generatePasswordOption.checked = false;
-    } else {
-        // No password and no issue - hide keep password option
-        keepPasswordOption.style.display = 'none';
-        generatePasswordOption.checked = true;
+    // Only show RCON password section if:
+    // 1. RCON password is missing/empty, OR
+    // 2. RCON is disabled and needs to be enabled
+    const shouldShowPasswordSection = hasRconPasswordIssue && (!hasExistingPassword || !rconEnabled);
+    
+    if (shouldShowPasswordSection && rconPasswordSection) {
+        rconPasswordSection.style.display = 'block';
+        
+        // Default to generate password
+        if (generatePasswordOption) generatePasswordOption.checked = true;
+        if (customPasswordOption) customPasswordOption.checked = false;
+        
+        // Set up event listeners for password options
+        setupPasswordOptionListeners();
+    } else if (rconPasswordSection) {
+        // Hide the password section if not needed
+        rconPasswordSection.style.display = 'none';
     }
-    
-    // Set up event listeners for password options (needed for dynamically shown options)
-    setupPasswordOptionListeners();
 }
 
 function setupPasswordOptionListeners() {
@@ -970,8 +968,11 @@ function applyServerProperties() {
     const passwordOption = document.querySelector('input[name="passwordOption"]:checked')?.value || 'generate';
     const customPassword = document.getElementById('customRconPassword')?.value || '';
     
-    // Validate custom password if selected
-    if (passwordOption === 'custom' && customPassword.length < 8) {
+    // Only validate if password section is visible and custom is selected
+    const rconPasswordSection = document.getElementById('rconPasswordSection');
+    const isPasswordSectionVisible = rconPasswordSection && rconPasswordSection.style.display !== 'none';
+    
+    if (isPasswordSectionVisible && passwordOption === 'custom' && customPassword.length < 8) {
         showAlert('Error', 'Custom RCON password must be at least 8 characters long.');
         return;
     }
@@ -982,8 +983,8 @@ function applyServerProperties() {
     
     const requestData = {
         restart_server: restartOption === 'restart',
-        custom_rcon_password: passwordOption === 'custom' ? customPassword : null,
-        keep_existing_password: passwordOption === 'keep'
+        custom_rcon_password: isPasswordSectionVisible && passwordOption === 'custom' ? customPassword : null,
+        keep_existing_password: false // Removed keep password option
     };
     
     fetch('/api/server-properties/apply', {
@@ -1027,14 +1028,7 @@ function applyServerProperties() {
             // Hide properties alert if visible
             dismissPropertiesAlert();
             
-            // Show success message in a simpler way
-            if (data.restart_performed) {
-                alert('Configuration applied successfully! Server has been restarted with the new configuration.');
-            } else if (data.restart_required) {
-                alert('Configuration applied successfully! Please restart the server for changes to take effect.');
-            } else {
-                alert('Configuration applied successfully!');
-            }
+            // Configuration applied successfully - no popup needed
             
             // Refresh page immediately to show updated status
             window.location.reload();
@@ -1048,14 +1042,14 @@ function applyServerProperties() {
                 errorMessage += '\n\nNote: Configuration changes were applied successfully, but server restart failed. Please manually restart the server for changes to take effect.';
             }
             
-            alert('Configuration Failed: ' + errorMessage);
+            showAlert('Configuration Failed', errorMessage);
         }
     })
     .catch(error => {
         applyBtn.disabled = false;
         applyBtn.innerHTML = originalBtnText;
         console.error('Server properties apply error:', error);
-        alert('Network Error: Failed to apply server properties. Please check your connection and try again.\n\nError details: ' + error.message);
+        showAlert('Network Error', 'Failed to apply server properties. Please check your connection and try again.\n\nError details: ' + error.message);
     });
 }
 

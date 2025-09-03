@@ -261,100 +261,95 @@
                     
                     <div id="propertiesModalContent" style="display: none;">
                         <form id="server-properties-form">
-                            <div class="alert alert-info">
-                            <h6 class="alert-heading">
-                                <i class="fas fa-info-circle"></i> Required Configuration
-                            </h6>
-                            <p class="mb-0">The web manager requires specific server.properties settings to function properly. Review and apply the required changes below.</p>
-                        </div>
-
-                        <!-- Issues List -->
-                        <div id="propertiesIssuesList">
-                            <!-- Issues will be populated dynamically -->
-                        </div>
-
-                        <!-- Security Notice -->
-                        <div class="alert alert-warning mt-3">
-                            <h6 class="alert-heading">
-                                <i class="fas fa-shield-alt"></i> Security Considerations
-                            </h6>
-                            <ul class="mb-0">
-                                <li><strong>Query Protocol:</strong> Only forward TCP traffic to the query port when exposing to internet (UDP can be used for DDoS amplification)</li>
-                                <li><strong>RCON:</strong> Never expose RCON port to the internet. Use strong passwords and restrict access to localhost/VPN only</li>
-                                <li><strong>Generated passwords:</strong> Will be cryptographically secure (16 characters with letters and numbers)</li>
-                            </ul>
-                        </div>
-
-                        <!-- Custom RCON Password Option -->
-                        <div class="card mt-3">
-                            <div class="card-header">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-key"></i> RCON Password Configuration
+                            <!-- Overview Section -->
+                            <div class="mb-4">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-info-circle text-primary"></i> Configuration Overview
                                 </h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-check mb-3">
-                                    <input class="form-check-input" type="radio" name="passwordOption" id="generatePassword" value="generate" checked>
-                                    <label class="form-check-label" for="generatePassword">
-                                        <strong>Generate secure password automatically</strong>
-                                        <small class="text-muted d-block">Recommended: Creates a 16-character password with letters and numbers</small>
-                                    </label>
-                                </div>
-                                <div class="form-check mb-3">
-                                    <input class="form-check-input" type="radio" name="passwordOption" id="customPassword" value="custom">
-                                    <label class="form-check-label" for="customPassword">
-                                        <strong>Use custom password</strong>
-                                        <small class="text-muted d-block">Enter your own RCON password</small>
-                                    </label>
-                                </div>
-                                <div class="form-check mb-3" id="keepPasswordOption" style="display: none;">
-                                    <input class="form-check-input" type="radio" name="passwordOption" id="keepPassword" value="keep">
-                                    <label class="form-check-label" for="keepPassword">
-                                        <strong>Keep existing password</strong>
-                                        <small class="text-muted d-block">Do not change the current RCON password</small>
-                                    </label>
-                                </div>
-                                <div id="customPasswordInput" class="mt-3" style="display: none;">
-                                    <!-- Hidden username field for accessibility -->
-                                    <input type="text" name="username" value="rcon" autocomplete="username" style="display: none;" aria-hidden="true">
-                                    <div class="input-group">
-                                        <span class="input-group-text">
-                                            <i class="fas fa-lock"></i>
-                                        </span>
-                                        <input type="password" class="form-control" id="customRconPassword" name="password" placeholder="Enter RCON password" autocomplete="new-password">
-                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility()">
-                                            <i class="fas fa-eye" id="passwordToggleIcon"></i>
-                                        </button>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <p class="mb-1">Your server.properties file needs updates for full web manager functionality.</p>
+                                        <div id="propertiesOverviewSummary" class="text-muted small">
+                                            <!-- Summary will be populated dynamically -->
+                                        </div>
                                     </div>
-                                    <div class="form-text">Password should be at least 8 characters long with mixed case and numbers.</div>
+                                    <div class="col-md-4 text-end">
+                                        <small class="text-muted">
+                                            <i class="fas fa-shield-alt"></i> 
+                                            Secure defaults applied
+                                        </small>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Restart Options -->
-                        <div class="card mt-3">
-                            <div class="card-header">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-refresh"></i> Server Restart Options
+                            <!-- Issues List -->
+                            <div class="mb-4">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-cog text-warning"></i> Required Changes
                                 </h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="radio" name="restartOption" id="applyOnly" value="apply" checked>
-                                    <label class="form-check-label" for="applyOnly">
-                                        <strong>Apply settings only</strong>
-                                        <small class="text-muted d-block">Changes take effect on next server start</small>
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="restartOption" id="applyAndRestart" value="restart">
-                                    <label class="form-check-label" for="applyAndRestart">
-                                        <strong>Apply settings and restart server</strong>
-                                        <small class="text-muted d-block">Immediately restart server with new configuration</small>
-                                    </label>
+                                <div id="propertiesIssuesList" class="border rounded p-3 bg-body-secondary">
+                                    <!-- Issues will be populated dynamically -->
                                 </div>
                             </div>
-                        </div>
+
+                            <!-- RCON Password Configuration (conditionally shown) -->
+                            <div id="rconPasswordSection" class="mb-4" style="display: none;">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-key text-info"></i> RCON Password Setup
+                                </h6>
+                                <div class="border rounded p-3 bg-body-secondary">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="radio" name="passwordOption" id="generatePassword" value="generate" checked>
+                                        <label class="form-check-label" for="generatePassword">
+                                            <strong>Generate secure password automatically</strong>
+                                            <small class="text-muted d-block">Recommended: Creates a 16-character password with letters and numbers</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="radio" name="passwordOption" id="customPassword" value="custom">
+                                        <label class="form-check-label" for="customPassword">
+                                            <strong>Use custom password</strong>
+                                            <small class="text-muted d-block">Enter your own RCON password (min. 8 characters)</small>
+                                        </label>
+                                    </div>
+                                    <div id="customPasswordInput" class="mt-3" style="display: none;">
+                                        <!-- Hidden username field for accessibility -->
+                                        <input type="text" name="username" value="rcon" autocomplete="username" style="display: none;" aria-hidden="true">
+                                        <div class="input-group">
+                                            <span class="input-group-text">
+                                                <i class="fas fa-lock"></i>
+                                            </span>
+                                            <input type="password" class="form-control" id="customRconPassword" name="password" placeholder="Enter RCON password" autocomplete="new-password">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility()">
+                                                <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Apply Changes -->
+                            <div class="mb-4">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-play text-success"></i> Apply Changes
+                                </h6>
+                                <div class="border rounded p-3 bg-body-secondary">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="radio" name="restartOption" id="applyOnly" value="apply" checked>
+                                        <label class="form-check-label" for="applyOnly">
+                                            <strong>Apply settings only</strong>
+                                            <small class="text-muted d-block">Changes take effect on next server start</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="restartOption" id="applyAndRestart" value="restart">
+                                        <label class="form-check-label" for="applyAndRestart">
+                                            <strong>Apply settings and restart server</strong>
+                                            <small class="text-muted d-block">Immediately restart server with new configuration</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </form>
                     </div>
 
